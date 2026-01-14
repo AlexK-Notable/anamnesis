@@ -1,0 +1,42 @@
+[project]
+name = "anamnesis"
+version = "0.1.0"
+description = "Semantic code analysis and intelligence - Python port of In-Memoria"
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+
+dependencies = [
+    "tree-sitter>=0.23.0",
+    "tree-sitter-language-pack>=0.23.4",  # Actively maintained, replaces unmaintained tree-sitter-languages
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-benchmark>=4.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
