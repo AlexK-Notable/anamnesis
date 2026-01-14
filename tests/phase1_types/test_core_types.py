@@ -1,215 +1,229 @@
 """
 Phase 1 Tests: Core Types
 
-These tests verify that Python dataclasses match Rust struct behavior:
+These tests verify that Python dataclasses work correctly:
 - Correct field types and defaults
-- JSON serialization matches Rust serde output
-- Validation behavior matches Rust
-
-Reference: rust-core/src/types/core_types.rs
+- Validation behavior
+- Serialization to dict
 """
 
-import json
-
 import pytest
+from dataclasses import asdict
 
-# Placeholder imports - uncomment when types are implemented
-# from anamnesis.types import (
-#     SemanticConcept,
-#     LineRange,
-#     CodebaseAnalysisResult,
-#     ComplexityMetrics,
-#     AstNode,
-#     ParseResult,
-#     Symbol,
-# )
+from anamnesis.types import (
+    AstNode,
+    CodebaseAnalysisResult,
+    ComplexityMetrics,
+    LineRange,
+    ParseResult,
+    SemanticConcept,
+    Symbol,
+)
 
 
 class TestLineRange:
     """Tests for LineRange dataclass."""
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
     def test_creation(self):
         """LineRange can be created with start and end."""
         range_ = LineRange(start=10, end=20)
         assert range_.start == 10
         assert range_.end == 20
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
     def test_serialization(self):
-        """LineRange serializes to JSON matching Rust."""
+        """LineRange serializes to dict."""
         range_ = LineRange(start=1, end=5)
-        json_str = range_.model_dump_json()
-        parsed = json.loads(json_str)
-
+        parsed = asdict(range_)
         assert parsed == {"start": 1, "end": 5}
+
+    def test_contains(self):
+        """LineRange.contains checks if line is within range."""
+        range_ = LineRange(start=10, end=20)
+        assert range_.contains(15) is True
+        assert range_.contains(10) is True
+        assert range_.contains(20) is True
+        assert range_.contains(9) is False
+        assert range_.contains(21) is False
+
+    def test_line_count(self):
+        """LineRange.line_count returns the number of lines."""
+        range_ = LineRange(start=10, end=20)
+        assert range_.line_count == 11  # 10 to 20 inclusive
+
+    def test_validation_start_negative(self):
+        """LineRange rejects negative start."""
+        with pytest.raises(ValueError, match="start must be non-negative"):
+            LineRange(start=-1, end=10)
+
+    def test_validation_end_before_start(self):
+        """LineRange rejects end before start."""
+        with pytest.raises(ValueError, match="end must be >= start"):
+            LineRange(start=20, end=10)
 
 
 class TestSemanticConcept:
     """Tests for SemanticConcept dataclass."""
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
     def test_creation(self):
-        """SemanticConcept can be created with all fields."""
+        """SemanticConcept can be created with all required fields."""
         concept = SemanticConcept(
             id="test_TestClass",
-            name="TestClass",
+            concept_name="TestClass",
             concept_type="class",
-            confidence=0.8,
+            confidence_score=0.8,
             file_path="test.ts",
             line_range=LineRange(start=1, end=10),
-            relationships={},
-            metadata={},
         )
 
-        assert concept.name == "TestClass"
+        assert concept.concept_name == "TestClass"
         assert concept.concept_type == "class"
-        assert concept.confidence == 0.8
+        assert concept.confidence_score == 0.8
         assert concept.file_path == "test.ts"
         assert concept.line_range.start == 1
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
     def test_with_relationships(self):
         """SemanticConcept can store relationships."""
         concept = SemanticConcept(
             id="test_UserService",
-            name="UserService",
+            concept_name="UserService",
             concept_type="class",
-            confidence=0.85,
+            confidence_score=0.85,
             file_path="user.ts",
             line_range=LineRange(start=1, end=50),
             relationships={
                 "implements": "IUserService",
                 "extends": "BaseService",
             },
-            metadata={},
         )
 
         assert concept.relationships["implements"] == "IUserService"
         assert concept.relationships["extends"] == "BaseService"
         assert len(concept.relationships) == 2
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
-    def test_with_metadata(self):
-        """SemanticConcept can store metadata."""
+    def test_with_evolution_history(self):
+        """SemanticConcept can store evolution history."""
         concept = SemanticConcept(
             id="test_calculateTotal",
-            name="calculateTotal",
+            concept_name="calculateTotal",
             concept_type="function",
-            confidence=0.9,
+            confidence_score=0.9,
             file_path="utils.ts",
             line_range=LineRange(start=15, end=25),
-            relationships={},
-            metadata={
-                "visibility": "public",
-                "async": "false",
-                "parameters": "2",
+            evolution_history={
+                "v1": {"change": "created"},
+                "v2": {"change": "renamed"},
             },
         )
 
-        assert concept.metadata["visibility"] == "public"
-        assert concept.metadata["async"] == "false"
-        assert concept.metadata["parameters"] == "2"
+        assert "v1" in concept.evolution_history
+        assert concept.evolution_history["v1"]["change"] == "created"
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
-    def test_serialization_matches_rust(self):
-        """SemanticConcept JSON matches Rust serde output."""
+    def test_serialization_structure(self):
+        """SemanticConcept can be converted to dict."""
         concept = SemanticConcept(
             id="test_func",
-            name="TestFunction",
+            concept_name="TestFunction",
             concept_type="function",
-            confidence=0.8,
+            confidence_score=0.8,
             file_path="test.js",
             line_range=LineRange(start=1, end=1),
-            relationships={},
-            metadata={},
         )
 
-        json_str = concept.model_dump_json()
-        parsed = json.loads(json_str)
+        parsed = asdict(concept)
 
-        # Verify structure matches Rust
+        # Verify structure
         assert "id" in parsed
-        assert "name" in parsed
+        assert "concept_name" in parsed
         assert "concept_type" in parsed
-        assert "confidence" in parsed
+        assert "confidence_score" in parsed
         assert "file_path" in parsed
         assert "line_range" in parsed
         assert "relationships" in parsed
-        assert "metadata" in parsed
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
-    def test_confidence_bounds(self):
-        """Confidence should be between 0 and 1."""
-        # Valid confidence values
+    def test_confidence_bounds_valid(self):
+        """Confidence should accept values between 0 and 1."""
         for conf in [0.0, 0.5, 1.0, 0.75]:
             concept = SemanticConcept(
                 id="test",
-                name="test",
+                concept_name="test",
                 concept_type="function",
-                confidence=conf,
+                confidence_score=conf,
                 file_path="test.ts",
                 line_range=LineRange(start=1, end=1),
-                relationships={},
-                metadata={},
             )
-            assert 0.0 <= concept.confidence <= 1.0
+            assert 0.0 <= concept.confidence_score <= 1.0
+
+    def test_confidence_bounds_invalid(self):
+        """Confidence should reject values outside 0-1."""
+        with pytest.raises(ValueError, match="confidence_score must be between 0 and 1"):
+            SemanticConcept(
+                id="test",
+                concept_name="test",
+                concept_type="function",
+                confidence_score=1.5,
+                file_path="test.ts",
+                line_range=LineRange(start=1, end=1),
+            )
 
 
 class TestComplexityMetrics:
     """Tests for ComplexityMetrics dataclass."""
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
     def test_creation(self):
-        """ComplexityMetrics can be created with all fields."""
+        """ComplexityMetrics can be created with required fields."""
         metrics = ComplexityMetrics(
-            cyclomatic_complexity=10.5,
-            cognitive_complexity=15.2,
-            function_count=8,
-            class_count=3,
-            file_count=2,
-            avg_functions_per_file=4.0,
-            avg_lines_per_concept=37.5,
-            max_nesting_depth=3,
+            cyclomatic=10,
+            cognitive=15,
         )
 
-        assert metrics.cyclomatic_complexity == 10.5
-        assert metrics.cognitive_complexity == 15.2
-        assert metrics.function_count == 8
-        assert metrics.class_count == 3
+        assert metrics.cyclomatic == 10
+        assert metrics.cognitive == 15
+
+    def test_with_optional_fields(self):
+        """ComplexityMetrics can have optional fields."""
+        metrics = ComplexityMetrics(
+            cyclomatic=10,
+            cognitive=15,
+            lines=100,
+            halstead_difficulty=5.5,
+            maintainability_index=75.0,
+        )
+
+        assert metrics.lines == 100
+        assert metrics.halstead_difficulty == 5.5
+        assert metrics.maintainability_index == 75.0
+
+    def test_defaults(self):
+        """ComplexityMetrics optional fields default to None."""
+        metrics = ComplexityMetrics(cyclomatic=5, cognitive=8)
+        assert metrics.lines is None
+        assert metrics.halstead_difficulty is None
+        assert metrics.maintainability_index is None
 
 
 class TestCodebaseAnalysisResult:
     """Tests for CodebaseAnalysisResult dataclass."""
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
     def test_creation(self):
         """CodebaseAnalysisResult can be created with all fields."""
         result = CodebaseAnalysisResult(
             languages=["typescript", "javascript"],
             frameworks=["react", "express"],
             complexity=ComplexityMetrics(
-                cyclomatic_complexity=15.0,
-                cognitive_complexity=22.0,
-                function_count=10,
-                class_count=5,
-                file_count=3,
-                avg_functions_per_file=3.33,
-                avg_lines_per_concept=50.0,
-                max_nesting_depth=4,
+                cyclomatic=15,
+                cognitive=22,
             ),
             concepts=[],
         )
 
         assert len(result.languages) == 2
         assert len(result.frameworks) == 2
-        assert result.complexity.function_count == 10
+        assert result.complexity.cyclomatic == 15
 
 
 class TestAstNode:
     """Tests for AstNode dataclass."""
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
     def test_creation(self):
         """AstNode can be created with children."""
         node = AstNode(
@@ -217,16 +231,14 @@ class TestAstNode:
             text="function test() {}",
             start_line=1,
             end_line=1,
-            start_column=0,
-            end_column=18,
             children=[],
         )
 
         assert node.node_type == "function_declaration"
         assert node.start_line == 1
+        assert node.end_line == 1
         assert len(node.children) == 0
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
     def test_nested_children(self):
         """AstNode can have nested children."""
         child = AstNode(
@@ -234,8 +246,6 @@ class TestAstNode:
             text="test",
             start_line=1,
             end_line=1,
-            start_column=9,
-            end_column=13,
             children=[],
         )
 
@@ -244,8 +254,6 @@ class TestAstNode:
             text="function test() {}",
             start_line=1,
             end_line=1,
-            start_column=0,
-            end_column=18,
             children=[child],
         )
 
@@ -256,7 +264,6 @@ class TestAstNode:
 class TestSymbol:
     """Tests for Symbol dataclass."""
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
     def test_creation(self):
         """Symbol can be created with all fields."""
         symbol = Symbol(
@@ -272,11 +279,20 @@ class TestSymbol:
         assert symbol.line == 42
         assert symbol.scope == "UserService"
 
+    def test_optional_scope(self):
+        """Symbol scope is optional."""
+        symbol = Symbol(
+            name="globalVar",
+            symbol_type="variable",
+            line=1,
+            column=0,
+        )
+        assert symbol.scope is None
+
 
 class TestParseResult:
     """Tests for ParseResult dataclass."""
 
-    @pytest.mark.skip(reason="Phase 1 not implemented yet")
     def test_creation(self):
         """ParseResult can be created with all fields."""
         result = ParseResult(
@@ -286,8 +302,6 @@ class TestParseResult:
                 text="",
                 start_line=0,
                 end_line=0,
-                start_column=0,
-                end_column=0,
                 children=[],
             ),
             errors=[],

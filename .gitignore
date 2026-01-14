@@ -58,3 +58,4 @@ Thumbs.db
 # uv
 .uv/
 uv.lock
+in-memoria.db
