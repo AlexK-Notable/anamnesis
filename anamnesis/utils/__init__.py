@@ -8,6 +8,8 @@ This package provides shared utilities used across the Anamnesis codebase:
 - Progress tracking (multi-phase with console rendering)
 - Language detection and registry
 - Graceful shutdown management
+- Resilience (retry, circuit breaker, error classification)
+- Response wrapping (standardized operation results)
 """
 
 # Logger
@@ -99,6 +101,59 @@ from .shutdown_manager import (
     request_shutdown,
 )
 
+# Retry (Phase 2)
+from .retry import (
+    Retrier,
+    RetryConfig,
+    RetryResult,
+    RetryStats,
+    calculate_delay,
+    create_api_retry_config,
+    create_database_retry_config,
+    create_file_retry_config,
+    get_default_retrier,
+    is_retryable,
+    retry,
+    retry_async,
+)
+
+# Circuit Breaker (Phase 2)
+from .circuit_breaker import (
+    CircuitBreaker,
+    CircuitBreakerError,
+    CircuitBreakerOptions,
+    CircuitBreakerStats,
+    CircuitState,
+    ErrorDetails,
+    create_api_circuit_breaker,
+    create_database_circuit_breaker,
+    create_parsing_circuit_breaker,
+)
+
+# Error Classifier (Phase 2)
+from .error_classifier import (
+    ErrorCategory,
+    ErrorClassification,
+    ErrorClassifier,
+    ErrorPattern,
+    FallbackAction,
+    RetryStrategy,
+    classify_error,
+    get_default_classifier,
+    is_retryable as is_error_retryable,
+    should_trip_breaker,
+)
+
+# Response Wrapper (Phase 2)
+from .response_wrapper import (
+    BatchResponse,
+    PaginatedResponse,
+    ResponseMetadata,
+    ResponseWrapper,
+    wrap_async_operation,
+    wrap_operation,
+)
+
 __all__ = [
     # Logger
     "Logger",
@@ -171,4 +226,45 @@ __all__ = [
     "on_shutdown",
     "register_shutdown_callback",
     "request_shutdown",
+    # Retry (Phase 2)
+    "Retrier",
+    "RetryConfig",
+    "RetryResult",
+    "RetryStats",
+    "calculate_delay",
+    "create_api_retry_config",
+    "create_database_retry_config",
+    "create_file_retry_config",
+    "get_default_retrier",
+    "is_retryable",
+    "retry",
+    "retry_async",
+    # Circuit Breaker (Phase 2)
+    "CircuitBreaker",
+    "CircuitBreakerError",
+    "CircuitBreakerOptions",
+    "CircuitBreakerStats",
+    "CircuitState",
+    "ErrorDetails",
+    "create_api_circuit_breaker",
+    "create_database_circuit_breaker",
+    "create_parsing_circuit_breaker",
+    # Error Classifier (Phase 2)
+    "ErrorCategory",
+    "ErrorClassification",
+    "ErrorClassifier",
+    "ErrorPattern",
+    "FallbackAction",
+    "RetryStrategy",
+    "classify_error",
+    "get_default_classifier",
+    "is_error_retryable",
+    "should_trip_breaker",
+    # Response Wrapper (Phase 2)
+    "BatchResponse",
+    "PaginatedResponse",
+    "ResponseMetadata",
+    "ResponseWrapper",
+    "wrap_async_operation",
+    "wrap_operation",
 ]
