@@ -1,0 +1,402 @@
+"""Learning service for orchestrating codebase intelligence building."""
+
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Callable, Optional
+
+from anamnesis.intelligence.pattern_engine import PatternEngine
+from anamnesis.intelligence.semantic_engine import SemanticEngine
+
+
+@dataclass
+class LearningOptions:
+    """Options for learning from codebase."""
+
+    force: bool = False
+    progress_callback: Optional[Callable[[int, int, str], None]] = None
+    max_files: int = 1000
+
+
+@dataclass
+class LearningResult:
+    """Result of learning from codebase."""
+
+    success: bool
+    concepts_learned: int = 0
+    patterns_learned: int = 0
+    features_learned: int = 0
+    insights: list[str] = field(default_factory=list)
+    time_elapsed_ms: int = 0
+    blueprint: Optional[dict] = None
+    error: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary."""
+        return {
+            "success": self.success,
+            "concepts_learned": self.concepts_learned,
+            "patterns_learned": self.patterns_learned,
+            "features_learned": self.features_learned,
+            "insights": self.insights,
+            "time_elapsed_ms": self.time_elapsed_ms,
+            "blueprint": self.blueprint,
+            "error": self.error,
+        }
+
+
+class LearningService:
+    """Service for learning codebase intelligence.
+
+    Orchestrates the learning process across multiple phases:
+    1. Codebase structure analysis
+    2. Semantic concept extraction
+    3. Pattern discovery
+    4. Relationship analysis
+    5. Intelligence synthesis
+    6. Feature mapping
+    7. Blueprint generation
+    """
+
+    def __init__(
+        self,
+        semantic_engine: Optional[SemanticEngine] = None,
+        pattern_engine: Optional[PatternEngine] = None,
+    ):
+        """Initialize learning service.
+
+        Args:
+            semantic_engine: Optional semantic engine instance
+            pattern_engine: Optional pattern engine instance
+        """
+        self._semantic_engine = semantic_engine or SemanticEngine()
+        self._pattern_engine = pattern_engine or PatternEngine()
+        self._learned_data: dict = {}
+
+    @property
+    def semantic_engine(self) -> SemanticEngine:
+        """Get semantic engine."""
+        return self._semantic_engine
+
+    @property
+    def pattern_engine(self) -> PatternEngine:
+        """Get pattern engine."""
+        return self._pattern_engine
+
+    @staticmethod
+    def _get_pattern_type_str(pattern) -> str:
+        """Get pattern type as string, handling both enum and string cases."""
+        ptype = pattern.pattern_type
+        return ptype.value if hasattr(ptype, 'value') else str(ptype)
+
+    def learn_from_codebase(
+        self,
+        path: str | Path,
+        options: Optional[LearningOptions] = None,
+    ) -> LearningResult:
+        """Learn from a codebase.
+
+        Args:
+            path: Path to codebase directory
+            options: Learning options
+
+        Returns:
+            Learning result with insights and statistics
+        """
+        options = options or LearningOptions()
+        start_time = datetime.now()
+        insights: list[str] = []
+        path = Path(path).resolve()
+
+        if not path.exists():
+            return LearningResult(
+                success=False,
+                error=f"Path does not exist: {path}",
+            )
+
+        if not path.is_dir():
+            return LearningResult(
+                success=False,
+                error=f"Path is not a directory: {path}",
+            )
+
+        try:
+            # Check for existing intelligence if not forcing re-learn
+            if not options.force:
+                existing = self._check_existing_intelligence(str(path))
+                if existing:
+                    return LearningResult(
+                        success=True,
+                        concepts_learned=existing["concepts"],
+                        patterns_learned=existing["patterns"],
+                        features_learned=existing.get("features", 0),
+                        insights=["Using existing intelligence (use force=True to re-learn)"],
+                        time_elapsed_ms=self._elapsed_ms(start_time),
+                    )
+
+            # Phase 1: Codebase analysis
+            insights.append("🔍 Phase 1: Analyzing codebase structure...")
+            if options.progress_callback:
+                options.progress_callback(1, 7, "Analyzing codebase structure")
+
+            analysis = self._semantic_engine.analyze_codebase(
+                str(path), max_files=options.max_files
+            )
+            insights.append(f"   ✅ Detected languages: {', '.join(analysis.languages) if analysis.languages else 'unknown'}")
+            insights.append(f"   ✅ Found frameworks: {', '.join(analysis.frameworks) if analysis.frameworks else 'none'}")
+            insights.append(f"   ✅ Total files: {analysis.total_files}, Total lines: {analysis.total_lines}")
+
+            # Phase 2: Semantic learning
+            insights.append("🧠 Phase 2: Learning semantic concepts...")
+            if options.progress_callback:
+                options.progress_callback(2, 7, "Learning semantic concepts")
+
+            concepts = analysis.concepts
+            concept_types: dict[str, int] = {}
+            for concept in concepts:
+                ctype = concept.concept_type.value
+                concept_types[ctype] = concept_types.get(ctype, 0) + 1
+
+            insights.append(f"   ✅ Extracted {len(concepts)} semantic concepts:")
+            for ctype, count in concept_types.items():
+                insights.append(f"     - {count} {ctype}{'s' if count > 1 else ''}")
+
+            # Phase 3: Pattern discovery
+            insights.append("🔄 Phase 3: Discovering coding patterns...")
+            if options.progress_callback:
+                options.progress_callback(3, 7, "Discovering patterns")
+
+            patterns = self._learn_patterns_from_directory(str(path), options.max_files)
+            pattern_categories: dict[str, int] = {}
+            for pattern in patterns:
+                category = self._get_pattern_type_str(pattern).split("_")[0]
+                pattern_categories[category] = pattern_categories.get(category, 0) + 1
+
+            insights.append(f"   ✅ Identified {len(patterns)} coding patterns:")
+            for category, count in pattern_categories.items():
+                insights.append(f"     - {count} {category} pattern{'s' if count > 1 else ''}")
+
+            # Phase 4: Relationship analysis
+            insights.append("🔗 Phase 4: Analyzing relationships...")
+            if options.progress_callback:
+                options.progress_callback(4, 7, "Analyzing relationships")
+
+            relationships = self._analyze_relationships(concepts, patterns)
+            insights.append(f"   ✅ Built {relationships['concept_relationships']} concept relationships")
+            insights.append(f"   ✅ Identified {relationships['dependency_patterns']} dependency patterns")
+
+            # Phase 5: Intelligence synthesis
+            insights.append("💾 Phase 5: Synthesizing intelligence...")
+            if options.progress_callback:
+                options.progress_callback(5, 7, "Synthesizing intelligence")
+
+            # Store learned data
+            self._learned_data[str(path)] = {
+                "concepts": concepts,
+                "patterns": patterns,
+                "analysis": analysis,
+                "learned_at": datetime.now(),
+            }
+
+            # Generate learning insights
+            learning_insights = self._generate_learning_insights(concepts, patterns, analysis)
+            insights.append("🎯 Learning Summary:")
+            for insight in learning_insights:
+                insights.append(f"   {insight}")
+
+            # Phase 6: Feature mapping
+            insights.append("🗺️  Phase 6: Building feature map...")
+            if options.progress_callback:
+                options.progress_callback(6, 7, "Building feature map")
+
+            feature_map = self._build_feature_map(str(path), concepts)
+            insights.append(f"   ✅ Mapped {len(feature_map)} features")
+
+            # Phase 7: Blueprint generation
+            insights.append("📋 Phase 7: Generating project blueprint...")
+            if options.progress_callback:
+                options.progress_callback(7, 7, "Generating blueprint")
+
+            blueprint = self._semantic_engine.generate_blueprint(str(path))
+            blueprint_dict = blueprint.to_dict() if blueprint else None
+
+            elapsed_ms = self._elapsed_ms(start_time)
+            insights.append(f"⚡ Learning completed in {elapsed_ms}ms")
+
+            return LearningResult(
+                success=True,
+                concepts_learned=len(concepts),
+                patterns_learned=len(patterns),
+                features_learned=len(feature_map),
+                insights=insights,
+                time_elapsed_ms=elapsed_ms,
+                blueprint=blueprint_dict,
+            )
+
+        except Exception as e:
+            return LearningResult(
+                success=False,
+                insights=insights,
+                time_elapsed_ms=self._elapsed_ms(start_time),
+                error=f"Learning failed: {e}",
+            )
+
+    def _check_existing_intelligence(self, path: str) -> Optional[dict]:
+        """Check for existing learned intelligence."""
+        if path in self._learned_data:
+            data = self._learned_data[path]
+            return {
+                "concepts": len(data.get("concepts", [])),
+                "patterns": len(data.get("patterns", [])),
+                "features": len(data.get("feature_map", {})),
+            }
+        return None
+
+    def _learn_patterns_from_directory(self, path: str, max_files: int) -> list:
+        """Learn patterns from directory."""
+        patterns = []
+        path_obj = Path(path)
+
+        # Get all source files
+        extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h"}
+        files = []
+        for ext in extensions:
+            files.extend(path_obj.rglob(f"*{ext}"))
+
+        # Limit files
+        files = files[:max_files]
+
+        for file_path in files:
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+                self._pattern_engine.learn_from_file(str(file_path), content)
+                file_patterns = self._pattern_engine.detect_patterns(content, str(file_path))
+                patterns.extend(file_patterns)
+            except (OSError, IOError):
+                continue
+
+        return patterns
+
+    def _analyze_relationships(self, concepts: list, patterns: list) -> dict:
+        """Analyze relationships between concepts and patterns."""
+        concept_relationships = set()
+        dependency_patterns = set()
+
+        # Group concepts by file
+        concepts_by_file: dict[str, list] = {}
+        for concept in concepts:
+            file_path = concept.file_path or "unknown"
+            if file_path not in concepts_by_file:
+                concepts_by_file[file_path] = []
+            concepts_by_file[file_path].append(concept)
+
+        # Find relationships within files
+        for file_concepts in concepts_by_file.values():
+            for i, concept1 in enumerate(file_concepts):
+                for concept2 in file_concepts[i + 1 :]:
+                    rel_key = f"{concept1.name}-{concept2.name}"
+                    concept_relationships.add(rel_key)
+
+        # Identify dependency patterns
+        for pattern in patterns:
+            pattern_type = self._get_pattern_type_str(pattern)
+            if any(
+                keyword in pattern_type.lower()
+                for keyword in ["dependency", "import", "organization"]
+            ):
+                dependency_patterns.add(pattern_type)
+
+        return {
+            "concept_relationships": len(concept_relationships),
+            "dependency_patterns": len(dependency_patterns),
+        }
+
+    def _generate_learning_insights(self, concepts: list, patterns: list, analysis) -> list[str]:
+        """Generate insights from learning."""
+        insights = []
+
+        # Concept density
+        if analysis.total_lines > 0:
+            density = len(concepts) / analysis.total_lines * 1000
+            insights.append(f"📊 Concept density: {density:.2f} concepts per 1000 lines")
+
+        # Pattern analysis
+        naming_patterns = [p for p in patterns if "naming" in self._get_pattern_type_str(p).lower()]
+        structural_patterns = [
+            p for p in patterns
+            if any(k in self._get_pattern_type_str(p).lower() for k in ["organization", "structure"])
+        ]
+        design_patterns = [
+            p for p in patterns
+            if any(k in self._get_pattern_type_str(p).lower() for k in ["singleton", "factory", "builder", "observer"])
+        ]
+
+        if naming_patterns:
+            insights.append(f"✨ Strong naming conventions detected ({len(naming_patterns)} patterns)")
+        if structural_patterns:
+            insights.append(f"🏗️ Organized code structure found ({len(structural_patterns)} patterns)")
+        if design_patterns:
+            insights.append(f"⚙️ Design patterns in use ({len(design_patterns)} patterns)")
+
+        # Language analysis
+        if len(analysis.languages) == 1:
+            insights.append(f"🎯 Single-language codebase ({analysis.languages[0]})")
+        elif len(analysis.languages) > 1:
+            insights.append(f"🌐 Multi-language codebase ({', '.join(analysis.languages)})")
+
+        # Framework analysis
+        if analysis.frameworks:
+            insights.append(f"🔧 Framework usage: {', '.join(analysis.frameworks)}")
+
+        return insights
+
+    def _build_feature_map(self, path: str, concepts: list) -> dict[str, list[str]]:
+        """Build feature-to-file mapping."""
+        feature_map: dict[str, list[str]] = {}
+
+        # Group concepts by inferred feature
+        for concept in concepts:
+            if not concept.file_path:
+                continue
+
+            # Infer feature from file path
+            path_parts = Path(concept.file_path).parts
+            feature = None
+
+            # Look for common feature indicators
+            for part in path_parts:
+                if part in {"src", "lib", "pkg", "internal", "test", "tests"}:
+                    continue
+                if part.endswith((".py", ".ts", ".js", ".go", ".rs")):
+                    continue
+                feature = part
+                break
+
+            if feature:
+                if feature not in feature_map:
+                    feature_map[feature] = []
+                if concept.file_path not in feature_map[feature]:
+                    feature_map[feature].append(concept.file_path)
+
+        return feature_map
+
+    def _elapsed_ms(self, start_time: datetime) -> int:
+        """Calculate elapsed milliseconds."""
+        return int((datetime.now() - start_time).total_seconds() * 1000)
+
+    def get_learned_data(self, path: str) -> Optional[dict]:
+        """Get learned data for a path."""
+        return self._learned_data.get(str(Path(path).resolve()))
+
+    def clear_learned_data(self, path: Optional[str] = None) -> None:
+        """Clear learned data."""
+        if path:
+            resolved = str(Path(path).resolve())
+            if resolved in self._learned_data:
+                del self._learned_data[resolved]
+        else:
+            self._learned_data.clear()
+
+    def has_intelligence(self, path: str) -> bool:
+        """Check if intelligence exists for path."""
+        return str(Path(path).resolve()) in self._learned_data

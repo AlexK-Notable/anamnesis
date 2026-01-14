@@ -205,7 +205,7 @@ class SemanticEngine:
 
         # Framework detection patterns
         self._framework_patterns: dict[str, list[tuple[str, re.Pattern[str]]]] = {
-            "Python": [
+            "python": [
                 ("FastAPI", re.compile(r"from\s+fastapi\s+import|import\s+fastapi", re.MULTILINE)),
                 ("Flask", re.compile(r"from\s+flask\s+import|import\s+flask", re.MULTILINE)),
                 ("Django", re.compile(r"from\s+django|import\s+django|DJANGO_SETTINGS", re.MULTILINE)),
@@ -217,7 +217,7 @@ class SemanticEngine:
                 ("Click", re.compile(r"import\s+click|from\s+click|@click\.", re.MULTILINE)),
                 ("Typer", re.compile(r"import\s+typer|from\s+typer", re.MULTILINE)),
             ],
-            "TypeScript": [
+            "typescript": [
                 ("React", re.compile(r"from\s+['\"]react['\"]|import\s+React", re.MULTILINE)),
                 ("Next.js", re.compile(r"from\s+['\"]next|next/", re.MULTILINE)),
                 ("Express", re.compile(r"from\s+['\"]express['\"]|require\(['\"]express", re.MULTILINE)),
@@ -225,18 +225,18 @@ class SemanticEngine:
                 ("Vue", re.compile(r"from\s+['\"]vue['\"]|createApp", re.MULTILINE)),
                 ("Angular", re.compile(r"@angular/core|@Component", re.MULTILINE)),
             ],
-            "JavaScript": [
+            "javascript": [
                 ("React", re.compile(r"from\s+['\"]react['\"]|require\(['\"]react", re.MULTILINE)),
                 ("Express", re.compile(r"require\(['\"]express['\"]|from\s+['\"]express", re.MULTILINE)),
                 ("Vue", re.compile(r"from\s+['\"]vue['\"]|createApp|Vue\.", re.MULTILINE)),
             ],
-            "Go": [
+            "go": [
                 ("Gin", re.compile(r"github\.com/gin-gonic/gin", re.MULTILINE)),
                 ("Echo", re.compile(r"github\.com/labstack/echo", re.MULTILINE)),
                 ("Fiber", re.compile(r"github\.com/gofiber/fiber", re.MULTILINE)),
                 ("GORM", re.compile(r"gorm\.io/gorm", re.MULTILINE)),
             ],
-            "Rust": [
+            "rust": [
                 ("Actix", re.compile(r"actix-web|actix_web", re.MULTILINE)),
                 ("Axum", re.compile(r"use\s+axum::", re.MULTILINE)),
                 ("Tokio", re.compile(r"use\s+tokio::", re.MULTILINE)),
@@ -274,11 +274,12 @@ class SemanticEngine:
             file_path: Path to the file.
 
         Returns:
-            Detected language or None.
+            Detected language (lowercase) or None.
         """
         path = Path(file_path)
         suffix = path.suffix.lower()
-        return self._language_extensions.get(suffix)
+        lang = self._language_extensions.get(suffix)
+        return lang.lower() if lang else None
 
     def detect_languages_in_directory(
         self,

@@ -39,6 +39,8 @@ class DependencyNode:
     is_external: bool = False
     is_stdlib: bool = False
     language: str = "python"
+    node_type: str = "module"
+    metadata: dict = field(default_factory=dict)
 
     @property
     def import_count(self) -> int:
@@ -66,6 +68,8 @@ class DependencyNode:
             "is_external": self.is_external,
             "is_stdlib": self.is_stdlib,
             "language": self.language,
+            "node_type": self.node_type,
+            "metadata": self.metadata,
             "import_count": self.import_count,
             "imported_by_count": self.imported_by_count,
             "coupling_score": self.coupling_score,
@@ -82,6 +86,8 @@ class DependencyNode:
             is_external=data.get("is_external", False),
             is_stdlib=data.get("is_stdlib", False),
             language=data.get("language", "python"),
+            node_type=data.get("node_type", "module"),
+            metadata=data.get("metadata", {}),
         )
 
 
@@ -200,6 +206,66 @@ class DependencyGraph:
         self.edges: list[DependencyEdge] = []
         self._adjacency: dict[str, set[str]] = defaultdict(set)
         self._reverse_adjacency: dict[str, set[str]] = defaultdict(set)
+
+    def add_node(
+        self,
+        name: str,
+        node_type: str = "unknown",
+        file_path: str = "",
+        metadata: dict | None = None,
+    ) -> DependencyNode:
+        """Add a node to the graph.
+
+        Args:
+            name: Unique name for the node.
+            node_type: Type of the node (e.g., 'class', 'function', 'module').
+            file_path: Path to the file containing this node.
+            metadata: Optional additional metadata.
+
+        Returns:
+            The created or existing DependencyNode.
+        """
+        if name not in self.nodes:
+            self.nodes[name] = DependencyNode(
+                path=file_path,
+                name=name,
+                language="unknown",
+                metadata=metadata or {},
+            )
+            self.nodes[name].node_type = node_type
+        return self.nodes[name]
+
+    def add_edge(
+        self,
+        source: str,
+        target: str,
+        edge_type: str = "unknown",
+    ) -> DependencyEdge | None:
+        """Add an edge between two nodes.
+
+        Args:
+            source: Source node name.
+            target: Target node name.
+            edge_type: Type of the relationship.
+
+        Returns:
+            The created DependencyEdge or None if nodes don't exist.
+        """
+        # Ensure nodes exist
+        if source not in self.nodes:
+            self.add_node(source)
+        if target not in self.nodes:
+            self.add_node(target)
+
+        edge = DependencyEdge(
+            source=source,
+            target=target,
+            edge_type=edge_type,
+        )
+        self.edges.append(edge)
+        self._adjacency[source].add(target)
+        self._reverse_adjacency[target].add(source)
+        return edge
 
     def build_from_imports(
         self,

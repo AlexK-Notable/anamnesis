@@ -257,30 +257,30 @@ class TestSemanticEngine:
     def test_detect_language_python(self):
         """Test detecting Python language."""
         engine = SemanticEngine()
-        assert engine.detect_language("test.py") == "Python"
-        assert engine.detect_language("test.pyi") == "Python"
+        assert engine.detect_language("test.py") == "python"
+        assert engine.detect_language("test.pyi") == "python"
 
     def test_detect_language_typescript(self):
         """Test detecting TypeScript language."""
         engine = SemanticEngine()
-        assert engine.detect_language("test.ts") == "TypeScript"
-        assert engine.detect_language("test.tsx") == "TypeScript"
+        assert engine.detect_language("test.ts") == "typescript"
+        assert engine.detect_language("test.tsx") == "typescript"
 
     def test_detect_language_javascript(self):
         """Test detecting JavaScript language."""
         engine = SemanticEngine()
-        assert engine.detect_language("test.js") == "JavaScript"
-        assert engine.detect_language("test.jsx") == "JavaScript"
+        assert engine.detect_language("test.js") == "javascript"
+        assert engine.detect_language("test.jsx") == "javascript"
 
     def test_detect_language_go(self):
         """Test detecting Go language."""
         engine = SemanticEngine()
-        assert engine.detect_language("main.go") == "Go"
+        assert engine.detect_language("main.go") == "go"
 
     def test_detect_language_rust(self):
         """Test detecting Rust language."""
         engine = SemanticEngine()
-        assert engine.detect_language("lib.rs") == "Rust"
+        assert engine.detect_language("lib.rs") == "rust"
 
     def test_detect_language_unknown(self):
         """Test detecting unknown language."""
@@ -408,8 +408,8 @@ class TestSemanticEngineWithFileSystem:
         engine = SemanticEngine()
         lang_counts = engine.detect_languages_in_directory(temp_project)
 
-        assert "Python" in lang_counts
-        assert lang_counts["Python"] >= 3
+        assert "python" in lang_counts
+        assert lang_counts["python"] >= 3
 
     def test_detect_frameworks(self, temp_project):
         """Test detecting frameworks."""
@@ -449,7 +449,7 @@ class TestSemanticEngineWithFileSystem:
         engine = SemanticEngine()
         analysis = engine.analyze_codebase(temp_project)
 
-        assert "Python" in analysis.languages
+        assert "python" in analysis.languages
         assert "FastAPI" in analysis.frameworks
         assert analysis.total_files >= 3
         assert len(analysis.key_directories) >= 3
@@ -470,7 +470,7 @@ class TestSemanticEngineWithFileSystem:
         engine = SemanticEngine()
         blueprint = engine.generate_blueprint(temp_project)
 
-        assert "Python" in blueprint.tech_stack
+        assert "python" in blueprint.tech_stack
         assert "FastAPI" in blueprint.tech_stack
         assert len(blueprint.key_directories) >= 3
         assert blueprint.feature_map is not None
