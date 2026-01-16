@@ -1,12 +1,19 @@
 """Learning service for orchestrating codebase intelligence building."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from anamnesis.intelligence.pattern_engine import PatternEngine
 from anamnesis.intelligence.semantic_engine import SemanticEngine
+from anamnesis.utils.error_classifier import classify_error
+from anamnesis.utils.logger import logger
+
+if TYPE_CHECKING:
+    from anamnesis.storage.sync_backend import SyncSQLiteBackend
 
 
 @dataclass
@@ -62,16 +69,24 @@ class LearningService:
         self,
         semantic_engine: Optional[SemanticEngine] = None,
         pattern_engine: Optional[PatternEngine] = None,
+        backend: Optional["SyncSQLiteBackend"] = None,
     ):
         """Initialize learning service.
 
         Args:
             semantic_engine: Optional semantic engine instance
             pattern_engine: Optional pattern engine instance
+            backend: Optional storage backend for persistence
         """
         self._semantic_engine = semantic_engine or SemanticEngine()
         self._pattern_engine = pattern_engine or PatternEngine()
+        self._backend = backend
         self._learned_data: dict = {}
+
+    @property
+    def backend(self) -> Optional["SyncSQLiteBackend"]:
+        """Get the storage backend."""
+        return self._backend
 
     @property
     def semantic_engine(self) -> SemanticEngine:
@@ -198,6 +213,10 @@ class LearningService:
                 "learned_at": datetime.now(),
             }
 
+            # Persist to backend if available
+            if self._backend:
+                self._persist_learned_data(concepts, patterns)
+
             # Generate learning insights
             learning_insights = self._generate_learning_insights(concepts, patterns, analysis)
             insights.append("🎯 Learning Summary:")
@@ -242,7 +261,11 @@ class LearningService:
             )
 
     def _check_existing_intelligence(self, path: str) -> Optional[dict]:
-        """Check for existing learned intelligence."""
+        """Check for existing learned intelligence.
+        
+        Checks both in-memory cache and backend storage.
+        """
+        # Check in-memory cache first
         if path in self._learned_data:
             data = self._learned_data[path]
             return {
@@ -250,7 +273,47 @@ class LearningService:
                 "patterns": len(data.get("patterns", [])),
                 "features": len(data.get("feature_map", {})),
             }
+        
+        # Check backend if available
+        if self._backend:
+            stats = self._backend.get_stats()
+            concept_count = stats.get("semantic_concepts", 0)
+            pattern_count = stats.get("developer_patterns", 0)
+            feature_count = stats.get("feature_maps", 0)
+            
+            if concept_count > 0 or pattern_count > 0:
+                return {
+                    "concepts": concept_count,
+                    "patterns": pattern_count,
+                    "features": feature_count,
+                }
+        
         return None
+
+    def _persist_learned_data(self, concepts: list, patterns: list) -> None:
+        """Persist learned concepts and patterns to backend.
+        
+        Args:
+            concepts: List of engine SemanticConcept objects
+            patterns: List of engine DetectedPattern objects
+        """
+        if not self._backend:
+            return
+        
+        from anamnesis.services.type_converters import (
+            detected_pattern_to_storage,
+            engine_concept_to_storage,
+        )
+        
+        # Persist concepts
+        with self._backend.batch_context():
+            for concept in concepts:
+                storage_concept = engine_concept_to_storage(concept)
+                self._backend.save_concept(storage_concept)
+            
+            for pattern in patterns:
+                storage_pattern = detected_pattern_to_storage(pattern)
+                self._backend.save_pattern(storage_pattern)
 
     def _learn_patterns_from_directory(self, path: str, max_files: int) -> list:
         """Learn patterns from directory."""
@@ -272,7 +335,16 @@ class LearningService:
                 self._pattern_engine.learn_from_file(str(file_path), content)
                 file_patterns = self._pattern_engine.detect_patterns(content, str(file_path))
                 patterns.extend(file_patterns)
-            except (OSError, IOError):
+            except (OSError, IOError) as e:
+                classification = classify_error(e, {"file": str(file_path)})
+                logger.debug(
+                    f"Skipping file during learning: {file_path}",
+                    extra={
+                        "error": str(e),
+                        "category": classification.category.value,
+                        "file_path": str(file_path),
+                    },
+                )
                 continue
 
         return patterns

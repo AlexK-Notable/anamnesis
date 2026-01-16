@@ -1,0 +1,33 @@
+{
+  "version": "0.1.0",
+  "intelligence": {
+    "enable_real_time_analysis": true,
+    "enable_pattern_learning": true
+  },
+  "watching": {
+    "patterns": [
+      "**/*.py",
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.rs",
+      "**/*.go",
+      "**/*.java"
+    ],
+    "ignored": [
+      "**/node_modules/**",
+      "**/.git/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/target/**",
+      "**/__pycache__/**",
+      "**/.venv/**"
+    ],
+    "debounce_ms": 500
+  },
+  "mcp": {
+    "server_port": 3000,
+    "enable_all_tools": true
+  }
+}

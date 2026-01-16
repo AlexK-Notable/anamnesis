@@ -1,10 +1,16 @@
 """Intelligence service for high-level intelligence operations."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
+from anamnesis.intelligence.embedding_engine import (
+    EmbeddingConfig,
+    EmbeddingEngine,
+)
 from anamnesis.intelligence.pattern_engine import (
     DetectedPattern,
     PatternEngine,
@@ -15,6 +21,10 @@ from anamnesis.intelligence.semantic_engine import (
     SemanticConcept,
     SemanticEngine,
 )
+from anamnesis.interfaces.engines import SemanticSearchResult
+
+if TYPE_CHECKING:
+    from anamnesis.storage.sync_backend import SyncSQLiteBackend
 
 
 @dataclass
@@ -121,21 +131,34 @@ class IntelligenceService:
     - Get developer profiles
     - Contribute AI insights
     - Get project blueprints
+
+    When a backend is provided, data is persisted to SQLite.
+    Without a backend, operates in memory-only mode for testing.
     """
 
     def __init__(
         self,
         semantic_engine: Optional[SemanticEngine] = None,
         pattern_engine: Optional[PatternEngine] = None,
+        embedding_engine: Optional[EmbeddingEngine] = None,
+        embedding_config: Optional[EmbeddingConfig] = None,
+        backend: Optional["SyncSQLiteBackend"] = None,
     ):
         """Initialize intelligence service.
 
         Args:
             semantic_engine: Optional semantic engine instance
             pattern_engine: Optional pattern engine instance
+            embedding_engine: Optional embedding engine for semantic search
+            embedding_config: Optional config for embedding engine (if not provided)
+            backend: Optional storage backend for persistence
         """
         self._semantic_engine = semantic_engine or SemanticEngine()
         self._pattern_engine = pattern_engine or PatternEngine()
+        self._embedding_engine = embedding_engine or EmbeddingEngine(embedding_config)
+        self._backend = backend
+
+        # In-memory caches (populated from backend or used standalone)
         self._concepts: list[SemanticConcept] = []
         self._patterns: list[DetectedPattern] = []
         self._insights: list[AIInsight] = []
@@ -151,13 +174,72 @@ class IntelligenceService:
         """Get pattern engine."""
         return self._pattern_engine
 
+    @property
+    def backend(self) -> Optional["SyncSQLiteBackend"]:
+        """Get storage backend."""
+        return self._backend
+
+    @property
+    def embedding_engine(self) -> EmbeddingEngine:
+        """Get embedding engine for semantic search."""
+        return self._embedding_engine
+
     def load_concepts(self, concepts: list[SemanticConcept]) -> None:
-        """Load semantic concepts."""
+        """Load semantic concepts.
+
+        Stores concepts in memory cache, persists to backend if available,
+        and indexes in embedding engine for semantic search.
+        """
         self._concepts = concepts
 
+        # Persist to backend if available
+        if self._backend:
+            from anamnesis.services.type_converters import engine_concept_to_storage
+
+            with self._backend.batch_context():
+                for concept in concepts:
+                    storage_concept = engine_concept_to_storage(concept)
+                    self._backend.save_concept(storage_concept)
+
+        # Index concepts in embedding engine for semantic search
+        self._index_concepts_for_search(concepts)
+
     def load_patterns(self, patterns: list[DetectedPattern]) -> None:
-        """Load detected patterns."""
+        """Load detected patterns.
+
+        Stores patterns in memory cache and persists to backend if available.
+        """
         self._patterns = patterns
+
+        # Persist to backend if available
+        if self._backend:
+            from anamnesis.services.type_converters import detected_pattern_to_storage
+
+            with self._backend.batch_context():
+                for pattern in patterns:
+                    storage_pattern = detected_pattern_to_storage(pattern)
+                    self._backend.save_pattern(storage_pattern)
+
+    def load_from_backend(self) -> None:
+        """Load concepts and patterns from backend into memory cache.
+
+        Call this to restore state after service restart.
+        """
+        if not self._backend:
+            return
+
+        from anamnesis.services.type_converters import (
+            storage_concept_to_engine,
+            storage_pattern_to_detected,
+        )
+
+        # Load concepts
+        storage_concepts = self._backend.search_concepts("", limit=10000)
+        self._concepts = [storage_concept_to_engine(c) for c in storage_concepts]
+
+        # Load patterns
+        storage_patterns = self._backend.get_all_patterns()
+        self._patterns = [storage_pattern_to_detected(p) for p in storage_patterns]
 
     def get_semantic_insights(
         self,
@@ -364,8 +446,11 @@ class IntelligenceService:
         for rec in self._pattern_engine.get_recommendations(
             "general development", top_k=10
         ):
+            # Handle both enum and string pattern_type
+            pt = rec.pattern_type
+            pattern_val = pt.value if hasattr(pt, "value") else str(pt)
             preferred.append({
-                "pattern": rec.pattern_type.value,
+                "pattern": pattern_val,
                 "description": rec.description,
                 "confidence": rec.confidence,
                 "examples": rec.examples,
@@ -419,7 +504,9 @@ class IntelligenceService:
         areas = set()
 
         for pattern in self._patterns:
-            pattern_val = pattern.pattern_type.value.lower()
+            # Handle both enum and string pattern_type
+            pt = pattern.pattern_type
+            pattern_val = (pt.value if hasattr(pt, "value") else str(pt)).lower()
             if "api" in pattern_val:
                 areas.add("api_development")
             if "test" in pattern_val:
@@ -435,7 +522,8 @@ class IntelligenceService:
         """Extract recent focus areas."""
         focus = []
         for pattern in self._patterns[-5:]:
-            focus.append(pattern.pattern_type.value)
+            pt = pattern.pattern_type
+            focus.append(pt.value if hasattr(pt, "value") else str(pt))
         return focus
 
     def contribute_insight(
@@ -475,6 +563,21 @@ class IntelligenceService:
             )
 
             self._insights.append(insight)
+
+            # Persist to backend if available
+            if self._backend:
+                from anamnesis.services.type_converters import service_insight_to_storage
+
+                storage_insight = service_insight_to_storage(
+                    insight_id=insight_id,
+                    insight_type=insight_type,
+                    content=content,
+                    confidence=confidence,
+                    source_agent=source_agent,
+                    created_at=insight.created_at,
+                    impact_prediction=impact_prediction,
+                )
+                self._backend.save_insight(storage_insight)
 
             # Update work session if provided
             session_updated = False
@@ -547,30 +650,115 @@ class IntelligenceService:
 
     def _get_learning_status(self, project_path: str) -> dict:
         """Get learning status for project."""
-        has_intelligence = len(self._concepts) > 0 or len(self._patterns) > 0
+        # Get counts from backend if available, else use in-memory cache
+        if self._backend:
+            stats = self._backend.get_stats()
+            concept_count = stats.get("semantic_concepts", 0)
+            pattern_count = stats.get("developer_patterns", 0)
+        else:
+            concept_count = len(self._concepts)
+            pattern_count = len(self._patterns)
+
+        has_intelligence = concept_count > 0 or pattern_count > 0
 
         return {
             "has_intelligence": has_intelligence,
             "is_stale": False,
-            "concepts_stored": len(self._concepts),
-            "patterns_stored": len(self._patterns),
+            "concepts_stored": concept_count,
+            "patterns_stored": pattern_count,
+            "persisted": self._backend is not None,
             "recommendation": "ready" if has_intelligence else "learning_recommended",
             "message": (
-                f"Intelligence ready! {len(self._concepts)} concepts and {len(self._patterns)} patterns."
+                f"Intelligence ready! {concept_count} concepts and {pattern_count} patterns."
                 if has_intelligence
                 else "Learning recommended for optimal functionality."
             ),
         }
 
     def get_insights(self, insight_type: Optional[str] = None) -> list[AIInsight]:
-        """Get contributed insights."""
+        """Get contributed insights.
+
+        Returns insights from memory cache. Call load_from_backend() first
+        to populate cache from persisted data.
+        """
         if insight_type:
             return [i for i in self._insights if i.insight_type == insight_type]
         return self._insights.copy()
 
     def clear(self) -> None:
-        """Clear all loaded data."""
+        """Clear all loaded data from memory and optionally from backend."""
         self._concepts.clear()
         self._patterns.clear()
         self._insights.clear()
         self._work_sessions.clear()
+        self._embedding_engine.clear()
+
+        # Note: We don't clear the backend here as that would be destructive.
+        # Use backend.clear_all() explicitly if needed.
+
+    def _index_concepts_for_search(self, concepts: list[SemanticConcept]) -> None:
+        """Index concepts in embedding engine for semantic search.
+
+        Args:
+            concepts: List of semantic concepts to index
+        """
+        if not concepts:
+            return
+
+        # Convert concepts to batch format for efficient indexing
+        batch_data = []
+        for concept in concepts:
+            # Build metadata dict
+            metadata = {
+                "confidence": concept.confidence,
+            }
+            if concept.relationships:
+                metadata["relationships"] = concept.relationships
+            if concept.line_range:
+                metadata["line_range"] = concept.line_range
+
+            batch_data.append((
+                concept.name,
+                concept.concept_type.value if hasattr(concept.concept_type, "value") else str(concept.concept_type),
+                concept.file_path or "",
+                metadata,
+            ))
+
+        # Add all concepts in one batch (more efficient for embedding generation)
+        self._embedding_engine.add_concepts_batch(batch_data)
+
+    def search_semantically_similar(
+        self,
+        query: str,
+        limit: int = 10,
+        concept_type: Optional[str] = None,
+        file_path_filter: Optional[str] = None,
+    ) -> list[SemanticSearchResult]:
+        """Search for semantically similar concepts using embeddings.
+
+        Uses the embedding engine to find concepts that are semantically
+        similar to the query, even if they don't share exact keywords.
+
+        Args:
+            query: Search query describing what to find
+            limit: Maximum number of results
+            concept_type: Optional filter by concept type (class, function, etc.)
+            file_path_filter: Optional filter by file path prefix
+
+        Returns:
+            List of SemanticSearchResult sorted by similarity
+        """
+        return self._embedding_engine.search(
+            query=query,
+            limit=limit,
+            concept_type=concept_type,
+            file_path_filter=file_path_filter,
+        )
+
+    def get_embedding_stats(self) -> dict:
+        """Get statistics about the embedding engine.
+
+        Returns:
+            Dictionary with embedding engine stats
+        """
+        return self._embedding_engine.get_stats()

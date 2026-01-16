@@ -15,6 +15,11 @@ from anamnesis.services.intelligence_service import (
 from anamnesis.services.codebase_service import (
     CodebaseService,
 )
+from anamnesis.services.session_manager import (
+    DecisionInfo,
+    SessionInfo,
+    SessionManager,
+)
 
 __all__ = [
     # Learning Service
@@ -29,4 +34,8 @@ __all__ = [
     "AIInsight",
     # Codebase Service
     "CodebaseService",
+    # Session Manager
+    "SessionManager",
+    "SessionInfo",
+    "DecisionInfo",
 ]

@@ -59,3 +59,9 @@ Thumbs.db
 .uv/
 uv.lock
 in-memoria.db
+
+# Anamnesis
+anamnesis.db
+.anamnesis/cache/
+.serena/
+in-memoria-vectors.db/

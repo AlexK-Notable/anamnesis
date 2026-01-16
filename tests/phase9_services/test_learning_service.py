@@ -176,7 +176,7 @@ def test_application_singleton():
 
         assert result.success is True
         assert result.concepts_learned > 0
-        assert result.time_elapsed_ms > 0
+        assert result.time_elapsed_ms >= 0  # Can be 0 on fast machines with small projects
         assert len(result.insights) > 0
         assert "Phase 1:" in result.insights[0]
 

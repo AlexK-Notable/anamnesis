@@ -25,7 +25,34 @@ from .schema import (
     WorkSession,
 )
 from .sqlite_backend import SQLiteBackend
+from .sync_backend import SyncSQLiteBackend
+from .resilient_backend import (
+    ResilientSQLiteBackend,
+    get_circuit_breaker_stats,
+    reset_circuit_breaker,
+)
 from .migrations import DatabaseMigrator, Migration
+from .adapters import (
+    AdapterError,
+    ValidationError,
+    TypeCoercionError,
+    EntityAdapter,
+    SemanticConceptAdapter,
+    DeveloperPatternAdapter,
+    AIInsightAdapter,
+    WorkSessionAdapter,
+    ArchitecturalDecisionAdapter,
+    FileIntelligenceAdapter,
+    ProjectMetadataAdapter,
+    FeatureMapAdapter,
+    EntryPointAdapter,
+    KeyDirectoryAdapter,
+    SharedPatternAdapter,
+    ProjectDecisionAdapter,
+    ADAPTER_REGISTRY,
+    adapt_from_dict,
+    adapt_to_dict,
+)
 
 __all__ = [
     # Schema types
@@ -43,7 +70,32 @@ __all__ = [
     "ProjectDecision",
     # Backends
     "SQLiteBackend",
+    "SyncSQLiteBackend",
+    "ResilientSQLiteBackend",
+    # Circuit breaker utilities
+    "get_circuit_breaker_stats",
+    "reset_circuit_breaker",
     # Migrations
     "DatabaseMigrator",
     "Migration",
+    # Adapters
+    "AdapterError",
+    "ValidationError",
+    "TypeCoercionError",
+    "EntityAdapter",
+    "SemanticConceptAdapter",
+    "DeveloperPatternAdapter",
+    "AIInsightAdapter",
+    "WorkSessionAdapter",
+    "ArchitecturalDecisionAdapter",
+    "FileIntelligenceAdapter",
+    "ProjectMetadataAdapter",
+    "FeatureMapAdapter",
+    "EntryPointAdapter",
+    "KeyDirectoryAdapter",
+    "SharedPatternAdapter",
+    "ProjectDecisionAdapter",
+    "ADAPTER_REGISTRY",
+    "adapt_from_dict",
+    "adapt_to_dict",
 ]

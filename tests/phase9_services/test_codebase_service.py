@@ -183,7 +183,7 @@ def test_application():
 
         assert result.success is True
         assert result.analysis is not None
-        assert result.time_elapsed_ms > 0
+        assert result.time_elapsed_ms >= 0  # Can be 0 on fast machines with small projects
         assert len(result.insights) > 0
 
     def test_analyze_with_complexity(self, temp_project):

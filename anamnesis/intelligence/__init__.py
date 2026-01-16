@@ -22,6 +22,11 @@ from anamnesis.intelligence.semantic_engine import (
     SemanticConcept,
     SemanticEngine,
 )
+from anamnesis.intelligence.embedding_engine import (
+    EmbeddingConfig,
+    EmbeddingEngine,
+    IndexedConcept,
+)
 
 __all__ = [
     # Pattern engine
@@ -37,4 +42,8 @@ __all__ = [
     "CodebaseAnalysis",
     "ProjectBlueprint",
     "SemanticEngine",
+    # Embedding engine
+    "EmbeddingConfig",
+    "EmbeddingEngine",
+    "IndexedConcept",
 ]

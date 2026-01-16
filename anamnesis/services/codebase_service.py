@@ -8,6 +8,8 @@ from typing import Any, Optional
 from anamnesis.analysis.complexity_analyzer import ComplexityAnalyzer, FileComplexity
 from anamnesis.analysis.dependency_graph import DependencyGraph
 from anamnesis.intelligence.semantic_engine import CodebaseAnalysis, SemanticEngine
+from anamnesis.utils.error_classifier import classify_error
+from anamnesis.utils.logger import logger
 
 
 @dataclass
@@ -225,7 +227,16 @@ class CodebaseService:
 
         try:
             content = path.read_text(encoding="utf-8", errors="ignore")
-        except (OSError, IOError):
+        except (OSError, IOError) as e:
+            classification = classify_error(e, {"file": file_path})
+            logger.debug(
+                f"Failed to read file for analysis: {file_path}",
+                extra={
+                    "error": str(e),
+                    "category": classification.category.value,
+                    "file_path": file_path,
+                },
+            )
             return None
 
         # Detect language
@@ -298,7 +309,16 @@ class CodebaseService:
                         hotspots.extend(metrics.hotspots)
                         file_count += 1
 
-                except (OSError, IOError):
+                except (OSError, IOError) as e:
+                    classification = classify_error(e, {"file": str(file_path)})
+                    logger.debug(
+                        f"Skipping file during complexity analysis: {file_path}",
+                        extra={
+                            "error": str(e),
+                            "category": classification.category.value,
+                            "file_path": str(file_path),
+                        },
+                    )
                     continue
 
         if file_count == 0:
