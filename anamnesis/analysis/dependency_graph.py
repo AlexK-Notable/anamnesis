@@ -257,10 +257,16 @@ class DependencyGraph:
         if target not in self.nodes:
             self.add_node(target)
 
+        # Convert string edge_type to DependencyType enum
+        try:
+            dep_type = DependencyType(edge_type)
+        except ValueError:
+            dep_type = DependencyType.DIRECT
+
         edge = DependencyEdge(
             source=source,
             target=target,
-            edge_type=edge_type,
+            dependency_type=dep_type,
         )
         self.edges.append(edge)
         self._adjacency[source].add(target)
@@ -411,21 +417,33 @@ class DependencyGraph:
             or (module_path / "__init__.py").exists()
         )
 
-    def find_circular_dependencies(self) -> list[CircularDependency]:
-        """Find all circular dependencies in the graph."""
+    def find_circular_dependencies(
+        self, max_depth: int = 500
+    ) -> list[CircularDependency]:
+        """Find all circular dependencies in the graph.
+
+        Args:
+            max_depth: Maximum recursion depth to prevent stack overflow.
+
+        Returns:
+            List of detected circular dependencies.
+        """
         cycles: list[CircularDependency] = []
         visited: set[str] = set()
         rec_stack: set[str] = set()
         path: list[str] = []
 
-        def dfs(node: str) -> None:
+        def dfs(node: str, depth: int = 0) -> None:
+            if depth >= max_depth:
+                return  # Prevent stack overflow
+
             visited.add(node)
             rec_stack.add(node)
             path.append(node)
 
             for neighbor in self._adjacency.get(node, set()):
                 if neighbor not in visited:
-                    dfs(neighbor)
+                    dfs(neighbor, depth + 1)
                 elif neighbor in rec_stack:
                     # Found cycle
                     cycle_start = path.index(neighbor)
@@ -442,27 +460,38 @@ class DependencyGraph:
 
         for node in self.nodes:
             if node not in visited:
-                dfs(node)
+                dfs(node, 0)
 
         return cycles
 
-    def get_dependency_depth(self, module: str) -> int:
-        """Get maximum dependency depth from a module."""
+    def get_dependency_depth(self, module: str, max_depth: int = 500) -> int:
+        """Get maximum dependency depth from a module.
+
+        Args:
+            module: Module name to analyze.
+            max_depth: Maximum recursion depth to prevent stack overflow.
+
+        Returns:
+            Maximum dependency depth, capped at max_depth.
+        """
         if module not in self.nodes:
             return 0
 
         visited: set[str] = set()
 
         def get_depth(node: str, current_depth: int) -> int:
+            if current_depth >= max_depth:
+                return max_depth  # Prevent stack overflow
+
             if node in visited:
                 return current_depth
             visited.add(node)
 
-            max_depth = current_depth
+            result = current_depth
             for neighbor in self._adjacency.get(node, set()):
-                max_depth = max(max_depth, get_depth(neighbor, current_depth + 1))
+                result = max(result, get_depth(neighbor, current_depth + 1))
 
-            return max_depth
+            return result
 
         return get_depth(module, 0)
 

@@ -404,18 +404,7 @@ class ImportExtractor:
             relative_level = 0
             is_star = False
 
-            # Check for relative imports in the raw text
-            raw_text = node.text
-            if raw_text.startswith("from .") or raw_text.startswith("from.."):
-                is_relative = True
-                # Count dots after 'from '
-                from_idx = raw_text.find("from") + 4
-                while from_idx < len(raw_text) and raw_text[from_idx] in " .":
-                    if raw_text[from_idx] == ".":
-                        relative_level += 1
-                    from_idx += 1
-
-            # Check for relative_import node
+            # Check for relative_import node (AST-based, more reliable than text parsing)
             for child in node.children:
                 child_type = child.metadata.get("tree_sitter_type", "")
                 if child_type == "relative_import":

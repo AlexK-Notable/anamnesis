@@ -192,13 +192,17 @@ class PathValidator:
         cls,
         path: str,
         base_path: str | None = None,
+        allow_symlinks: bool = True,
+        follow_symlinks: bool = True,
     ) -> PathValidationResult:
         """
-        Validate that a path is safe (no traversal attacks).
+        Validate that a path is safe (no traversal attacks or symlink escapes).
 
         Args:
             path: The path to validate
             base_path: Optional base path that the resolved path must be within
+            allow_symlinks: If False, reject paths containing symlinks
+            follow_symlinks: If True, resolve symlinks and validate final target
 
         Returns:
             PathValidationResult with validation outcome
@@ -214,8 +218,30 @@ class PathValidator:
                 path = sanitized
 
         try:
-            resolved = Path(path).resolve()
+            path_obj = Path(path)
+
+            # Check for symlinks in the path if not allowed
+            if not allow_symlinks:
+                if cls._contains_symlink(path_obj):
+                    return PathValidationResult(
+                        is_valid=False,
+                        resolved_path=None,
+                        error=f"Path contains symbolic links: {path}",
+                    )
+
+            # Resolve path (follows symlinks by default)
+            if follow_symlinks:
+                resolved = path_obj.resolve()
+            else:
+                # Use resolve with strict=False to get absolute path without following symlinks
+                resolved = Path(os.path.abspath(path))
+
             resolved_str = str(resolved)
+
+            # If following symlinks, warn about them
+            if follow_symlinks and allow_symlinks:
+                if cls._contains_symlink(path_obj):
+                    warnings.append(f"Path contains symlinks, resolved to: {resolved_str}")
 
             # If base_path is provided, ensure resolved path is within it
             if base_path:
@@ -241,6 +267,61 @@ class PathValidator:
                 resolved_path=None,
                 error=f"Invalid path: {e}",
             )
+
+    @classmethod
+    def _contains_symlink(cls, path: Path) -> bool:
+        """
+        Check if any component of the path is a symbolic link.
+
+        Args:
+            path: Path to check
+
+        Returns:
+            True if any path component is a symlink
+        """
+        # Check the path itself
+        if path.is_symlink():
+            return True
+
+        # Check each parent component
+        try:
+            # Start from the path and check each parent
+            current = path
+            while current != current.parent:  # Stop at root
+                if current.is_symlink():
+                    return True
+                current = current.parent
+        except (OSError, PermissionError):
+            # Can't check - assume safe but this is conservative
+            pass
+
+        return False
+
+    @classmethod
+    def is_symlink_safe(cls, path: str, allowed_base: str) -> bool:
+        """
+        Check if a symlink target is within allowed boundaries.
+
+        This resolves the symlink and verifies the final target is
+        within the allowed base directory.
+
+        Args:
+            path: Path that may be a symlink
+            allowed_base: Base directory that the resolved path must be within
+
+        Returns:
+            True if the path (after resolving symlinks) is within allowed_base
+        """
+        try:
+            path_obj = Path(path)
+            resolved = path_obj.resolve()  # Follows symlinks
+            base_resolved = Path(allowed_base).resolve()
+
+            # Check if resolved path is within allowed base
+            resolved.relative_to(base_resolved)
+            return True
+        except (ValueError, OSError):
+            return False
 
 
 # ============================================================================
