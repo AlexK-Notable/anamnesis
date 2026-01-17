@@ -137,14 +137,18 @@ anamnesis/
 
 ## Relationship to In-Memoria
 
-Anamnesis is a Python implementation of the core analysis engine from [In-Memoria](https://github.com/In-Memoria/In-Memoria). While In-Memoria is a full MCP server providing codebase intelligence to AI assistants, Anamnesis focuses purely on the analysis capabilities, making it usable as a standalone library.
+Anamnesis is a Python implementation of the core analysis engine from [In-Memoria](https://github.com/pi22by7/In-Memoria), originally created by [Piyush Airani](https://github.com/pi22by7). While In-Memoria is a full MCP server providing codebase intelligence to AI assistants, Anamnesis focuses purely on the analysis capabilities, making it usable as a standalone library.
 
 **In-Memoria** (Rust/TypeScript) → Full MCP server with CLI
 **Anamnesis** (Python) → Portable analysis library
 
+## Acknowledgments
+
+- [Piyush Airani](https://github.com/pi22by7) - Creator of [In-Memoria](https://github.com/pi22by7/In-Memoria), the original Rust implementation this project is based on
+
 ## License
 
-MIT
+MIT - see the [LICENSE](LICENSE) file for details.
 
 ## Etymology
 
