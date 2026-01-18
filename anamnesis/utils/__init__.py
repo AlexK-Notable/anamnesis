@@ -154,6 +154,28 @@ from .response_wrapper import (
     wrap_operation,
 )
 
+# TOON Encoder (Phase 13)
+from .toon_encoder import (
+    ResponseFormat,
+    ToonEncoder,
+    ToonEncodingError,
+    estimate_token_savings,
+    has_nested_arrays,
+)
+
+# Serialization (Phase 13)
+from .serialization import (
+    is_serialized,
+    serialize_to_primitives,
+)
+
+# Response Formatter (Phase 13)
+from .response_formatter import (
+    ResponseFormatter,
+    format_response,
+    get_default_formatter,
+)
+
 __all__ = [
     # Logger
     "Logger",
@@ -267,4 +289,17 @@ __all__ = [
     "ResponseWrapper",
     "wrap_async_operation",
     "wrap_operation",
+    # TOON Encoder (Phase 13)
+    "ResponseFormat",
+    "ToonEncoder",
+    "ToonEncodingError",
+    "estimate_token_savings",
+    "has_nested_arrays",
+    # Serialization (Phase 13)
+    "is_serialized",
+    "serialize_to_primitives",
+    # Response Formatter (Phase 13)
+    "ResponseFormatter",
+    "format_response",
+    "get_default_formatter",
 ]

@@ -408,21 +408,15 @@ class ResponseWrapper(Generic[T]):
             }
 
     def _serialize_data(self, data: Any) -> Any:
-        """Serialize data for JSON output."""
-        if data is None:
-            return None
-        if isinstance(data, (str, int, float, bool)):
-            return data
-        if isinstance(data, (list, tuple)):
-            return [self._serialize_data(item) for item in data]
-        if isinstance(data, dict):
-            return {k: self._serialize_data(v) for k, v in data.items()}
-        if hasattr(data, "to_dict"):
-            return data.to_dict()
-        if hasattr(data, "__dict__"):
-            return {k: self._serialize_data(v) for k, v in data.__dict__.items()
-                    if not k.startswith("_")}
-        return str(data)
+        """Serialize data for JSON output.
+
+        Delegates to shared serialize_to_primitives() for consistent
+        serialization across the codebase.
+        """
+        # Import at function level to avoid circular imports
+        from anamnesis.utils.serialization import serialize_to_primitives
+
+        return serialize_to_primitives(data)
 
 
 def wrap_operation(
