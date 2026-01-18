@@ -65,3 +65,4 @@ anamnesis.db
 .anamnesis/cache/
 .serena/
 in-memoria-vectors.db/
+.hypothesis/
