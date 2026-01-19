@@ -55,6 +55,7 @@ _intelligence_service: Optional[IntelligenceService] = None
 _codebase_service: Optional[CodebaseService] = None
 _session_manager: Optional[SessionManager] = None
 _search_service: Optional[SearchService] = None
+_semantic_initialized: bool = False  # Track async semantic backend initialization
 _current_path: Optional[str] = None
 _server_start_time: float = time.time()  # Track server uptime
 
@@ -72,10 +73,46 @@ def _get_search_service() -> SearchService:
     return _search_service
 
 
+async def _ensure_semantic_search() -> bool:
+    """Initialize semantic search backend lazily.
+
+    Called on first semantic search request. Creates the full async
+    SearchService with semantic backend (embeddings + Qdrant).
+
+    Returns:
+        True if semantic search is now available.
+    """
+    global _search_service, _semantic_initialized
+
+    if _semantic_initialized:
+        return _search_service is not None and _search_service.is_semantic_available()
+
+    current_path = _get_current_path()
+
+    try:
+        # Create full async search service with semantic backend
+        _search_service = await SearchService.create(
+            current_path,
+            enable_semantic=True,
+        )
+        _semantic_initialized = True
+        logger.info("Semantic search initialized successfully")
+        return _search_service.is_semantic_available()
+
+    except Exception as e:
+        logger.warning(f"Semantic search initialization failed: {e}")
+        # Fall back to sync service if async fails
+        if _search_service is None:
+            _search_service = SearchService.create_sync(current_path)
+        _semantic_initialized = True  # Don't retry on failure
+        return False
+
+
 def _reset_search_service() -> None:
     """Reset search service when path changes."""
-    global _search_service
+    global _search_service, _semantic_initialized
     _search_service = None
+    _semantic_initialized = False
 
 
 def _get_learning_service() -> LearningService:
@@ -664,7 +701,21 @@ def _search_codebase_impl(
     }
     search_type_enum = type_map.get(search_type.lower(), SearchType.TEXT)
 
-    # Get search service
+    # Get or create event loop
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    # Initialize semantic search lazily if requested
+    if search_type_enum == SearchType.SEMANTIC:
+        semantic_available = loop.run_until_complete(_ensure_semantic_search())
+        if not semantic_available:
+            logger.warning("Semantic search not available, falling back to text search")
+            # Will fall back via SearchService logic
+
+    # Get search service (may have been upgraded to async version)
     search_service = _get_search_service()
 
     # Build search query
@@ -675,15 +726,8 @@ def _search_codebase_impl(
         language=language,
     )
 
-    # Execute search (async wrapped for sync context)
+    # Execute search
     try:
-        # Run async search in event loop
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
         results = loop.run_until_complete(search_service.search(search_query))
 
         # Convert to response format

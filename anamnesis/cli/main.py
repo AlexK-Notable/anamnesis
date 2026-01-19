@@ -262,6 +262,120 @@ def init(path: str) -> None:
 
 
 @cli.command()
+@click.argument("query", type=str)
+@click.option(
+    "--type", "-t",
+    "search_type",
+    type=click.Choice(["text", "pattern", "semantic"], case_sensitive=False),
+    default="text",
+    help="Search type: text (substring), pattern (regex/AST), semantic (vector similarity)",
+)
+@click.option("--limit", "-n", default=20, help="Maximum number of results")
+@click.option("--language", "-l", default=None, help="Filter by language (python, javascript, etc.)")
+@click.option(
+    "--path", "-p",
+    type=click.Path(exists=True),
+    default=".",
+    help="Directory to search (defaults to current directory)",
+)
+@click.option("--json", "as_json", is_flag=True, help="Output results as JSON")
+def search(
+    query: str,
+    search_type: str,
+    limit: int,
+    language: Optional[str],
+    path: str,
+    as_json: bool,
+) -> None:
+    """Search codebase using text, pattern, or semantic search.
+
+    QUERY is the search query - text string, regex pattern, or natural language.
+
+    Examples:
+      anamnesis search "def authenticate"
+      anamnesis search "class.*Service" --type pattern
+      anamnesis search "function handling user login" --type semantic
+    """
+    import asyncio
+    import json as json_module
+
+    from anamnesis.interfaces.search import SearchQuery, SearchType
+    from anamnesis.search.service import SearchService
+
+    resolved_path = Path(path).resolve()
+
+    # Map search type
+    type_map = {
+        "text": SearchType.TEXT,
+        "pattern": SearchType.PATTERN,
+        "semantic": SearchType.SEMANTIC,
+    }
+    search_type_enum = type_map[search_type.lower()]
+
+    if not as_json:
+        click.echo(f"🔍 Searching ({search_type}): {query}")
+        click.echo(f"📂 Path: {resolved_path}")
+        click.echo()
+
+    async def run_search():
+        # Create search service (with semantic for semantic search)
+        if search_type_enum == SearchType.SEMANTIC:
+            service = await SearchService.create(str(resolved_path), enable_semantic=True)
+        else:
+            service = SearchService.create_sync(str(resolved_path))
+
+        search_query = SearchQuery(
+            query=query,
+            search_type=search_type_enum,
+            limit=limit,
+            language=language,
+        )
+
+        return await service.search(search_query)
+
+    try:
+        results = asyncio.run(run_search())
+
+        if as_json:
+            output = {
+                "query": query,
+                "search_type": search_type,
+                "total": len(results),
+                "results": [
+                    {
+                        "file": r.file_path,
+                        "matches": r.matches,
+                        "score": r.score,
+                    }
+                    for r in results
+                ],
+            }
+            click.echo(json_module.dumps(output, indent=2))
+        else:
+            if not results:
+                click.echo("No results found.")
+                return
+
+            click.echo(f"Found {len(results)} result(s):\n")
+
+            for i, result in enumerate(results, 1):
+                click.echo(f"  {i}. {result.file_path}")
+                if result.score and result.score < 1.0:
+                    click.echo(f"     Score: {result.score:.3f}")
+                for match in result.matches[:3]:  # Show first 3 matches
+                    line = match.get("line", "?")
+                    content = match.get("content", "")[:80]  # Truncate
+                    click.echo(f"     Line {line}: {content}")
+                if len(result.matches) > 3:
+                    click.echo(f"     ... and {len(result.matches) - 3} more matches")
+                click.echo()
+
+    except Exception as e:
+        click.echo(f"❌ Search failed: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
 @click.argument("path", type=click.Path(exists=True), default=".", required=False)
 @click.option("--verbose", is_flag=True, help="Show detailed diagnostic information")
 @click.option("--validate", is_flag=True, help="Validate intelligence data consistency")
