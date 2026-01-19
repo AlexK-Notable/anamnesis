@@ -4,7 +4,10 @@ This module provides the FastMCP server with all intelligence, automation,
 and monitoring tools for AI-assisted codebase understanding.
 """
 
+import gc
 import os
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -50,6 +53,7 @@ _intelligence_service: Optional[IntelligenceService] = None
 _codebase_service: Optional[CodebaseService] = None
 _session_manager: Optional[SessionManager] = None
 _current_path: Optional[str] = None
+_server_start_time: float = time.time()  # Track server uptime
 
 
 def _get_learning_service() -> LearningService:
@@ -439,9 +443,24 @@ def _get_system_status_impl(
     }
 
     if include_metrics:
+        # Collect actual runtime metrics
+        gc_stats = gc.get_stats()
+        collected_total = sum(s.get("collected", 0) for s in gc_stats)
+
+        # Get process memory info (platform-independent approximation)
+        try:
+            import resource
+            mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            # Convert to MB (Linux returns KB, macOS returns bytes)
+            mem_mb = mem_usage / 1024 if sys.platform != "darwin" else mem_usage / (1024 * 1024)
+        except (ImportError, AttributeError):
+            mem_mb = 0  # Windows doesn't have resource module
+
         status["metrics"] = {
-            "memory_usage": "nominal",
-            "response_time": "fast",
+            "memory_mb": round(mem_mb, 1),
+            "python_objects": len(gc.get_objects()),
+            "gc_collections": collected_total,
+            "uptime_seconds": round(time.time() - _server_start_time, 1) if _server_start_time else 0,
         }
 
     if include_diagnostics:

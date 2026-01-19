@@ -306,16 +306,17 @@ class DebugTools:
         start = time.time()
 
         try:
-            from anamnesis.storage.sqlite_store import SQLiteStore
+            from anamnesis.storage.sync_backend import SyncSQLiteBackend
 
             db_path = path / ".anamnesis" / "anamnesis.db"
             if not db_path.exists():
                 db_path = path / "anamnesis.db"
 
             if db_path.exists():
-                store = SQLiteStore(str(db_path))
-                # Quick test query
-                store.close()
+                backend = SyncSQLiteBackend(str(db_path))
+                backend.connect()
+                # Quick connectivity test
+                backend.close()
 
                 duration = (time.time() - start) * 1000
                 return DiagnosticResult(
