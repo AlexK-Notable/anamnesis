@@ -16,6 +16,9 @@ dependencies = [
     "aiosqlite>=0.19.0",
     "numpy>=1.24.0",
 
+    # Vector database (concurrent-safe semantic search)
+    "qdrant-client>=1.7.0",
+
     # Embeddings (Phase 4: Vector Search)
     "sentence-transformers>=2.2.0",
 

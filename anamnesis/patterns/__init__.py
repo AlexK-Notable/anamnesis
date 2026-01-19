@@ -1,14 +1,37 @@
 """Pattern Detection and Matching Engine.
 
 This package provides pattern-based code search and analysis capabilities,
-including regex patterns, AST patterns, and structural patterns.
+including regex patterns and AST patterns using tree-sitter.
 
-Planned Components (Phase 14):
-- PatternMatcher: Regex and glob pattern matching
+Components:
+- PatternMatch: Result type for pattern matches
+- PatternMatcher: Abstract base class for matchers
+- RegexPatternMatcher: Regex-based pattern matching with builtins
 - ASTPatternMatcher: Tree-sitter based AST pattern matching
-- StructuralPatternAnalyzer: Code structure pattern detection
-- PatternRegistry: Pattern storage and retrieval
 
-This package is currently in development. See the implementation sprint
-notes for the planned feature set.
+Usage:
+    from anamnesis.patterns import RegexPatternMatcher, ASTPatternMatcher
+
+    # Regex patterns
+    regex = RegexPatternMatcher.with_builtins()
+    for match in regex.match(content, "src/auth.py"):
+        print(f"{match.pattern_name}: {match.matched_text}")
+
+    # AST patterns (structural)
+    ast = ASTPatternMatcher()
+    for match in ast.match(content, "src/auth.py"):
+        print(f"{match.pattern_name}: {match.matched_text}")
 """
+
+from .matcher import PatternMatch, PatternMatcher
+from .regex_matcher import RegexPattern, RegexPatternMatcher
+from .ast_matcher import ASTPatternMatcher, ASTQuery
+
+__all__ = [
+    "PatternMatch",
+    "PatternMatcher",
+    "RegexPattern",
+    "RegexPatternMatcher",
+    "ASTPatternMatcher",
+    "ASTQuery",
+]

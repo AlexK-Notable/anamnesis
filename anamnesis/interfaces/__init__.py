@@ -4,6 +4,14 @@ Anamnesis interfaces.
 This module exports all interface definitions for the Anamnesis system.
 """
 
+from .search import (
+    SearchType,
+    SearchResult,
+    SearchQuery,
+    SearchBackend,
+    ISearchService,
+    IVectorStore,
+)
 from .engines import (
     # Callback type
     ProgressCallback,
@@ -35,6 +43,13 @@ from .engines import (
 )
 
 __all__ = [
+    # Search interfaces
+    "SearchType",
+    "SearchResult",
+    "SearchQuery",
+    "SearchBackend",
+    "ISearchService",
+    "IVectorStore",
     # Callback type
     "ProgressCallback",
     # Supporting types

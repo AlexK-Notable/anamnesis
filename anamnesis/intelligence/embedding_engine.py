@@ -23,14 +23,76 @@ if TYPE_CHECKING:
 
 @dataclass
 class EmbeddingConfig:
-    """Configuration for the embedding engine."""
+    """Configuration for the embedding engine.
 
+    Supports flexible model configuration for HuggingFace models:
+    - Model hub names: "sentence-transformers/all-MiniLM-L6-v2"
+    - Short names: "all-MiniLM-L6-v2" (resolved via sentence-transformers)
+    - Local paths: "/path/to/model"
+    - Custom HuggingFace models with trust_remote_code
+
+    Example configurations:
+        # Default (fast, good quality)
+        config = EmbeddingConfig()
+
+        # Higher quality model
+        config = EmbeddingConfig(model_name="all-mpnet-base-v2")
+
+        # Custom HuggingFace model
+        config = EmbeddingConfig(
+            model_name="BAAI/bge-small-en-v1.5",
+            trust_remote_code=True,
+        )
+
+        # Local model path
+        config = EmbeddingConfig(model_name="/path/to/my/model")
+    """
+
+    # Model source - supports HuggingFace names or local paths
     model_name: str = "all-MiniLM-L6-v2"
+
+    # HuggingFace-specific options
+    trust_remote_code: bool = False  # For custom model architectures
+    revision: Optional[str] = None  # Specific commit/tag
+    token: Optional[str] = None  # HuggingFace token for private models
+
+    # Cache and device
     cache_dir: Optional[str] = None
-    device: str = "cpu"  # "cpu", "cuda", "mps"
+    device: str = "cpu"  # "cpu", "cuda", "mps", or "auto"
+
+    # Inference settings
     batch_size: int = 32
     normalize_embeddings: bool = True
     max_sequence_length: int = 512
+
+    # Dimension override (auto-detected from model if None)
+    embedding_dimension: Optional[int] = None
+
+    # Performance options
+    use_fp16: bool = False  # Half precision for faster inference
+    show_progress: bool = True  # Show progress bar for large batches
+
+    # Fallback settings
+    fallback_to_cpu: bool = True  # Fall back to CPU if GPU fails
+
+    def get_effective_device(self) -> str:
+        """Determine the actual device to use.
+
+        Returns:
+            Device string: "cpu", "cuda", or "mps".
+        """
+        if self.device == "auto":
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    return "cuda"
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    return "mps"
+            except ImportError:
+                pass
+            return "cpu"
+        return self.device
 
 
 @dataclass
@@ -104,6 +166,8 @@ class EmbeddingEngine:
     def _load_model(self) -> bool:
         """Load the embedding model lazily.
 
+        Supports HuggingFace models, local paths, and custom architectures.
+
         Returns:
             True if model loaded successfully, False otherwise.
         """
@@ -113,15 +177,49 @@ class EmbeddingEngine:
         try:
             from sentence_transformers import SentenceTransformer
 
-            logger.info(f"Loading embedding model: {self._config.model_name}")
-            self._model = SentenceTransformer(
-                self._config.model_name,
-                cache_folder=self._config.cache_dir,
-                device=self._config.device,
-            )
+            device = self._config.get_effective_device()
+            logger.info(f"Loading embedding model: {self._config.model_name} on {device}")
+
+            # Build model kwargs for HuggingFace options
+            model_kwargs = {}
+            if self._config.trust_remote_code:
+                model_kwargs["trust_remote_code"] = True
+            if self._config.revision:
+                model_kwargs["revision"] = self._config.revision
+            if self._config.token:
+                model_kwargs["token"] = self._config.token
+            if self._config.use_fp16:
+                model_kwargs["torch_dtype"] = "float16"
+
+            try:
+                self._model = SentenceTransformer(
+                    self._config.model_name,
+                    cache_folder=self._config.cache_dir,
+                    device=device,
+                    model_kwargs=model_kwargs if model_kwargs else None,
+                )
+            except Exception as e:
+                # Fallback to CPU if device fails and fallback enabled
+                if self._config.fallback_to_cpu and device != "cpu":
+                    logger.warning(f"Failed to load on {device}, falling back to CPU: {e}")
+                    self._model = SentenceTransformer(
+                        self._config.model_name,
+                        cache_folder=self._config.cache_dir,
+                        device="cpu",
+                        model_kwargs=model_kwargs if model_kwargs else None,
+                    )
+                else:
+                    raise
+
             self._model.max_seq_length = self._config.max_sequence_length
             self._model_loaded = True
-            logger.info("Embedding model loaded successfully")
+
+            # Log model info
+            embedding_dim = self._model.get_sentence_embedding_dimension()
+            logger.info(
+                f"Embedding model loaded: dim={embedding_dim}, "
+                f"max_seq={self._config.max_sequence_length}"
+            )
             return True
 
         except ImportError as e:
@@ -135,6 +233,21 @@ class EmbeddingEngine:
             logger.warning(self._model_error)
             self._model_loaded = True
             return False
+
+    def get_embedding_dimension(self) -> int:
+        """Get the embedding dimension for the loaded model.
+
+        Returns:
+            Embedding dimension (e.g., 384 for MiniLM, 768 for mpnet).
+        """
+        if self._config.embedding_dimension:
+            return self._config.embedding_dimension
+
+        if self._model is not None:
+            return self._model.get_sentence_embedding_dimension()
+
+        # Default for all-MiniLM-L6-v2
+        return 384
 
     def _generate_embedding(self, text: str) -> Optional[np.ndarray]:
         """Generate embedding for a single text.

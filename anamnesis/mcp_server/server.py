@@ -21,6 +21,8 @@ from anamnesis.services import (
     LearningService,
     SessionManager,
 )
+from anamnesis.interfaces.search import SearchQuery, SearchType
+from anamnesis.search.service import SearchService
 from anamnesis.utils.circuit_breaker import CircuitBreakerError
 from anamnesis.utils.error_classifier import classify_error
 from anamnesis.utils.logger import logger
@@ -52,8 +54,28 @@ _learning_service: Optional[LearningService] = None
 _intelligence_service: Optional[IntelligenceService] = None
 _codebase_service: Optional[CodebaseService] = None
 _session_manager: Optional[SessionManager] = None
+_search_service: Optional[SearchService] = None
 _current_path: Optional[str] = None
 _server_start_time: float = time.time()  # Track server uptime
+
+
+def _get_search_service() -> SearchService:
+    """Get or create search service instance.
+
+    Creates a synchronous search service (text + pattern backends).
+    For semantic search, use async initialization separately.
+    """
+    global _search_service
+    if _search_service is None:
+        current_path = _get_current_path()
+        _search_service = SearchService.create_sync(current_path)
+    return _search_service
+
+
+def _reset_search_service() -> None:
+    """Reset search service when path changes."""
+    global _search_service
+    _search_service = None
 
 
 def _get_learning_service() -> LearningService:
@@ -104,9 +126,11 @@ def _get_current_path() -> str:
 
 
 def _set_current_path(path: str) -> None:
-    """Set current working path."""
+    """Set current working path and reset path-dependent services."""
     global _current_path
     _current_path = str(Path(path).resolve())
+    # Reset search service to use new path
+    _reset_search_service()
 
 
 def _with_error_handling(operation_name: str):
@@ -623,55 +647,73 @@ def _search_codebase_impl(
 ) -> dict:
     """Implementation for search_codebase tool.
 
-    Simple file-based search implementation.
+    Routes to appropriate search backend based on search_type:
+    - text: Simple substring matching (fast, always available)
+    - pattern: Regex and AST structural patterns
+    - semantic: Vector similarity search (requires indexing)
     """
+    import asyncio
+
     current_path = _get_current_path()
-    results = []
 
-    # Simple text search across Python files
-    path_obj = Path(current_path)
-    if path_obj.is_dir():
-        pattern = "**/*.py" if language in (None, "python") else f"**/*.{language}"
-        for file_path in path_obj.glob(pattern):
-            if file_path.is_file():
-                try:
-                    content = file_path.read_text()
-                    if query.lower() in content.lower():
-                        # Find matching lines
-                        matches = []
-                        for i, line in enumerate(content.split("\n"), 1):
-                            if query.lower() in line.lower():
-                                matches.append({"line": i, "content": line.strip()})
-                                if len(matches) >= 5:  # Max 5 matches per file
-                                    break
-
-                        if matches:
-                            results.append({
-                                "file": str(file_path.relative_to(path_obj)),
-                                "matches": matches,
-                            })
-
-                        if len(results) >= limit:
-                            break
-                except (OSError, UnicodeDecodeError) as e:
-                    classification = classify_error(e, {"file": str(file_path)})
-                    logger.debug(
-                        f"Skipping file during search: {file_path}",
-                        extra={
-                            "error": str(e),
-                            "category": classification.category.value,
-                            "file_path": str(file_path),
-                        },
-                    )
-                    continue
-
-    return {
-        "results": results,
-        "query": query,
-        "search_type": search_type,
-        "total": len(results),
-        "path": current_path,
+    # Map string to SearchType enum
+    type_map = {
+        "text": SearchType.TEXT,
+        "pattern": SearchType.PATTERN,
+        "semantic": SearchType.SEMANTIC,
     }
+    search_type_enum = type_map.get(search_type.lower(), SearchType.TEXT)
+
+    # Get search service
+    search_service = _get_search_service()
+
+    # Build search query
+    search_query = SearchQuery(
+        query=query,
+        search_type=search_type_enum,
+        limit=limit,
+        language=language,
+    )
+
+    # Execute search (async wrapped for sync context)
+    try:
+        # Run async search in event loop
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        results = loop.run_until_complete(search_service.search(search_query))
+
+        # Convert to response format
+        return {
+            "results": [
+                {
+                    "file": r.file_path,
+                    "matches": r.matches,
+                    "score": r.score,
+                }
+                for r in results
+            ],
+            "query": query,
+            "search_type": search_type,
+            "total": len(results),
+            "path": current_path,
+            "available_types": [t.value for t in search_service.get_available_backends()],
+        }
+
+    except Exception as e:
+        logger.error(f"Search failed: {e}")
+        # Return empty results on error
+        return {
+            "results": [],
+            "query": query,
+            "search_type": search_type,
+            "total": 0,
+            "path": current_path,
+            "error": str(e),
+        }
 
 
 @_with_error_handling("analyze_codebase")

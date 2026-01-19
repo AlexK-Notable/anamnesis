@@ -32,6 +32,7 @@ from .resilient_backend import (
     reset_circuit_breaker,
 )
 from .migrations import DatabaseMigrator, Migration
+from .qdrant_store import QdrantVectorStore, QdrantConfig, QdrantStats
 from .adapters import (
     AdapterError,
     ValidationError,
@@ -78,6 +79,10 @@ __all__ = [
     # Migrations
     "DatabaseMigrator",
     "Migration",
+    # Vector storage
+    "QdrantVectorStore",
+    "QdrantConfig",
+    "QdrantStats",
     # Adapters
     "AdapterError",
     "ValidationError",
