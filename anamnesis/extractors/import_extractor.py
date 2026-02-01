@@ -17,7 +17,13 @@ from anamnesis.parsing.ast_types import ASTContext, NodeType, ParsedNode
 
 
 class ImportKind(StrEnum):
-    """Kind of import statement."""
+    """Kind of import statement.
+
+    .. deprecated::
+        Use ``anamnesis.extraction.types.ImportKind`` instead.
+        This enum is retained for backward compatibility. New code should
+        use the unified extraction types from ``anamnesis.extraction``.
+    """
 
     # Standard imports
     IMPORT = "import"  # import x

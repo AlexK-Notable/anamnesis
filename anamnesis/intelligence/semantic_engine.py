@@ -17,7 +17,14 @@ from typing import Any
 
 
 class ConceptType(str, Enum):
-    """Types of semantic concepts."""
+    """Types of semantic concepts.
+
+    .. deprecated::
+        Use ``anamnesis.extraction.types.SymbolKind`` instead.
+        ConceptType has 11 values; SymbolKind has 18 values covering
+        all ConceptType values plus language-specific types. New code
+        should use the unified extraction types from ``anamnesis.extraction``.
+    """
 
     CLASS = "class"
     FUNCTION = "function"

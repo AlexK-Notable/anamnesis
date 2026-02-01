@@ -16,6 +16,14 @@ from anamnesis.storage.qdrant_store import QdrantVectorStore, QdrantConfig
 from anamnesis.intelligence.embedding_engine import EmbeddingEngine, EmbeddingConfig
 from anamnesis.patterns import ASTPatternMatcher
 
+# Optional unified extraction support
+try:
+    from anamnesis.extraction import ExtractionOrchestrator
+    from anamnesis.extraction.converters import flatten_unified_symbols
+    _HAS_UNIFIED_EXTRACTION = True
+except ImportError:
+    _HAS_UNIFIED_EXTRACTION = False
+
 
 class SemanticSearchBackend(SearchBackend):
     """Semantic search using embeddings and Qdrant vector store.
@@ -46,6 +54,7 @@ class SemanticSearchBackend(SearchBackend):
         base_path: str,
         embedding_engine: EmbeddingEngine,
         vector_store: QdrantVectorStore,
+        use_unified_extraction: bool = False,
     ):
         """Initialize semantic search backend.
 
@@ -55,11 +64,17 @@ class SemanticSearchBackend(SearchBackend):
             base_path: Base directory for the codebase.
             embedding_engine: Configured embedding engine.
             vector_store: Configured Qdrant vector store.
+            use_unified_extraction: Use ExtractionOrchestrator for
+                concept extraction during indexing. Provides richer
+                symbol metadata (docstrings, signatures, hierarchy)
+                for better embedding quality.
         """
         self._base_path = Path(base_path)
         self._embeddings = embedding_engine
         self._vectors = vector_store
         self._ast_matcher = ASTPatternMatcher()
+        self._use_unified_extraction = use_unified_extraction and _HAS_UNIFIED_EXTRACTION
+        self._orchestrator = None  # Lazy init
 
     @classmethod
     async def create(
@@ -177,10 +192,12 @@ class SemanticSearchBackend(SearchBackend):
         if not language:
             language = self._detect_language(file_path)
 
-        # Extract concepts using AST matcher
+        # Extract concepts using unified extraction or AST matcher
         concepts = []
 
-        if self._ast_matcher.supports_language(language):
+        if self._use_unified_extraction:
+            concepts = self._index_unified(file_path, content, language, metadata)
+        elif self._ast_matcher.supports_language(language):
             for match in self._ast_matcher.match(content, file_path):
                 # Create embedding text combining type and content
                 embed_text = f"{match.pattern_name}: {match.matched_text[:500]}"
@@ -263,6 +280,64 @@ class SemanticSearchBackend(SearchBackend):
             True.
         """
         return True
+
+    def _get_orchestrator(self):
+        """Lazily initialize the ExtractionOrchestrator."""
+        if self._orchestrator is None:
+            self._orchestrator = ExtractionOrchestrator()
+        return self._orchestrator
+
+    def _index_unified(
+        self,
+        file_path: str,
+        content: str,
+        language: str,
+        metadata: dict,
+    ) -> list[tuple]:
+        """Extract concepts using unified ExtractionOrchestrator for indexing.
+
+        Provides richer embedding text by including docstrings, signatures,
+        and type information from tree-sitter extraction.
+
+        Returns:
+            List of (file_path, name, concept_type, embedding, metadata) tuples.
+        """
+        orchestrator = self._get_orchestrator()
+        result = orchestrator.extract(content, file_path, language)
+
+        concepts = []
+        flat_symbols = flatten_unified_symbols(result.symbols)
+
+        for sym in flat_symbols:
+            # Build richer embedding text from unified symbol metadata
+            parts = [f"{sym.kind}: {sym.name}"]
+            if sym.signature:
+                parts.append(f"signature: {sym.signature}")
+            if sym.docstring:
+                parts.append(sym.docstring[:300])
+            if sym.decorators:
+                parts.append(f"decorators: {', '.join(sym.decorators)}")
+
+            embed_text = "\n".join(parts)[:500]
+            embedding = self._embeddings._generate_embedding(embed_text)
+
+            if embedding is not None:
+                concepts.append((
+                    file_path,
+                    sym.name,
+                    str(sym.kind),
+                    embedding.tolist(),
+                    {
+                        "line_start": sym.start_line,
+                        "line_end": sym.end_line,
+                        "language": language,
+                        "backend": sym.backend,
+                        "confidence": sym.confidence,
+                        **{k: v for k, v in metadata.items() if k != "language"},
+                    },
+                ))
+
+        return concepts
 
     def _detect_language(self, file_path: str) -> str:
         """Detect language from file extension.

@@ -15,7 +15,15 @@ from typing import Any
 
 
 class PatternType(str, Enum):
-    """Types of patterns that can be detected."""
+    """Types of patterns that can be detected.
+
+    .. deprecated::
+        Use ``anamnesis.extraction.types.PatternKind`` instead.
+        PatternType has 22 values; PatternKind is a superset covering
+        all PatternType values plus anti-patterns and custom patterns.
+        New code should use the unified extraction types from
+        ``anamnesis.extraction``.
+    """
 
     # Design patterns
     SINGLETON = "singleton"

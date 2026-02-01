@@ -70,6 +70,7 @@ class LearningService:
         semantic_engine: Optional[SemanticEngine] = None,
         pattern_engine: Optional[PatternEngine] = None,
         backend: Optional["SyncSQLiteBackend"] = None,
+        use_unified_pipeline: bool = False,
     ):
         """Initialize learning service.
 
@@ -77,11 +78,18 @@ class LearningService:
             semantic_engine: Optional semantic engine instance
             pattern_engine: Optional pattern engine instance
             backend: Optional storage backend for persistence
+            use_unified_pipeline: Use the unified extraction pipeline
+                (ExtractionOrchestrator) instead of the legacy
+                SemanticEngine/PatternEngine regex paths. The unified
+                pipeline provides tree-sitter-first extraction with
+                regex fallback and richer metadata.
         """
         self._semantic_engine = semantic_engine or SemanticEngine()
         self._pattern_engine = pattern_engine or PatternEngine()
         self._backend = backend
         self._learned_data: dict = {}
+        self._use_unified_pipeline = use_unified_pipeline
+        self._orchestrator = None  # Lazy init to avoid import cost when unused
 
     @property
     def backend(self) -> Optional["SyncSQLiteBackend"]:
@@ -97,6 +105,23 @@ class LearningService:
     def pattern_engine(self) -> PatternEngine:
         """Get pattern engine."""
         return self._pattern_engine
+
+    @property
+    def use_unified_pipeline(self) -> bool:
+        """Whether the unified extraction pipeline is enabled."""
+        return self._use_unified_pipeline
+
+    def _get_orchestrator(self):
+        """Lazily initialize the ExtractionOrchestrator.
+
+        Deferred import avoids circular dependencies and startup cost
+        when the unified pipeline is not enabled.
+        """
+        if self._orchestrator is None:
+            from anamnesis.extraction import ExtractionOrchestrator
+
+            self._orchestrator = ExtractionOrchestrator()
+        return self._orchestrator
 
     @staticmethod
     def _get_pattern_type_str(pattern) -> str:
@@ -166,10 +191,14 @@ class LearningService:
             if options.progress_callback:
                 options.progress_callback(2, 7, "Learning semantic concepts")
 
-            concepts = analysis.concepts
+            if self._use_unified_pipeline:
+                concepts = self._extract_concepts_unified(path, options.max_files)
+                insights.append("   📦 Using unified extraction pipeline")
+            else:
+                concepts = analysis.concepts
             concept_types: dict[str, int] = {}
             for concept in concepts:
-                ctype = concept.concept_type.value
+                ctype = concept.concept_type.value if hasattr(concept.concept_type, 'value') else str(concept.concept_type)
                 concept_types[ctype] = concept_types.get(ctype, 0) + 1
 
             insights.append(f"   ✅ Extracted {len(concepts)} semantic concepts:")
@@ -181,7 +210,11 @@ class LearningService:
             if options.progress_callback:
                 options.progress_callback(3, 7, "Discovering patterns")
 
-            patterns = self._learn_patterns_from_directory(str(path), options.max_files)
+            if self._use_unified_pipeline:
+                patterns = self._learn_patterns_unified(path, options.max_files)
+                insights.append("   📦 Using unified extraction pipeline")
+            else:
+                patterns = self._learn_patterns_from_directory(str(path), options.max_files)
             pattern_categories: dict[str, int] = {}
             for pattern in patterns:
                 category = self._get_pattern_type_str(pattern).split("_")[0]
@@ -345,6 +378,99 @@ class LearningService:
                         "file_path": str(file_path),
                     },
                 )
+                continue
+
+        return patterns
+
+    # ================================================================
+    # Unified pipeline methods
+    # ================================================================
+
+    def _extract_concepts_unified(self, path: Path, max_files: int) -> list:
+        """Extract concepts using the unified ExtractionOrchestrator.
+
+        Returns engine-compatible SemanticConcept objects by converting
+        from the unified types.
+        """
+        from anamnesis.extraction.converters import (
+            flatten_unified_symbols,
+            unified_symbol_to_semantic_concept,
+        )
+
+        orchestrator = self._get_orchestrator()
+        concepts = []
+
+        extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h"}
+        files = []
+        for ext in extensions:
+            files.extend(path.rglob(f"*{ext}"))
+
+        # Skip ignored directories and limit files
+        files = [
+            f for f in files
+            if not any(
+                part in {"node_modules", ".git", "__pycache__", ".venv", "venv"}
+                for part in f.parts
+            )
+        ][:max_files]
+
+        for file_path in files:
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+                language = self._semantic_engine.detect_language(file_path) or ""
+                if not language:
+                    continue
+
+                result = orchestrator.extract(content, str(file_path.relative_to(path)), language)
+
+                # Convert UnifiedSymbol -> SemanticConcept for downstream compatibility
+                flat_symbols = flatten_unified_symbols(result.symbols)
+                for sym in flat_symbols:
+                    concept = unified_symbol_to_semantic_concept(sym)
+                    concepts.append(concept)
+            except (OSError, IOError):
+                continue
+
+        return concepts
+
+    def _learn_patterns_unified(self, path: Path, max_files: int) -> list:
+        """Learn patterns using the unified ExtractionOrchestrator.
+
+        Returns engine-compatible DetectedPattern objects by converting
+        from the unified types.
+        """
+        from anamnesis.extraction.converters import unified_pattern_to_engine_pattern
+
+        orchestrator = self._get_orchestrator()
+        patterns = []
+
+        extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h"}
+        files = []
+        for ext in extensions:
+            files.extend(path.rglob(f"*{ext}"))
+
+        files = [
+            f for f in files
+            if not any(
+                part in {"node_modules", ".git", "__pycache__", ".venv", "venv"}
+                for part in f.parts
+            )
+        ][:max_files]
+
+        for file_path in files:
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+                language = self._semantic_engine.detect_language(file_path) or ""
+                if not language:
+                    continue
+
+                result = orchestrator.extract(content, str(file_path.relative_to(path)), language)
+
+                # Convert UnifiedPattern -> engine DetectedPattern for downstream compatibility
+                for unified_pat in result.patterns:
+                    engine_pat = unified_pattern_to_engine_pattern(unified_pat)
+                    patterns.append(engine_pat)
+            except (OSError, IOError):
                 continue
 
         return patterns

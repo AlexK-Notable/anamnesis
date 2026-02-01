@@ -17,7 +17,13 @@ from anamnesis.parsing.ast_types import ASTContext, NodeType, ParsedNode
 
 
 class PatternKind(StrEnum):
-    """Kind of detected pattern."""
+    """Kind of detected pattern.
+
+    .. deprecated::
+        Use ``anamnesis.extraction.types.PatternKind`` instead.
+        This enum is retained for backward compatibility. New code should
+        use the unified extraction types from ``anamnesis.extraction``.
+    """
 
     # Creational Patterns
     SINGLETON = "singleton"

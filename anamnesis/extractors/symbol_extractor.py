@@ -17,7 +17,14 @@ from anamnesis.parsing.ast_types import ASTContext, NodeType, ParsedNode
 
 
 class SymbolKind(StrEnum):
-    """Kind of extracted symbol."""
+    """Kind of extracted symbol.
+
+    .. deprecated::
+        Use ``anamnesis.extraction.types.SymbolKind`` instead.
+        This enum is retained for backward compatibility with existing code
+        that uses the extractors directly. New code should use the unified
+        extraction types from ``anamnesis.extraction``.
+    """
 
     # Declarations
     MODULE = "module"

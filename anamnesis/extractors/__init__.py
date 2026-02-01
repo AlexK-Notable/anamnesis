@@ -8,6 +8,27 @@ This module provides extractors that analyze parsed ASTs to extract:
 
 These extractors build on the parsing layer to provide semantic understanding
 of the codebase for the intelligence engines.
+
+.. deprecated::
+    The types in this package (SymbolKind, PatternKind, ImportKind,
+    ExtractedSymbol, DetectedPattern, ExtractedImport) are superseded
+    by the unified types in ``anamnesis.extraction``.
+
+    For new code, use::
+
+        from anamnesis.extraction import (
+            ExtractionOrchestrator,
+            UnifiedSymbol,
+            UnifiedPattern,
+            UnifiedImport,
+            SymbolKind,
+            PatternKind,
+            ImportKind,
+        )
+
+    The extractors themselves (SymbolExtractor, PatternExtractor,
+    ImportExtractor) continue to be used internally by the unified
+    pipeline's TreeSitterBackend.
 """
 
 from anamnesis.extractors.symbol_extractor import (
