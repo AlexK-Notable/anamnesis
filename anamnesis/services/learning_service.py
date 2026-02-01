@@ -125,9 +125,10 @@ class LearningService:
 
     @staticmethod
     def _get_pattern_type_str(pattern) -> str:
-        """Get pattern type as string, handling both enum and string cases."""
-        ptype = pattern.pattern_type
-        return ptype.value if hasattr(ptype, 'value') else str(ptype)
+        """Get pattern type as string from DetectedPattern or UnifiedPattern."""
+        # DetectedPattern has pattern_type, UnifiedPattern has kind
+        ptype = getattr(pattern, "pattern_type", None) or getattr(pattern, "kind", "unknown")
+        return ptype.value if hasattr(ptype, "value") else str(ptype)
 
     def learn_from_codebase(
         self,
@@ -325,26 +326,31 @@ class LearningService:
 
     def _persist_learned_data(self, concepts: list, patterns: list) -> None:
         """Persist learned concepts and patterns to backend.
-        
+
         Args:
             concepts: List of engine SemanticConcept objects
-            patterns: List of engine DetectedPattern objects
+            patterns: List of DetectedPattern or UnifiedPattern objects
         """
         if not self._backend:
             return
-        
+
+        from anamnesis.extraction.converters import unified_pattern_to_engine_pattern
+        from anamnesis.extraction.types import UnifiedPattern
         from anamnesis.services.type_converters import (
             detected_pattern_to_storage,
             engine_concept_to_storage,
         )
-        
+
         # Persist concepts
         with self._backend.batch_context():
             for concept in concepts:
                 storage_concept = engine_concept_to_storage(concept)
                 self._backend.save_concept(storage_concept)
-            
+
             for pattern in patterns:
+                # Convert UnifiedPattern → DetectedPattern for storage
+                if isinstance(pattern, UnifiedPattern):
+                    pattern = unified_pattern_to_engine_pattern(pattern)
                 storage_pattern = detected_pattern_to_storage(pattern)
                 self._backend.save_pattern(storage_pattern)
 
@@ -436,11 +442,10 @@ class LearningService:
     def _learn_patterns_unified(self, path: Path, max_files: int) -> list:
         """Learn patterns using the unified ExtractionOrchestrator.
 
-        Returns engine-compatible DetectedPattern objects by converting
-        from the unified types.
+        Returns UnifiedPattern objects directly. Downstream consumers
+        (IntelligenceService, PatternEngine) accept both UnifiedPattern
+        and DetectedPattern via the unified type protocol.
         """
-        from anamnesis.extraction.converters import unified_pattern_to_engine_pattern
-
         orchestrator = self._get_orchestrator()
         patterns = []
 
@@ -466,10 +471,8 @@ class LearningService:
 
                 result = orchestrator.extract(content, str(file_path.relative_to(path)), language)
 
-                # Convert UnifiedPattern -> engine DetectedPattern for downstream compatibility
-                for unified_pat in result.patterns:
-                    engine_pat = unified_pattern_to_engine_pattern(unified_pat)
-                    patterns.append(engine_pat)
+                # Pass UnifiedPattern directly — no conversion overhead
+                patterns.extend(result.patterns)
             except (OSError, IOError):
                 continue
 

@@ -15,6 +15,7 @@ from anamnesis.intelligence.pattern_engine import (
     DetectedPattern,
     PatternEngine,
     PatternRecommendation,
+    _pattern_type_key,
 )
 from anamnesis.intelligence.semantic_engine import (
     ProjectBlueprint,
@@ -160,7 +161,7 @@ class IntelligenceService:
 
         # In-memory caches (populated from backend or used standalone)
         self._concepts: list[SemanticConcept] = []
-        self._patterns: list[DetectedPattern] = []
+        self._patterns: list = []  # DetectedPattern or UnifiedPattern
         self._insights: list[AIInsight] = []
         self._work_sessions: dict[str, dict] = {}
 
@@ -204,19 +205,29 @@ class IntelligenceService:
         # Index concepts in embedding engine for semantic search
         self._index_concepts_for_search(concepts)
 
-    def load_patterns(self, patterns: list[DetectedPattern]) -> None:
+    def load_patterns(self, patterns: list) -> None:
         """Load detected patterns.
 
-        Stores patterns in memory cache and persists to backend if available.
+        Accepts both ``DetectedPattern`` and ``UnifiedPattern`` objects.
+        Stores in memory cache, forwards to the pattern engine for
+        recommendation building, and persists to backend if available.
         """
         self._patterns = patterns
 
+        # Forward to pattern engine so recommendations have data
+        self._pattern_engine.load_unified_patterns(patterns)
+
         # Persist to backend if available
         if self._backend:
+            from anamnesis.extraction.converters import unified_pattern_to_engine_pattern
+            from anamnesis.extraction.types import UnifiedPattern
             from anamnesis.services.type_converters import detected_pattern_to_storage
 
             with self._backend.batch_context():
                 for pattern in patterns:
+                    # Convert UnifiedPattern → DetectedPattern for storage
+                    if isinstance(pattern, UnifiedPattern):
+                        pattern = unified_pattern_to_engine_pattern(pattern)
                     storage_pattern = detected_pattern_to_storage(pattern)
                     self._backend.save_pattern(storage_pattern)
 
@@ -237,9 +248,10 @@ class IntelligenceService:
         storage_concepts = self._backend.search_concepts("", limit=10000)
         self._concepts = [storage_concept_to_engine(c) for c in storage_concepts]
 
-        # Load patterns
+        # Load patterns and forward to pattern engine
         storage_patterns = self._backend.get_all_patterns()
         self._patterns = [storage_pattern_to_detected(p) for p in storage_patterns]
+        self._pattern_engine.load_unified_patterns(self._patterns)
 
     def get_semantic_insights(
         self,
@@ -333,14 +345,14 @@ class IntelligenceService:
 
         related_files = None
         if include_related_files and recommendations:
-            # Find files that use similar patterns
+            # Find files that use similar patterns (works with both types)
+            rec_types = {str(rec.pattern_type) for rec in recommendations}
             related = set()
             for pattern in self._patterns:
-                if pattern.file_path:
-                    for rec in recommendations:
-                        if rec.pattern_type == pattern.pattern_type:
-                            related.add(pattern.file_path)
-            related_files = list(related)[:10]  # Limit to 10 files
+                fp = getattr(pattern, "file_path", None)
+                if fp and _pattern_type_key(pattern) in rec_types:
+                    related.add(fp)
+            related_files = list(related)[:10]
 
         return recommendations, reasoning, related_files
 
@@ -504,9 +516,7 @@ class IntelligenceService:
         areas = set()
 
         for pattern in self._patterns:
-            # Handle both enum and string pattern_type
-            pt = pattern.pattern_type
-            pattern_val = (pt.value if hasattr(pt, "value") else str(pt)).lower()
+            pattern_val = _pattern_type_key(pattern).lower()
             if "api" in pattern_val:
                 areas.add("api_development")
             if "test" in pattern_val:
@@ -522,8 +532,7 @@ class IntelligenceService:
         """Extract recent focus areas."""
         focus = []
         for pattern in self._patterns[-5:]:
-            pt = pattern.pattern_type
-            focus.append(pt.value if hasattr(pt, "value") else str(pt))
+            focus.append(_pattern_type_key(pattern))
         return focus
 
     def contribute_insight(

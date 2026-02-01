@@ -388,22 +388,15 @@ def reset_server_state(tmp_path):
     """Reset server global state and use tmp_path for memory storage."""
     import anamnesis.mcp_server.server as server_module
 
-    # Save originals
-    orig_memory = server_module._memory_service
-    orig_path = server_module._current_path
-    orig_session = server_module._session_manager
-
-    # Set test path
-    server_module._current_path = str(tmp_path)
-    server_module._memory_service = None
-    server_module._session_manager = None
+    # Reset registry and activate tmp_path as the project
+    server_module._registry.reset()
+    # Create the tmp_path as a valid project directory
+    server_module._registry.activate(str(tmp_path))
 
     yield
 
-    # Restore
-    server_module._memory_service = orig_memory
-    server_module._current_path = orig_path
-    server_module._session_manager = orig_session
+    # Clean up
+    server_module._registry.reset()
 
 
 class TestWriteMemoryTool:
@@ -563,9 +556,9 @@ class TestToolRegistration:
         assert "edit_memory" in tool_names
 
     def test_total_tool_count(self):
-        """Server has expected total tool count (20 original + 8 new = 28)."""
+        """Server has expected total tool count (20 original + 11 new = 31)."""
         from anamnesis.mcp_server.server import mcp
 
         tool_count = len(mcp._tool_manager._tools)
-        # 20 original + 3 metacognition + 5 memory = 28
-        assert tool_count == 28
+        # 20 original + 3 metacognition + 5 memory + 3 project mgmt = 31
+        assert tool_count == 31

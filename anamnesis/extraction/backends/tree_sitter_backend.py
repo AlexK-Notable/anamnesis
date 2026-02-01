@@ -10,6 +10,7 @@ Priority: 50 (above regex at 10, below future LSP at 100).
 from __future__ import annotations
 
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from anamnesis.extraction.types import (
@@ -155,13 +156,24 @@ class TreeSitterBackend:
         file_path: str,
         language: str,
     ) -> list[UnifiedPattern]:
-        """Extract patterns via tree-sitter AST analysis."""
+        """Extract patterns via tree-sitter AST analysis.
+
+        Includes both design patterns (from PatternExtractor) and
+        naming conventions (from AST symbol analysis).
+        """
         context = self._get_context(content, file_path, language)
         if context is None:
             return []
 
         raw_patterns = self._pattern_extractor.extract(context)
-        return [self._convert_pattern(p, language) for p in raw_patterns]
+        patterns = [self._convert_pattern(p, language) for p in raw_patterns]
+
+        # AST-based naming convention detection
+        raw_symbols = self._symbol_extractor.extract(context)
+        symbols = [self._convert_symbol(s, language) for s in raw_symbols]
+        patterns.extend(self._detect_naming_conventions(symbols, file_path, language))
+
+        return patterns
 
     def _convert_pattern(
         self,
@@ -311,6 +323,9 @@ class TreeSitterBackend:
         patterns = [self._convert_pattern(p, language) for p in raw_patterns]
         imports = [self._convert_import(i, language) for i in raw_imports]
 
+        # AST-based naming conventions (uses already-converted symbols)
+        patterns.extend(self._detect_naming_conventions(symbols, file_path, language))
+
         return ExtractionResult(
             file_path=file_path,
             language=language,
@@ -322,6 +337,82 @@ class TreeSitterBackend:
             confidence=ConfidenceTier.FULL_PARSE_RICH,
             parse_had_errors=not context.is_valid,
         )
+
+    # ----------------------------------------------------------------
+    # AST-based naming convention detection
+    # ----------------------------------------------------------------
+
+    # Pre-compiled patterns for naming convention classification
+    _RE_CAMEL = re.compile(r"^[a-z]+(?:[A-Z][a-z0-9]*)+$")
+    _RE_PASCAL = re.compile(r"^[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+$")
+    _RE_SNAKE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$")
+    _RE_SCREAMING = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
+
+    def _detect_naming_conventions(
+        self,
+        symbols: list[UnifiedSymbol],
+        file_path: str,
+        language: str,
+    ) -> list[UnifiedPattern]:
+        """Detect naming conventions from already-extracted AST symbols.
+
+        Unlike the regex backend which guesses symbol kinds from
+        ``def`` / ``class`` keywords, this method knows the exact symbol
+        kind from the AST — giving higher-confidence results.
+        """
+        counts: dict[str, list[str]] = {
+            PatternKind.CAMEL_CASE_FUNCTION: [],
+            PatternKind.PASCAL_CASE_CLASS: [],
+            PatternKind.SNAKE_CASE_VARIABLE: [],
+            PatternKind.SCREAMING_SNAKE_CASE_CONST: [],
+        }
+
+        for sym in self._iter_symbols(symbols):
+            name = sym.name
+            kind = sym.kind if isinstance(sym.kind, str) else sym.kind.value
+
+            if kind in ("class", "interface", "struct", "enum", "trait"):
+                if self._RE_PASCAL.match(name):
+                    counts[PatternKind.PASCAL_CASE_CLASS].append(name)
+            elif kind in ("function", "method"):
+                if self._RE_CAMEL.match(name):
+                    counts[PatternKind.CAMEL_CASE_FUNCTION].append(name)
+                elif self._RE_SNAKE.match(name):
+                    counts[PatternKind.SNAKE_CASE_VARIABLE].append(name)
+            elif kind in ("constant", "variable"):
+                if self._RE_SCREAMING.match(name):
+                    counts[PatternKind.SCREAMING_SNAKE_CASE_CONST].append(name)
+                elif self._RE_SNAKE.match(name):
+                    counts[PatternKind.SNAKE_CASE_VARIABLE].append(name)
+
+        patterns: list[UnifiedPattern] = []
+        for kind_val, names in counts.items():
+            if not names:
+                continue
+            patterns.append(
+                UnifiedPattern(
+                    kind=kind_val,
+                    name=f"{kind_val}_convention",
+                    description=f"{kind_val} naming convention detected ({len(names)} symbols)",
+                    confidence=min(0.5 + len(names) * 0.1, 0.95),
+                    file_path=file_path,
+                    frequency=len(names),
+                    related_symbols=names[:10],
+                    language=language,
+                    backend="tree_sitter",
+                    metadata={"ast_based": True},
+                )
+            )
+
+        return patterns
+
+    @staticmethod
+    def _iter_symbols(symbols: list[UnifiedSymbol]):
+        """Recursively iterate over symbols and their children."""
+        for sym in symbols:
+            yield sym
+            if sym.children:
+                yield from TreeSitterBackend._iter_symbols(sym.children)
 
     # ----------------------------------------------------------------
     # Internal helpers

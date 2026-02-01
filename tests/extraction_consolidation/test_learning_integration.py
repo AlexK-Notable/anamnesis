@@ -217,21 +217,23 @@ class TestUnifiedPatternExtraction:
         data = service.get_learned_data(str(sample_codebase))
         pattern_types = set()
         for p in data["patterns"]:
-            pt = p.pattern_type
-            pattern_types.add(pt.value if hasattr(pt, 'value') else str(pt))
+            # Works with both DetectedPattern.pattern_type and UnifiedPattern.kind
+            pt = getattr(p, "pattern_type", None) or getattr(p, "kind", "unknown")
+            pattern_types.add(pt.value if hasattr(pt, "value") else str(pt))
         assert "singleton" in pattern_types
 
-    def test_patterns_are_engine_types(self, sample_codebase):
-        """Patterns should be engine-compatible DetectedPattern objects."""
+    def test_patterns_have_required_fields(self, sample_codebase):
+        """Patterns should have description, confidence, and a type identifier."""
         service = LearningService(use_unified_pipeline=True)
         result = service.learn_from_codebase(sample_codebase, LearningOptions(force=True))
 
         data = service.get_learned_data(str(sample_codebase))
         for p in data["patterns"]:
-            # Should have pattern_type (engine format), not kind (unified format)
-            assert hasattr(p, "pattern_type")
+            # Both UnifiedPattern and DetectedPattern have these
             assert hasattr(p, "description")
             assert hasattr(p, "confidence")
+            # Type identifier: pattern_type (legacy) or kind (unified)
+            assert hasattr(p, "pattern_type") or hasattr(p, "kind")
 
 
 # ============================================================================
@@ -255,7 +257,11 @@ class TestBackwardCompatibility:
         assert not any("unified" in i.lower() for i in result.insights)
 
     def test_both_produce_compatible_learned_data(self, sample_codebase):
-        """Both pipelines should produce data with the same structure."""
+        """Both pipelines should produce data with the same top-level structure.
+
+        Legacy returns DetectedPattern objects, unified returns UnifiedPattern
+        objects. Both have description, confidence, and a type identifier.
+        """
         legacy = LearningService(use_unified_pipeline=False)
         unified = LearningService(use_unified_pipeline=True)
 
@@ -268,11 +274,16 @@ class TestBackwardCompatibility:
         assert legacy_data is not None
         assert unified_data is not None
 
-        # Both should have same keys
+        # Both should have same top-level keys
         assert "concepts" in legacy_data
         assert "concepts" in unified_data
         assert "patterns" in legacy_data
         assert "patterns" in unified_data
+
+        # Both pattern types should have core attributes
+        for p in unified_data["patterns"]:
+            assert hasattr(p, "description")
+            assert hasattr(p, "confidence")
 
     def test_nonexistent_path(self):
         """Both pipelines should handle nonexistent path gracefully."""

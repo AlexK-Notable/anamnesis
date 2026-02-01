@@ -22,6 +22,7 @@ from anamnesis.services import (
     MemoryService,
     SessionManager,
 )
+from anamnesis.services.project_registry import ProjectContext, ProjectRegistry
 from anamnesis.interfaces.search import SearchQuery, SearchType
 from anamnesis.search.service import SearchService
 from anamnesis.utils.circuit_breaker import CircuitBreakerError
@@ -53,143 +54,79 @@ other tools to query and interact with the learned knowledge.
 Use `write_memory` and `read_memory` to persist project knowledge across
 sessions. Use the `think_about_*` tools to reflect before, during, and
 after complex tasks.
+
+For multi-project workflows, use `activate_project` to switch between
+projects. Each project gets isolated services, preventing cross-project
+data contamination.
 """,
 )
 
-# Global service instances (lazy initialization)
-_learning_service: Optional[LearningService] = None
-_intelligence_service: Optional[IntelligenceService] = None
-_codebase_service: Optional[CodebaseService] = None
-_session_manager: Optional[SessionManager] = None
-_memory_service: Optional[MemoryService] = None
-_search_service: Optional[SearchService] = None
-_semantic_initialized: bool = False  # Track async semantic backend initialization
-_current_path: Optional[str] = None
+# Project registry (replaces individual service globals)
+# All per-project state is managed through ProjectContext instances.
+_registry = ProjectRegistry()
 _server_start_time: float = time.time()  # Track server uptime
 
 
-def _get_search_service() -> SearchService:
-    """Get or create search service instance.
+# =============================================================================
+# Registry-based Service Access
+# =============================================================================
+# All service access goes through the project registry. Each project gets
+# isolated services, preventing cross-project data contamination.
 
-    Creates a synchronous search service (text + pattern backends).
-    For semantic search, use async initialization separately.
-    """
-    global _search_service
-    if _search_service is None:
-        current_path = _get_current_path()
-        _search_service = SearchService.create_sync(current_path)
-    return _search_service
+
+def _get_active_context() -> ProjectContext:
+    """Get the active project context (auto-activates cwd if needed)."""
+    return _registry.get_active()
+
+
+def _get_search_service() -> SearchService:
+    """Get search service for the active project."""
+    return _get_active_context().get_search_service()
 
 
 async def _ensure_semantic_search() -> bool:
-    """Initialize semantic search backend lazily.
-
-    Called on first semantic search request. Creates the full async
-    SearchService with semantic backend (embeddings + Qdrant).
-
-    Returns:
-        True if semantic search is now available.
-    """
-    global _search_service, _semantic_initialized
-
-    if _semantic_initialized:
-        return _search_service is not None and _search_service.is_semantic_available()
-
-    current_path = _get_current_path()
-
-    try:
-        # Create full async search service with semantic backend
-        _search_service = await SearchService.create(
-            current_path,
-            enable_semantic=True,
-        )
-        _semantic_initialized = True
-        logger.info("Semantic search initialized successfully")
-        return _search_service.is_semantic_available()
-
-    except Exception as e:
-        logger.warning(f"Semantic search initialization failed: {e}")
-        # Fall back to sync service if async fails
-        if _search_service is None:
-            _search_service = SearchService.create_sync(current_path)
-        _semantic_initialized = True  # Don't retry on failure
-        return False
-
-
-def _reset_search_service() -> None:
-    """Reset search service when path changes."""
-    global _search_service, _semantic_initialized
-    _search_service = None
-    _semantic_initialized = False
+    """Initialize semantic search for the active project."""
+    return await _get_active_context().ensure_semantic_search()
 
 
 def _get_learning_service() -> LearningService:
-    """Get or create learning service instance."""
-    global _learning_service
-    if _learning_service is None:
-        _learning_service = LearningService()
-    return _learning_service
+    """Get learning service for the active project."""
+    return _get_active_context().get_learning_service()
 
 
 def _get_intelligence_service() -> IntelligenceService:
-    """Get or create intelligence service instance."""
-    global _intelligence_service
-    if _intelligence_service is None:
-        _intelligence_service = IntelligenceService()
-    return _intelligence_service
+    """Get intelligence service for the active project."""
+    return _get_active_context().get_intelligence_service()
 
 
 def _get_codebase_service() -> CodebaseService:
-    """Get or create codebase service instance."""
-    global _codebase_service
-    if _codebase_service is None:
-        _codebase_service = CodebaseService()
-    return _codebase_service
+    """Get codebase service for the active project."""
+    return _get_active_context().get_codebase_service()
 
 
 def _get_session_manager() -> SessionManager:
-    """Get or create session manager instance.
-
-    Uses an in-memory SQLite backend for session persistence.
-    """
-    global _session_manager
-    if _session_manager is None:
-        from anamnesis.storage.sync_backend import SyncSQLiteBackend
-
-        backend = SyncSQLiteBackend(":memory:")
-        backend.connect()
-        _session_manager = SessionManager(backend)
-    return _session_manager
+    """Get session manager for the active project."""
+    return _get_active_context().get_session_manager()
 
 
 def _get_memory_service() -> MemoryService:
-    """Get or create memory service instance.
-
-    Uses the current project path for memory storage.
-    """
-    global _memory_service
-    current_path = _get_current_path()
-    # Recreate if project path changed
-    if _memory_service is None or str(_memory_service.project_path) != current_path:
-        _memory_service = MemoryService(current_path)
-    return _memory_service
+    """Get memory service for the active project."""
+    return _get_active_context().get_memory_service()
 
 
 def _get_current_path() -> str:
-    """Get current working path."""
-    global _current_path
-    if _current_path is None:
-        _current_path = os.getcwd()
-    return _current_path
+    """Get current working path (active project path)."""
+    return _get_active_context().path
 
 
 def _set_current_path(path: str) -> None:
-    """Set current working path and reset path-dependent services."""
-    global _current_path, _memory_service
-    _current_path = str(Path(path).resolve())
-    # Reset path-dependent services
-    _reset_search_service()
-    _memory_service = None  # Will be recreated with new path
+    """Set current working path by activating a project.
+
+    This replaces the old global path mutation with project activation.
+    All services are now project-scoped, so switching projects
+    automatically uses isolated service instances.
+    """
+    _registry.activate(path)
 
 
 # =============================================================================
@@ -322,6 +259,8 @@ def _learn_codebase_intelligence_impl(
     max_files: int = 1000,
 ) -> dict:
     """Implementation for learn_codebase_intelligence tool."""
+    # Activate path first so services belong to the correct project context
+    _set_current_path(path)
     learning_service = _get_learning_service()
     intelligence_service = _get_intelligence_service()
 
@@ -331,7 +270,6 @@ def _learn_codebase_intelligence_impl(
     )
 
     result = learning_service.learn_from_codebase(path, options)
-    _set_current_path(path)
 
     # Transfer learned data to intelligence service
     if result.success:
@@ -1033,6 +971,42 @@ def _get_decisions_impl(
 
 
 # =============================================================================
+# Project Management Tool Implementations
+# =============================================================================
+
+
+@_with_error_handling("activate_project")
+def _activate_project_impl(path: str) -> dict:
+    """Implementation for activate_project tool."""
+    ctx = _registry.activate(path)
+    return {
+        "success": True,
+        "project": ctx.to_dict(),
+    }
+
+
+@_with_error_handling("get_current_config")
+def _get_current_config_impl() -> dict:
+    """Implementation for get_current_config tool."""
+    return {
+        "success": True,
+        "registry": _registry.to_dict(),
+    }
+
+
+@_with_error_handling("list_projects")
+def _list_projects_impl() -> dict:
+    """Implementation for list_projects tool."""
+    projects = _registry.list_projects()
+    return {
+        "success": True,
+        "projects": [p.to_dict() for p in projects],
+        "count": len(projects),
+        "active_path": _registry.active_path,
+    }
+
+
+# =============================================================================
 # Metacognition Tool Implementations
 # =============================================================================
 
@@ -1576,6 +1550,59 @@ def get_decisions(
         List of decisions with count
     """
     return _get_decisions_impl(session_id, limit)
+
+
+# =============================================================================
+# Project Management Tool Registrations
+# =============================================================================
+
+
+@mcp.tool
+def activate_project(
+    path: str,
+) -> dict:
+    """Activate a project by path for multi-project workflows.
+
+    Switches the active project context. All subsequent tool calls will
+    use services scoped to this project. Previously activated projects
+    retain their cached state (learning data, sessions, etc.).
+
+    If no project is explicitly activated, the current working directory
+    is used automatically.
+
+    Args:
+        path: Path to the project root directory
+
+    Returns:
+        Project context with active services status
+    """
+    return _activate_project_impl(path)
+
+
+@mcp.tool
+def get_current_config() -> dict:
+    """Get the current project configuration and registry state.
+
+    Shows the active project, all known projects, and which services
+    are initialized for each.
+
+    Returns:
+        Registry state with project details
+    """
+    return _get_current_config_impl()
+
+
+@mcp.tool
+def list_projects() -> dict:
+    """List all known projects in the registry.
+
+    Shows projects that have been activated during this server session,
+    sorted by most recently activated first.
+
+    Returns:
+        List of projects with their service status
+    """
+    return _list_projects_impl()
 
 
 # =============================================================================

@@ -103,7 +103,12 @@ class DetectedPattern:
 
 @dataclass
 class PatternRecommendation:
-    """A recommended pattern based on context."""
+    """A recommended pattern based on context.
+
+    When sourced from the unified extraction pipeline, the optional
+    ``evidence``, ``related_symbols``, and ``pattern_name`` fields
+    carry richer metadata than the legacy DetectedPattern path.
+    """
 
     pattern_type: PatternType | str
     description: str
@@ -112,9 +117,14 @@ class PatternRecommendation:
     examples: list[dict[str, Any]] = field(default_factory=list)
     related_files: list[str] = field(default_factory=list)
 
+    # Rich metadata from UnifiedPattern (optional, backward-compat)
+    pattern_name: str | None = None
+    evidence: list[dict[str, Any]] = field(default_factory=list)
+    related_symbols: list[str] = field(default_factory=list)
+
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
-        return {
+        d: dict[str, Any] = {
             "pattern_type": str(self.pattern_type.value if isinstance(self.pattern_type, PatternType) else self.pattern_type),
             "description": self.description,
             "confidence": self.confidence,
@@ -122,6 +132,32 @@ class PatternRecommendation:
             "examples": self.examples,
             "related_files": self.related_files,
         }
+        if self.pattern_name:
+            d["pattern_name"] = self.pattern_name
+        if self.evidence:
+            d["evidence"] = self.evidence
+        if self.related_symbols:
+            d["related_symbols"] = self.related_symbols
+        return d
+
+
+def _pattern_type_key(pattern: Any) -> str:
+    """Extract a comparable pattern type string from any pattern object.
+
+    Works with both DetectedPattern (``pattern_type``) and
+    UnifiedPattern (``kind``).
+    """
+    # DetectedPattern path
+    pt = getattr(pattern, "pattern_type", None)
+    if pt is not None:
+        return str(pt.value if isinstance(pt, PatternType) else pt)
+
+    # UnifiedPattern path
+    kind = getattr(pattern, "kind", None)
+    if kind is not None:
+        return str(kind.value if hasattr(kind, "value") else kind)
+
+    return "unknown"
 
 
 class PatternEngine:
@@ -134,7 +170,8 @@ class PatternEngine:
             storage: Optional storage backend for persisting patterns.
         """
         self.storage = storage
-        self._learned_patterns: dict[str, list[DetectedPattern]] = {}
+        # Stores DetectedPattern or UnifiedPattern objects per file
+        self._learned_patterns: dict[str, list[Any]] = {}
         self._pattern_frequency: dict[str, int] = {}
 
         # Pattern detection rules with regex patterns
@@ -337,9 +374,32 @@ class PatternEngine:
 
         # Update frequency counts
         for pattern in patterns:
-            pattern_key = str(pattern.pattern_type.value if isinstance(pattern.pattern_type, PatternType) else pattern.pattern_type)
+            pattern_key = _pattern_type_key(pattern)
             self._pattern_frequency[pattern_key] = (
                 self._pattern_frequency.get(pattern_key, 0) + pattern.frequency
+            )
+
+    def load_unified_patterns(self, patterns: list[Any]) -> None:
+        """Load UnifiedPattern objects directly into the engine.
+
+        Populates ``_learned_patterns`` and ``_pattern_frequency`` from
+        extraction pipeline output without requiring regex re-detection.
+        Accepts any object with ``file_path``, ``kind`` or ``pattern_type``,
+        ``confidence``, and ``frequency`` attributes.
+
+        Args:
+            patterns: List of UnifiedPattern (or DetectedPattern) objects.
+        """
+        for pattern in patterns:
+            file_path = getattr(pattern, "file_path", None) or "unknown"
+            if file_path not in self._learned_patterns:
+                self._learned_patterns[file_path] = []
+            self._learned_patterns[file_path].append(pattern)
+
+            pattern_key = _pattern_type_key(pattern)
+            freq = getattr(pattern, "frequency", 1)
+            self._pattern_frequency[pattern_key] = (
+                self._pattern_frequency.get(pattern_key, 0) + freq
             )
 
     def get_recommendations(
@@ -455,23 +515,37 @@ class PatternEngine:
                 path
                 for path, patterns in self._learned_patterns.items()
                 for p in patterns
-                if str(p.pattern_type.value if isinstance(p.pattern_type, PatternType) else p.pattern_type) == pattern_type
+                if _pattern_type_key(p) == pattern_type
             ]
 
-            # Get examples from learned patterns
+            # Collect examples and rich metadata from learned patterns
             examples = []
+            all_evidence: list[dict[str, Any]] = []
+            all_symbols: list[str] = []
+            best_name: str | None = None
+
             for path, patterns in self._learned_patterns.items():
                 for p in patterns:
-                    if str(p.pattern_type.value if isinstance(p.pattern_type, PatternType) else p.pattern_type) == pattern_type and p.code_snippet:
+                    if _pattern_type_key(p) != pattern_type:
+                        continue
+
+                    if p.code_snippet and len(examples) < 3:
                         examples.append({
                             "file": path,
                             "code": p.code_snippet,
                             "confidence": p.confidence,
                         })
-                        if len(examples) >= 3:
-                            break
-                if len(examples) >= 3:
-                    break
+
+                    # Extract rich metadata from UnifiedPattern
+                    evidence = getattr(p, "evidence", None)
+                    if evidence:
+                        all_evidence.extend(evidence)
+                    symbols = getattr(p, "related_symbols", None)
+                    if symbols:
+                        all_symbols.extend(symbols)
+                    name = getattr(p, "name", None)
+                    if name and best_name is None:
+                        best_name = name
 
             recommendations.append(
                 PatternRecommendation(
@@ -483,6 +557,9 @@ class PatternEngine:
                     reasoning=reasoning,
                     examples=examples,
                     related_files=related_files[:5],
+                    pattern_name=best_name,
+                    evidence=all_evidence[:10],
+                    related_symbols=list(dict.fromkeys(all_symbols))[:20],
                 )
             )
 

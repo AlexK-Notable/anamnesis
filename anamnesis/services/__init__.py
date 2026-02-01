@@ -25,6 +25,10 @@ from anamnesis.services.memory_service import (
     MemoryListEntry,
     MemoryService,
 )
+from anamnesis.services.project_registry import (
+    ProjectContext,
+    ProjectRegistry,
+)
 
 __all__ = [
     # Learning Service
@@ -47,4 +51,7 @@ __all__ = [
     "MemoryService",
     "MemoryInfo",
     "MemoryListEntry",
+    # Project Registry
+    "ProjectContext",
+    "ProjectRegistry",
 ]

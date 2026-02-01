@@ -66,11 +66,11 @@ class TestServiceGetters:
         service = _get_codebase_service()
         assert service is not None
 
-    def test_current_path_operations(self):
+    def test_current_path_operations(self, tmp_path):
         """Test current path get/set."""
         original = _get_current_path()
-        _set_current_path("/tmp/test")
-        assert _get_current_path() == "/tmp/test"
+        _set_current_path(str(tmp_path))
+        assert _get_current_path() == str(tmp_path)
         # Restore
         _set_current_path(original)
 

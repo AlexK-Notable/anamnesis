@@ -22,19 +22,11 @@ def reset_server_state():
     """Reset server global state between tests."""
     import anamnesis.mcp_server.server as server_module
 
-    # Reset all global service instances
-    server_module._session_manager = None
-    server_module._learning_service = None
-    server_module._intelligence_service = None
-    server_module._codebase_service = None
-    server_module._current_path = None
+    # Reset project registry (replaces old per-service globals)
+    server_module._registry.reset()
     yield
     # Clean up after test
-    server_module._session_manager = None
-    server_module._learning_service = None
-    server_module._intelligence_service = None
-    server_module._codebase_service = None
-    server_module._current_path = None
+    server_module._registry.reset()
 
 
 class TestStartSession:
