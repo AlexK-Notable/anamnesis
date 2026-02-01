@@ -19,6 +19,7 @@ from anamnesis.services import (
     IntelligenceService,
     LearningOptions,
     LearningService,
+    MemoryService,
     SessionManager,
 )
 from anamnesis.interfaces.search import SearchQuery, SearchType
@@ -43,9 +44,15 @@ Key capabilities:
 - Predict coding approaches for implementation tasks
 - Track developer profiles and coding styles
 - Contribute and retrieve AI-discovered insights
+- Store and retrieve persistent project memories
+- Reflect on your work with metacognition tools
 
 Start with `auto_learn_if_needed` to initialize intelligence, then use
 other tools to query and interact with the learned knowledge.
+
+Use `write_memory` and `read_memory` to persist project knowledge across
+sessions. Use the `think_about_*` tools to reflect before, during, and
+after complex tasks.
 """,
 )
 
@@ -54,6 +61,7 @@ _learning_service: Optional[LearningService] = None
 _intelligence_service: Optional[IntelligenceService] = None
 _codebase_service: Optional[CodebaseService] = None
 _session_manager: Optional[SessionManager] = None
+_memory_service: Optional[MemoryService] = None
 _search_service: Optional[SearchService] = None
 _semantic_initialized: bool = False  # Track async semantic backend initialization
 _current_path: Optional[str] = None
@@ -154,6 +162,19 @@ def _get_session_manager() -> SessionManager:
     return _session_manager
 
 
+def _get_memory_service() -> MemoryService:
+    """Get or create memory service instance.
+
+    Uses the current project path for memory storage.
+    """
+    global _memory_service
+    current_path = _get_current_path()
+    # Recreate if project path changed
+    if _memory_service is None or str(_memory_service.project_path) != current_path:
+        _memory_service = MemoryService(current_path)
+    return _memory_service
+
+
 def _get_current_path() -> str:
     """Get current working path."""
     global _current_path
@@ -164,10 +185,82 @@ def _get_current_path() -> str:
 
 def _set_current_path(path: str) -> None:
     """Set current working path and reset path-dependent services."""
-    global _current_path
+    global _current_path, _memory_service
     _current_path = str(Path(path).resolve())
-    # Reset search service to use new path
+    # Reset path-dependent services
     _reset_search_service()
+    _memory_service = None  # Will be recreated with new path
+
+
+# =============================================================================
+# Metacognition Prompts
+# =============================================================================
+
+_THINK_COLLECTED_PROMPT = """\
+Think about the collected information and whether it is sufficient and relevant.
+
+Consider:
+1. **Completeness**: Do you have enough information to proceed with the task?
+   - Have you identified all relevant files and symbols?
+   - Are there dependencies or relationships you haven't explored?
+   - Is there context missing that could change your approach?
+
+2. **Relevance**: Is the information you've gathered actually useful?
+   - Does it directly relate to the task at hand?
+   - Are you going down a rabbit hole that won't help?
+   - Should you refocus on a different aspect?
+
+3. **Confidence**: How confident are you in your understanding?
+   - Are there assumptions you're making that should be verified?
+   - Could the code behave differently than you expect?
+   - Have you considered edge cases?
+
+Take a moment to assess before proceeding.
+"""
+
+_THINK_TASK_ADHERENCE_PROMPT = """\
+Think about the task at hand and whether you are still on track.
+
+Consider:
+1. **Original goal**: What was the user's actual request?
+   - Are you still working toward that goal?
+   - Have you drifted into tangential work?
+   - Is your current approach aligned with what was asked?
+
+2. **Scope**: Are you doing too much or too little?
+   - Are you over-engineering the solution?
+   - Are you adding unnecessary features or abstractions?
+   - Have you missed any requirements?
+
+3. **Progress**: What have you accomplished so far?
+   - What concrete steps remain?
+   - Are there blockers you need to address?
+   - Should you ask for clarification before continuing?
+
+Refocus on the core task if you've drifted.
+"""
+
+_THINK_DONE_PROMPT = """\
+Think about whether you are truly done with the task.
+
+Consider:
+1. **Completeness**: Have you addressed everything the user asked for?
+   - Review the original request point by point
+   - Have you tested or verified your changes?
+   - Are there loose ends that need tying up?
+
+2. **Quality**: Is the work at an acceptable standard?
+   - Does the code follow project conventions?
+   - Are there obvious bugs or edge cases?
+   - Would you be confident in this code going to production?
+
+3. **Communication**: Have you explained what you did?
+   - Does the user understand the changes and why?
+   - Are there caveats or limitations they should know about?
+   - Is there follow-up work they should consider?
+
+If not fully done, identify what remains. If done, summarize the outcome.
+"""
 
 
 def _with_error_handling(operation_name: str):
@@ -940,6 +1033,122 @@ def _get_decisions_impl(
 
 
 # =============================================================================
+# Metacognition Tool Implementations
+# =============================================================================
+
+
+def _think_about_collected_information_impl() -> dict:
+    """Implementation for think_about_collected_information tool."""
+    return {
+        "success": True,
+        "prompt": _THINK_COLLECTED_PROMPT,
+    }
+
+
+def _think_about_task_adherence_impl() -> dict:
+    """Implementation for think_about_task_adherence tool."""
+    return {
+        "success": True,
+        "prompt": _THINK_TASK_ADHERENCE_PROMPT,
+    }
+
+
+def _think_about_whether_you_are_done_impl() -> dict:
+    """Implementation for think_about_whether_you_are_done tool."""
+    return {
+        "success": True,
+        "prompt": _THINK_DONE_PROMPT,
+    }
+
+
+# =============================================================================
+# Memory Tool Implementations
+# =============================================================================
+
+
+@_with_error_handling("write_memory")
+def _write_memory_impl(
+    memory_file_name: str,
+    content: str,
+) -> dict:
+    """Implementation for write_memory tool."""
+    memory_service = _get_memory_service()
+    result = memory_service.write_memory(memory_file_name, content)
+    return {
+        "success": True,
+        "memory": result.to_dict(),
+    }
+
+
+@_with_error_handling("read_memory")
+def _read_memory_impl(
+    memory_file_name: str,
+) -> dict:
+    """Implementation for read_memory tool."""
+    memory_service = _get_memory_service()
+    result = memory_service.read_memory(memory_file_name)
+    if result is None:
+        return {
+            "success": False,
+            "error": f"Memory '{memory_file_name}' not found",
+        }
+    return {
+        "success": True,
+        "memory": result.to_dict(),
+    }
+
+
+@_with_error_handling("list_memories")
+def _list_memories_impl() -> dict:
+    """Implementation for list_memories tool."""
+    memory_service = _get_memory_service()
+    memories = memory_service.list_memories()
+    return {
+        "success": True,
+        "memories": [m.to_dict() for m in memories],
+        "count": len(memories),
+    }
+
+
+@_with_error_handling("delete_memory")
+def _delete_memory_impl(
+    memory_file_name: str,
+) -> dict:
+    """Implementation for delete_memory tool."""
+    memory_service = _get_memory_service()
+    deleted = memory_service.delete_memory(memory_file_name)
+    if not deleted:
+        return {
+            "success": False,
+            "error": f"Memory '{memory_file_name}' not found",
+        }
+    return {
+        "success": True,
+        "deleted": memory_file_name,
+    }
+
+
+@_with_error_handling("edit_memory")
+def _edit_memory_impl(
+    memory_file_name: str,
+    old_text: str,
+    new_text: str,
+) -> dict:
+    """Implementation for edit_memory tool."""
+    memory_service = _get_memory_service()
+    result = memory_service.edit_memory(memory_file_name, old_text, new_text)
+    if result is None:
+        return {
+            "success": False,
+            "error": f"Memory '{memory_file_name}' not found",
+        }
+    return {
+        "success": True,
+        "memory": result.to_dict(),
+    }
+
+
+# =============================================================================
 # MCP Tool Registrations
 # =============================================================================
 
@@ -1367,6 +1576,150 @@ def get_decisions(
         List of decisions with count
     """
     return _get_decisions_impl(session_id, limit)
+
+
+# =============================================================================
+# Metacognition Tool Registrations
+# =============================================================================
+
+
+@mcp.tool
+def think_about_collected_information() -> dict:
+    """Think about the collected information and whether it is sufficient and relevant.
+
+    This tool should be called after completing a sequence of search and
+    exploration steps (find_symbol, search_codebase, etc.) to reflect on
+    whether you have enough information to proceed.
+
+    Returns:
+        A reflective prompt to guide your thinking
+    """
+    return _think_about_collected_information_impl()
+
+
+@mcp.tool
+def think_about_task_adherence() -> dict:
+    """Think about the task at hand and whether you are still on track.
+
+    Especially important during long conversations with significant back
+    and forth. Call this before making code changes to ensure you haven't
+    drifted from the original goal.
+
+    Returns:
+        A reflective prompt to guide your thinking
+    """
+    return _think_about_task_adherence_impl()
+
+
+@mcp.tool
+def think_about_whether_you_are_done() -> dict:
+    """Think about whether you are truly done with the task.
+
+    Call this when you believe you've completed the user's request.
+    Helps verify completeness, quality, and communication before
+    declaring the work finished.
+
+    Returns:
+        A reflective prompt to guide your thinking
+    """
+    return _think_about_whether_you_are_done_impl()
+
+
+# =============================================================================
+# Memory Tool Registrations
+# =============================================================================
+
+
+@mcp.tool
+def write_memory(
+    memory_file_name: str,
+    content: str,
+) -> dict:
+    """Write information about this project that can be useful for future tasks.
+
+    Stores a markdown file in `.anamnesis/memories/` within the project root.
+    The memory name should be meaningful and descriptive.
+
+    Args:
+        memory_file_name: Name for the memory (e.g., "architecture-decisions",
+            "api-patterns"). Letters, numbers, hyphens, underscores, dots only.
+        content: The content to write (markdown format recommended)
+
+    Returns:
+        Result with the written memory details
+    """
+    return _write_memory_impl(memory_file_name, content)
+
+
+@mcp.tool
+def read_memory(
+    memory_file_name: str,
+) -> dict:
+    """Read the content of a memory file.
+
+    Use this to retrieve previously stored project knowledge. Only read
+    memories that are relevant to the current task.
+
+    Args:
+        memory_file_name: Name of the memory to read
+
+    Returns:
+        Memory content and metadata, or error if not found
+    """
+    return _read_memory_impl(memory_file_name)
+
+
+@mcp.tool
+def list_memories() -> dict:
+    """List available memories for this project.
+
+    Returns names and metadata for all stored memories. Use this to
+    discover what project knowledge is available before reading specific
+    memories.
+
+    Returns:
+        List of memory entries with names, sizes, and timestamps
+    """
+    return _list_memories_impl()
+
+
+@mcp.tool
+def delete_memory(
+    memory_file_name: str,
+) -> dict:
+    """Delete a memory file.
+
+    Remove a memory that is no longer relevant or correct.
+
+    Args:
+        memory_file_name: Name of the memory to delete
+
+    Returns:
+        Success status
+    """
+    return _delete_memory_impl(memory_file_name)
+
+
+@mcp.tool
+def edit_memory(
+    memory_file_name: str,
+    old_text: str,
+    new_text: str,
+) -> dict:
+    """Edit an existing memory by replacing text.
+
+    Use this to update specific parts of a memory without rewriting
+    the entire content.
+
+    Args:
+        memory_file_name: Name of the memory to edit
+        old_text: The exact text to find and replace
+        new_text: The replacement text
+
+    Returns:
+        Updated memory content and metadata
+    """
+    return _edit_memory_impl(memory_file_name, old_text, new_text)
 
 
 # =============================================================================

@@ -20,6 +20,11 @@ from anamnesis.services.session_manager import (
     SessionInfo,
     SessionManager,
 )
+from anamnesis.services.memory_service import (
+    MemoryInfo,
+    MemoryListEntry,
+    MemoryService,
+)
 
 __all__ = [
     # Learning Service
@@ -38,4 +43,8 @@ __all__ = [
     "SessionManager",
     "SessionInfo",
     "DecisionInfo",
+    # Memory Service
+    "MemoryService",
+    "MemoryInfo",
+    "MemoryListEntry",
 ]
