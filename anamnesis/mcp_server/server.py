@@ -254,6 +254,44 @@ def _format_blueprint_as_memory(blueprint: dict) -> str:
     return "\n".join(lines)
 
 
+def _categorize_references(references: list[dict]) -> dict[str, list[dict]]:
+    """Categorize symbol references by file type for intelligent filtering.
+
+    Groups references into source, test, config, and other categories
+    based on file path heuristics. Each reference retains its original
+    data and gains a 'category' field.
+
+    Args:
+        references: List of reference dicts with at least a 'file' key.
+
+    Returns:
+        Dict mapping category names to lists of references.
+    """
+    if not references:
+        return {}
+
+    categories: dict[str, list[dict]] = {}
+
+    for ref in references:
+        file_path = ref.get("file", ref.get("relative_path", "")).lower()
+
+        if any(t in file_path for t in ("test", "spec", "fixture", "conftest")):
+            cat = "test"
+        elif any(c in file_path for c in ("config", "settings", "env", ".cfg", ".ini", ".toml", ".yaml", ".yml")):
+            cat = "config"
+        elif any(s in file_path for s in ("src/", "lib/", "app/", "anamnesis/", "pkg/")):
+            cat = "source"
+        elif file_path.endswith(".py") or file_path.endswith(".ts") or file_path.endswith(".rs"):
+            cat = "source"
+        else:
+            cat = "other"
+
+        ref_with_cat = {**ref, "category": cat}
+        categories.setdefault(cat, []).append(ref_with_cat)
+
+    return categories
+
+
 def _with_error_handling(operation_name: str, toon_auto: bool = True):
     """Decorator for MCP tool implementations with error handling and TOON auto-encoding.
 
@@ -2000,7 +2038,15 @@ def _find_referencing_symbols_impl(
 ) -> dict:
     retriever = _get_symbol_retriever()
     results = retriever.find_referencing_symbols(name_path, relative_path)
-    return {"references": results, "count": len(results)}
+
+    # Intelligence augmentation: categorize references
+    categorized = _categorize_references(results)
+
+    return {
+        "references": results,
+        "count": len(results),
+        "categories": categorized,
+    }
 
 
 @mcp.tool

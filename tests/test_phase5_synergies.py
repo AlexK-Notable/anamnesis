@@ -100,3 +100,41 @@ class TestMemorySearch:
 
         results = service.search_memories("topic", limit=3)
         assert len(results) <= 3
+
+
+class TestIntelligentReferenceFiltering:
+    """Tests for intelligence-augmented reference results."""
+
+    def test_categorize_references_by_file_type(self):
+        """References are categorized into source/test/config groups."""
+        from anamnesis.mcp_server.server import _categorize_references
+
+        references = [
+            {"file": "src/auth/service.py", "line": 42, "snippet": "service.login()"},
+            {"file": "tests/test_auth.py", "line": 10, "snippet": "service.login()"},
+            {"file": "src/api/routes.py", "line": 88, "snippet": "service.login()"},
+            {"file": "config/settings.py", "line": 5, "snippet": "LOGIN_URL"},
+        ]
+
+        categorized = _categorize_references(references)
+        assert "source" in categorized
+        assert "test" in categorized
+        assert len(categorized["source"]) == 2
+        assert len(categorized["test"]) == 1
+
+    def test_categorize_empty_references(self):
+        """Empty reference list returns empty categories."""
+        from anamnesis.mcp_server.server import _categorize_references
+
+        categorized = _categorize_references([])
+        assert categorized == {}
+
+    def test_categorize_handles_unknown_paths(self):
+        """References with unknown paths go to 'other' category."""
+        from anamnesis.mcp_server.server import _categorize_references
+
+        references = [
+            {"file": "random/thing.txt", "line": 1, "snippet": "x"},
+        ]
+        categorized = _categorize_references(references)
+        assert "other" in categorized
