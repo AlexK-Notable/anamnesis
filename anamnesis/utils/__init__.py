@@ -161,6 +161,7 @@ from .toon_encoder import (
     ToonEncodingError,
     estimate_token_savings,
     has_nested_arrays,
+    is_structurally_toon_eligible,
 )
 
 # Serialization (Phase 13)
@@ -295,6 +296,7 @@ __all__ = [
     "ToonEncodingError",
     "estimate_token_savings",
     "has_nested_arrays",
+    "is_structurally_toon_eligible",
     # Serialization (Phase 13)
     "is_serialized",
     "serialize_to_primitives",

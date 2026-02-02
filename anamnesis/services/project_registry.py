@@ -19,6 +19,7 @@ from anamnesis.services.memory_service import MemoryService
 from anamnesis.utils.logger import logger
 
 if TYPE_CHECKING:
+    from anamnesis.lsp.manager import LspManager
     from anamnesis.services.codebase_service import CodebaseService
     from anamnesis.services.intelligence_service import IntelligenceService
     from anamnesis.services.learning_service import LearningService
@@ -46,6 +47,7 @@ class ProjectContext:
     _memory_service: Optional["MemoryService"] = field(default=None, repr=False)
     _search_service: Optional["SearchService"] = field(default=None, repr=False)
     _semantic_initialized: bool = field(default=False, repr=False)
+    _lsp_manager: Optional["LspManager"] = field(default=None, repr=False)
 
     @property
     def name(self) -> str:
@@ -109,6 +111,27 @@ class ProjectContext:
             self._search_service = SearchService.create_sync(self.path)
         return self._search_service
 
+    def get_lsp_manager(self) -> "LspManager":
+        """Get or create the LSP manager for this project.
+
+        Lazily creates an LspManager that handles language server
+        lifecycle for this project.
+        """
+        if self._lsp_manager is None:
+            from anamnesis.lsp.manager import LspManager
+
+            self._lsp_manager = LspManager(self.path)
+        return self._lsp_manager
+
+    def shutdown_lsp(self) -> None:
+        """Shut down all LSP servers for this project.
+
+        Called during project deactivation to prevent zombie processes.
+        """
+        if self._lsp_manager is not None:
+            self._lsp_manager.stop_all()
+            self._lsp_manager = None
+
     async def ensure_semantic_search(self) -> bool:
         """Initialize semantic search backend lazily.
 
@@ -171,6 +194,7 @@ class ProjectContext:
                 "memory": self._memory_service is not None,
                 "search": self._search_service is not None,
                 "semantic_search": self._semantic_initialized,
+                "lsp": self._lsp_manager is not None,
             },
         }
 
@@ -301,6 +325,8 @@ class ProjectRegistry:
         if resolved not in self._projects:
             return False
 
+        # Shut down LSP servers to prevent zombie processes
+        self._projects[resolved].shutdown_lsp()
         del self._projects[resolved]
         if self._active_path == resolved:
             self._active_path = None

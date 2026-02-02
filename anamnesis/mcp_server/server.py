@@ -29,6 +29,7 @@ from anamnesis.utils.circuit_breaker import CircuitBreakerError
 from anamnesis.utils.error_classifier import classify_error
 from anamnesis.utils.logger import logger
 from anamnesis.utils.response_wrapper import ResponseWrapper, wrap_async_operation
+from anamnesis.utils.toon_encoder import ToonEncoder, is_structurally_toon_eligible
 
 # Create the MCP server instance
 mcp = FastMCP(
@@ -65,6 +66,7 @@ data contamination.
 # All per-project state is managed through ProjectContext instances.
 _registry = ProjectRegistry()
 _server_start_time: float = time.time()  # Track server uptime
+_toon_encoder = ToonEncoder()  # TOON auto-encoding for eligible responses
 
 
 # =============================================================================
@@ -200,14 +202,26 @@ If not fully done, identify what remains. If done, summarize the outcome.
 """
 
 
-def _with_error_handling(operation_name: str):
-    """Decorator for MCP tool implementations with error handling.
+def _with_error_handling(operation_name: str, toon_auto: bool = True):
+    """Decorator for MCP tool implementations with error handling and TOON auto-encoding.
 
     Catches CircuitBreakerError and other exceptions, returning
     ResponseWrapper-formatted error responses.
 
+    When toon_auto is True (default), successful dict responses are checked
+    for structural TOON eligibility. Eligible responses (flat uniform arrays
+    with ≥5 elements, no nested arrays) are encoded to TOON format for
+    ~25-40% token savings. The encoded string is returned directly — FastMCP
+    wraps it as TextContent. Error responses always stay as JSON dicts for
+    maximum debuggability.
+
+    If TOON encoding fails for any reason, the original dict is returned
+    silently (no error propagated).
+
     Args:
         operation_name: Name of the operation for logging and error context.
+        toon_auto: Enable automatic TOON encoding for eligible responses.
+            Set to False for tools where JSON output is required.
     """
     import functools
 
@@ -215,7 +229,17 @@ def _with_error_handling(operation_name: str):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             try:
-                return func(*args, **kwargs)
+                result = func(*args, **kwargs)
+
+                # Auto-TOON: encode eligible success responses for token savings
+                if toon_auto and isinstance(result, dict) and result.get("success"):
+                    try:
+                        if is_structurally_toon_eligible(result):
+                            return _toon_encoder.encode(result)
+                    except Exception:
+                        pass  # Silent fallback to dict/JSON on any encoding error
+
+                return result
             except CircuitBreakerError as e:
                 logger.error(
                     f"Circuit breaker open for operation '{operation_name}'",
@@ -1747,6 +1771,341 @@ def edit_memory(
         Updated memory content and metadata
     """
     return _edit_memory_impl(memory_file_name, old_text, new_text)
+
+
+# =============================================================================
+# LSP Navigation & Editing Tools
+# =============================================================================
+# These tools provide symbol-level code navigation and editing using
+# Language Server Protocol (with tree-sitter fallback for navigation).
+
+
+def _get_lsp_manager():
+    """Get the LSP manager for the active project."""
+    return _get_active_context().get_lsp_manager()
+
+
+def _get_symbol_retriever():
+    """Get a SymbolRetriever for the active project."""
+    from anamnesis.lsp.symbols import SymbolRetriever
+
+    ctx = _get_active_context()
+    return SymbolRetriever(ctx.path, lsp_manager=ctx.get_lsp_manager())
+
+
+def _get_code_editor():
+    """Get a CodeEditor for the active project."""
+    from anamnesis.lsp.editor import CodeEditor
+
+    ctx = _get_active_context()
+    retriever = _get_symbol_retriever()
+    return CodeEditor(ctx.path, retriever, lsp_manager=ctx.get_lsp_manager())
+
+
+@_with_error_handling("find_symbol")
+def _find_symbol_impl(
+    name_path_pattern: str,
+    relative_path: str = "",
+    depth: int = 0,
+    include_body: bool = False,
+    include_info: bool = False,
+    substring_matching: bool = False,
+) -> dict:
+    retriever = _get_symbol_retriever()
+    results = retriever.find(
+        name_path_pattern,
+        relative_path=relative_path or None,
+        depth=depth,
+        include_body=include_body,
+        include_info=include_info,
+        substring_matching=substring_matching,
+    )
+    return {"symbols": results, "count": len(results)}
+
+
+@mcp.tool
+def find_symbol(
+    name_path_pattern: str,
+    relative_path: str = "",
+    depth: int = 0,
+    include_body: bool = False,
+    include_info: bool = False,
+    substring_matching: bool = False,
+) -> dict:
+    """Search for code symbols by name path pattern.
+
+    Searches actual code identifiers (classes, functions, methods, etc.)
+    using LSP when available, with tree-sitter fallback.
+
+    A name path addresses symbols hierarchically:
+    - Simple name: ``"method"`` matches any symbol with that name
+    - Path: ``"MyClass/method"`` matches method inside MyClass
+    - Absolute: ``"/MyClass/method"`` requires exact path match
+    - Overload: ``"method[0]"`` matches specific overload
+
+    Args:
+        name_path_pattern: Pattern to match (see examples above)
+        relative_path: Restrict search to this file (recommended for speed)
+        depth: Include children up to this depth (0=symbol only, 1=immediate children)
+        include_body: Include the symbol's source code in results
+        include_info: Include hover/type information (requires LSP)
+        substring_matching: Allow substring matching on the last path component
+
+    Returns:
+        List of matching symbols with location, kind, and optional body/info
+    """
+    return _find_symbol_impl(
+        name_path_pattern, relative_path, depth,
+        include_body, include_info, substring_matching,
+    )
+
+
+@_with_error_handling("get_symbols_overview")
+def _get_symbols_overview_impl(
+    relative_path: str,
+    depth: int = 0,
+) -> dict:
+    retriever = _get_symbol_retriever()
+    return retriever.get_overview(relative_path, depth=depth)
+
+
+@mcp.tool
+def get_symbols_overview(
+    relative_path: str,
+    depth: int = 0,
+) -> dict:
+    """Get a high-level overview of symbols in a file, grouped by kind.
+
+    Returns symbols organized by their kind (Class, Function, Method, etc.)
+    in a compact format. Use this as the first tool when exploring a new file.
+
+    Args:
+        relative_path: Path to the file relative to the project root
+        depth: Include children up to this depth (0=top-level only)
+
+    Returns:
+        Symbols grouped by kind with names and line numbers
+    """
+    return _get_symbols_overview_impl(relative_path, depth)
+
+
+@_with_error_handling("find_referencing_symbols")
+def _find_referencing_symbols_impl(
+    name_path: str,
+    relative_path: str,
+) -> dict:
+    retriever = _get_symbol_retriever()
+    results = retriever.find_referencing_symbols(name_path, relative_path)
+    return {"references": results, "count": len(results)}
+
+
+@mcp.tool
+def find_referencing_symbols(
+    name_path: str,
+    relative_path: str,
+) -> dict:
+    """Find all references to a symbol across the codebase.
+
+    Requires LSP to be enabled for the file's language. Returns locations
+    where the symbol is used, with code snippets for context.
+
+    Args:
+        name_path: The symbol's name path (e.g., "MyClass/my_method")
+        relative_path: File containing the symbol definition
+
+    Returns:
+        List of references with file paths, line numbers, and code snippets
+    """
+    return _find_referencing_symbols_impl(name_path, relative_path)
+
+
+@_with_error_handling("replace_symbol_body")
+def _replace_symbol_body_impl(
+    name_path: str,
+    relative_path: str,
+    body: str,
+) -> dict:
+    editor = _get_code_editor()
+    return editor.replace_body(name_path, relative_path, body)
+
+
+@mcp.tool
+def replace_symbol_body(
+    name_path: str,
+    relative_path: str,
+    body: str,
+) -> dict:
+    """Replace the body of a symbol with new source code.
+
+    The body includes the full definition (signature + implementation)
+    but NOT preceding comments/docstrings or imports. Requires LSP.
+
+    Args:
+        name_path: Symbol to replace (e.g., "MyClass/my_method")
+        relative_path: File containing the symbol
+        body: New source code for the symbol
+
+    Returns:
+        Success status with details of the replacement
+    """
+    return _replace_symbol_body_impl(name_path, relative_path, body)
+
+
+@_with_error_handling("insert_after_symbol")
+def _insert_after_symbol_impl(
+    name_path: str,
+    relative_path: str,
+    body: str,
+) -> dict:
+    editor = _get_code_editor()
+    return editor.insert_after_symbol(name_path, relative_path, body)
+
+
+@mcp.tool
+def insert_after_symbol(
+    name_path: str,
+    relative_path: str,
+    body: str,
+) -> dict:
+    """Insert code after a symbol's definition. Requires LSP.
+
+    A typical use case is adding a new method after an existing one.
+
+    Args:
+        name_path: Symbol after which to insert (e.g., "MyClass/existing_method")
+        relative_path: File containing the symbol
+        body: Code to insert after the symbol
+
+    Returns:
+        Success status with the insertion line number
+    """
+    return _insert_after_symbol_impl(name_path, relative_path, body)
+
+
+@_with_error_handling("insert_before_symbol")
+def _insert_before_symbol_impl(
+    name_path: str,
+    relative_path: str,
+    body: str,
+) -> dict:
+    editor = _get_code_editor()
+    return editor.insert_before_symbol(name_path, relative_path, body)
+
+
+@mcp.tool
+def insert_before_symbol(
+    name_path: str,
+    relative_path: str,
+    body: str,
+) -> dict:
+    """Insert code before a symbol's definition. Requires LSP.
+
+    A typical use case is adding an import or decorator before a class.
+
+    Args:
+        name_path: Symbol before which to insert
+        relative_path: File containing the symbol
+        body: Code to insert before the symbol
+
+    Returns:
+        Success status with the insertion line number
+    """
+    return _insert_before_symbol_impl(name_path, relative_path, body)
+
+
+@_with_error_handling("rename_symbol")
+def _rename_symbol_impl(
+    name_path: str,
+    relative_path: str,
+    new_name: str,
+) -> dict:
+    editor = _get_code_editor()
+    return editor.rename_symbol(name_path, relative_path, new_name)
+
+
+@mcp.tool
+def rename_symbol(
+    name_path: str,
+    relative_path: str,
+    new_name: str,
+) -> dict:
+    """Rename a symbol throughout the entire codebase. Requires LSP.
+
+    Uses the language server's rename capability for accurate, project-wide
+    renaming that updates all references.
+
+    Args:
+        name_path: Current symbol name path (e.g., "MyClass/old_method")
+        relative_path: File containing the symbol
+        new_name: New name for the symbol
+
+    Returns:
+        Result with files changed and total edits applied
+    """
+    return _rename_symbol_impl(name_path, relative_path, new_name)
+
+
+@_with_error_handling("enable_lsp")
+def _enable_lsp_impl(language: str = "") -> dict:
+    mgr = _get_lsp_manager()
+    if language:
+        success = mgr.start(language)
+        if success:
+            return {"success": True, "message": f"LSP server for '{language}' started"}
+        return {
+            "success": False,
+            "error": f"Failed to start LSP server for '{language}'. "
+                     f"Ensure the language server binary is installed.",
+        }
+    # Start all available
+    results = {}
+    for lang in ["python", "go", "rust", "typescript"]:
+        results[lang] = mgr.start(lang)
+    started = [l for l, ok in results.items() if ok]
+    failed = [l for l, ok in results.items() if not ok]
+    return {
+        "success": bool(started),
+        "started": started,
+        "failed": failed,
+    }
+
+
+@mcp.tool
+def enable_lsp(language: str = "") -> dict:
+    """Start LSP server(s) for enhanced code navigation and editing.
+
+    LSP provides compiler-grade accuracy for symbol lookup, references,
+    and renaming. Without LSP, navigation falls back to tree-sitter.
+
+    Supported languages: python (Pyright), go (gopls), rust (rust-analyzer),
+    typescript (typescript-language-server).
+
+    Args:
+        language: Language to enable (e.g., "python"). Empty starts all available.
+
+    Returns:
+        Status of which servers were started
+    """
+    return _enable_lsp_impl(language)
+
+
+@_with_error_handling("get_lsp_status")
+def _get_lsp_status_impl() -> dict:
+    mgr = _get_lsp_manager()
+    return mgr.get_status()
+
+
+@mcp.tool
+def get_lsp_status() -> dict:
+    """Get status of LSP language servers.
+
+    Shows which languages are supported, which servers are running,
+    and the current project root.
+
+    Returns:
+        Status dict with supported languages and running servers
+    """
+    return _get_lsp_status_impl()
 
 
 # =============================================================================

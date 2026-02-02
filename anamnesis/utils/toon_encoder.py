@@ -127,6 +127,63 @@ def has_nested_arrays(data: Any, max_depth: int = 3) -> bool:
     return check_value(data, 0, False)
 
 
+def is_structurally_toon_eligible(data: Any, min_array_size: int = 5) -> bool:
+    """Check if data would benefit from TOON encoding by inspecting structure.
+
+    Unlike is_toon_eligible() which uses hardcoded type names, this function
+    analyzes the actual data shape at runtime. This enables automatic TOON
+    selection for any dict response without requiring type registration.
+
+    TOON benefits require ALL of:
+    1. At least one array of uniform dicts with >= min_array_size elements
+    2. No nested arrays anywhere in the data (TOON's weakness)
+    3. Array elements share the same keys (uniform structure)
+
+    Args:
+        data: The response data (typically a dict from ResponseWrapper.to_dict()).
+        min_array_size: Minimum array length to justify TOON encoding overhead.
+
+    Returns:
+        True if TOON encoding would likely save tokens.
+
+    Examples:
+        >>> is_structurally_toon_eligible({"results": [{"id": i} for i in range(10)]})
+        True   # Flat uniform array with enough elements
+        >>> is_structurally_toon_eligible({"count": 5})
+        False  # No arrays
+        >>> is_structurally_toon_eligible({"items": [{"tags": ["a"]}]})
+        False  # Nested arrays
+    """
+    # Quick reject: nested arrays break TOON efficiency
+    if has_nested_arrays(data):
+        return False
+
+    # Walk the data to find all arrays of dicts
+    best_array_size = 0
+    best_uniform = False
+
+    def find_dict_arrays(value: Any) -> None:
+        nonlocal best_array_size, best_uniform
+        if isinstance(value, list) and len(value) > 0 and isinstance(value[0], dict):
+            # Check if all elements are dicts with identical key sets
+            key_set = set(value[0].keys())
+            uniform = all(isinstance(el, dict) and set(el.keys()) == key_set for el in value)
+            if len(value) > best_array_size:
+                best_array_size = len(value)
+                best_uniform = uniform
+        if isinstance(value, dict):
+            for v in value.values():
+                find_dict_arrays(v)
+
+    if isinstance(data, dict):
+        for v in data.values():
+            find_dict_arrays(v)
+    else:
+        return False
+
+    return best_array_size >= min_array_size and best_uniform
+
+
 class ToonEncoder:
     """Encoder for converting MCP responses to TOON format.
 

@@ -556,9 +556,9 @@ class TestToolRegistration:
         assert "edit_memory" in tool_names
 
     def test_total_tool_count(self):
-        """Server has expected total tool count (20 original + 11 new = 31)."""
+        """Server has expected total tool count (20 original + 11 new + 9 LSP = 40)."""
         from anamnesis.mcp_server.server import mcp
 
         tool_count = len(mcp._tool_manager._tools)
-        # 20 original + 3 metacognition + 5 memory + 3 project mgmt = 31
-        assert tool_count == 31
+        # 20 original + 3 metacognition + 5 memory + 3 project mgmt + 9 LSP = 40
+        assert tool_count == 40
