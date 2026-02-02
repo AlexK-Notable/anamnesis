@@ -202,6 +202,58 @@ If not fully done, identify what remains. If done, summarize the outcome.
 """
 
 
+def _format_blueprint_as_memory(blueprint: dict) -> str:
+    """Format a project blueprint dict as a readable markdown memory.
+
+    Called during auto-onboarding to generate a project-overview memory
+    from the learned blueprint. Handles missing/empty fields gracefully.
+
+    Args:
+        blueprint: Dict from IntelligenceService.get_project_blueprint().
+
+    Returns:
+        Markdown string suitable for MemoryService.write_memory().
+    """
+    lines = ["# Project Overview", "", "Auto-generated from codebase analysis.", ""]
+
+    tech = blueprint.get("tech_stack", [])
+    if tech:
+        lines.append("## Tech Stack")
+        for t in tech:
+            lines.append(f"- {t}")
+        lines.append("")
+
+    arch = blueprint.get("architecture", "")
+    if arch:
+        lines.append("## Architecture")
+        lines.append(f"{arch}")
+        lines.append("")
+
+    entries = blueprint.get("entry_points", {})
+    if entries:
+        lines.append("## Entry Points")
+        for etype, epath in entries.items():
+            lines.append(f"- **{etype}**: `{epath}`")
+        lines.append("")
+
+    dirs = blueprint.get("key_directories", {})
+    if dirs:
+        lines.append("## Key Directories")
+        for dpath, dtype in dirs.items():
+            lines.append(f"- `{dpath}/` — {dtype}")
+        lines.append("")
+
+    features = blueprint.get("feature_map", {})
+    if features:
+        lines.append("## Features")
+        for feature, files in features.items():
+            file_list = ", ".join(f"`{f}`" for f in files[:5])
+            lines.append(f"- **{feature}**: {file_list}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def _with_error_handling(operation_name: str, toon_auto: bool = True):
     """Decorator for MCP tool implementations with error handling and TOON auto-encoding.
 
@@ -516,6 +568,22 @@ def _auto_learn_if_needed_impl(
             "6. Built feature map",
             "7. Generated project blueprint",
         ]
+
+    # Auto-onboarding: generate project-overview memory on first learn
+    if result.success:
+        try:
+            memory_service = _get_memory_service()
+            # Only write if no overview exists yet (don't overwrite manual edits)
+            if memory_service.read_memory("project-overview") is None:
+                blueprint = intelligence_service.get_project_blueprint(
+                    path=resolved_path, include_feature_map=True,
+                )
+                if blueprint:
+                    content = _format_blueprint_as_memory(blueprint)
+                    memory_service.write_memory("project-overview", content)
+                    response["auto_onboarding"] = "project-overview memory created"
+        except Exception:
+            pass  # Non-critical — don't break learning on onboarding failure
 
     return response
 
