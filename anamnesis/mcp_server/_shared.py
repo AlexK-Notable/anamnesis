@@ -1,0 +1,446 @@
+"""Shared infrastructure for the Anamnesis MCP server.
+
+This module contains the FastMCP instance, project registry, service accessors,
+error handling decorator, metacognition prompts, and utility helpers shared
+across all tool modules. Extracted from server.py for better modularity.
+"""
+
+import functools
+import gc
+import os
+import re
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+from fastmcp import FastMCP
+
+from anamnesis.interfaces.search import SearchQuery, SearchType
+from anamnesis.search.service import SearchService
+from anamnesis.services import (
+    CodebaseService,
+    IntelligenceService,
+    LearningOptions,
+    LearningService,
+    MemoryService,
+    SessionManager,
+)
+from anamnesis.services.project_registry import ProjectContext, ProjectRegistry
+from anamnesis.utils.circuit_breaker import CircuitBreakerError
+from anamnesis.utils.error_classifier import classify_error
+from anamnesis.utils.logger import logger
+from anamnesis.utils.response_wrapper import ResponseWrapper, wrap_async_operation
+from anamnesis.utils.toon_encoder import ToonEncoder, is_structurally_toon_eligible
+
+# =============================================================================
+# FastMCP Server Instance
+# =============================================================================
+
+mcp = FastMCP(
+    "anamnesis",
+    instructions="""Anamnesis - Codebase Intelligence Server
+
+This server provides tools for understanding and navigating codebases through
+intelligent analysis, pattern recognition, and semantic understanding.
+
+Key capabilities:
+- Learn from codebases to build intelligence database
+- Search for code symbols and understand relationships
+- Get pattern recommendations based on learned conventions
+- Predict coding approaches for implementation tasks
+- Track developer profiles and coding styles
+- Contribute and retrieve AI-discovered insights
+- Store and retrieve persistent project memories
+- Reflect on your work with metacognition tools
+
+Start with `auto_learn_if_needed` to initialize intelligence, then use
+other tools to query and interact with the learned knowledge.
+
+Use `write_memory` and `read_memory` to persist project knowledge across
+sessions. Use `reflect` to pause and think before, during, and after
+complex tasks.
+
+For multi-project workflows, use `get_project_config(activate=path)` to switch between
+projects. Each project gets isolated services, preventing cross-project
+data contamination.
+""",
+)
+
+# =============================================================================
+# Module-level Globals
+# =============================================================================
+
+_registry = ProjectRegistry()
+_server_start_time: float = time.time()
+_toon_encoder = ToonEncoder()
+
+# =============================================================================
+# Registry-based Service Access
+# =============================================================================
+# All service access goes through the project registry. Each project gets
+# isolated services, preventing cross-project data contamination.
+
+
+def _get_active_context() -> ProjectContext:
+    """Get the active project context (auto-activates cwd if needed)."""
+    return _registry.get_active()
+
+
+def _get_search_service() -> SearchService:
+    """Get search service for the active project."""
+    return _get_active_context().get_search_service()
+
+
+async def _ensure_semantic_search() -> bool:
+    """Initialize semantic search for the active project."""
+    return await _get_active_context().ensure_semantic_search()
+
+
+def _get_learning_service() -> LearningService:
+    """Get learning service for the active project."""
+    return _get_active_context().get_learning_service()
+
+
+def _get_intelligence_service() -> IntelligenceService:
+    """Get intelligence service for the active project."""
+    return _get_active_context().get_intelligence_service()
+
+
+def _get_codebase_service() -> CodebaseService:
+    """Get codebase service for the active project."""
+    return _get_active_context().get_codebase_service()
+
+
+def _get_session_manager() -> SessionManager:
+    """Get session manager for the active project."""
+    return _get_active_context().get_session_manager()
+
+
+def _get_memory_service() -> MemoryService:
+    """Get memory service for the active project."""
+    return _get_active_context().get_memory_service()
+
+
+def _get_current_path() -> str:
+    """Get current working path (active project path)."""
+    return _get_active_context().path
+
+
+def _set_current_path(path: str) -> None:
+    """Set current working path by activating a project.
+
+    This replaces the old global path mutation with project activation.
+    All services are now project-scoped, so switching projects
+    automatically uses isolated service instances.
+    """
+    _registry.activate(path)
+
+
+# =============================================================================
+# Metacognition Prompts
+# =============================================================================
+
+_THINK_COLLECTED_PROMPT = """\
+Think about the collected information and whether it is sufficient and relevant.
+
+Consider:
+1. **Completeness**: Do you have enough information to proceed with the task?
+   - Have you identified all relevant files and symbols?
+   - Are there dependencies or relationships you haven't explored?
+   - Is there context missing that could change your approach?
+
+2. **Relevance**: Is the information you've gathered actually useful?
+   - Does it directly relate to the task at hand?
+   - Are you going down a rabbit hole that won't help?
+   - Should you refocus on a different aspect?
+
+3. **Confidence**: How confident are you in your understanding?
+   - Are there assumptions you're making that should be verified?
+   - Could the code behave differently than you expect?
+   - Have you considered edge cases?
+
+Take a moment to assess before proceeding.
+"""
+
+_THINK_TASK_ADHERENCE_PROMPT = """\
+Think about the task at hand and whether you are still on track.
+
+Consider:
+1. **Original goal**: What was the user's actual request?
+   - Are you still working toward that goal?
+   - Have you drifted into tangential work?
+   - Is your current approach aligned with what was asked?
+
+2. **Scope**: Are you doing too much or too little?
+   - Are you over-engineering the solution?
+   - Are you adding unnecessary features or abstractions?
+   - Have you missed any requirements?
+
+3. **Progress**: What have you accomplished so far?
+   - What concrete steps remain?
+   - Are there blockers you need to address?
+   - Should you ask for clarification before continuing?
+
+Refocus on the core task if you've drifted.
+"""
+
+_THINK_DONE_PROMPT = """\
+Think about whether you are truly done with the task.
+
+Consider:
+1. **Completeness**: Have you addressed everything the user asked for?
+   - Review the original request point by point
+   - Have you tested or verified your changes?
+   - Are there any loose ends or TODO items?
+
+2. **Quality**: Is the work at an acceptable standard?
+   - Is the code clean and well-structured?
+   - Have you handled error cases?
+   - Would you be confident in this code going to production?
+
+3. **Communication**: Have you explained what you did?
+   - Does the user understand the changes and why?
+   - Are there caveats or limitations they should know about?
+   - Is there follow-up work they should consider?
+
+If not fully done, identify what remains. If done, summarize the outcome.
+"""
+
+_REFLECT_PROMPTS = {
+    "collected_information": _THINK_COLLECTED_PROMPT,
+    "task_adherence": _THINK_TASK_ADHERENCE_PROMPT,
+    "whether_done": _THINK_DONE_PROMPT,
+}
+
+# =============================================================================
+# Utility Helpers
+# =============================================================================
+
+
+def _format_blueprint_as_memory(blueprint: dict) -> str:
+    """Format a project blueprint dict as a readable markdown memory.
+
+    Called during auto-onboarding to generate a project-overview memory
+    from the learned blueprint. Handles missing/empty fields gracefully.
+
+    Args:
+        blueprint: Dict from IntelligenceService.get_project_blueprint().
+
+    Returns:
+        Markdown string suitable for MemoryService.write_memory().
+    """
+    lines = ["# Project Overview", "", "Auto-generated from codebase analysis.", ""]
+
+    tech = blueprint.get("tech_stack", [])
+    if tech:
+        lines.append("## Tech Stack")
+        for t in tech:
+            lines.append(f"- {t}")
+        lines.append("")
+
+    arch = blueprint.get("architecture", "")
+    if arch:
+        lines.append("## Architecture")
+        lines.append(f"{arch}")
+        lines.append("")
+
+    entries = blueprint.get("entry_points", {})
+    if entries:
+        lines.append("## Entry Points")
+        for etype, epath in entries.items():
+            lines.append(f"- **{etype}**: `{epath}`")
+        lines.append("")
+
+    dirs = blueprint.get("key_directories", {})
+    if dirs:
+        lines.append("## Key Directories")
+        for dpath, dtype in dirs.items():
+            lines.append(f"- `{dpath}/` — {dtype}")
+        lines.append("")
+
+    features = blueprint.get("feature_map", {})
+    if features:
+        lines.append("## Features")
+        for feature, files in features.items():
+            file_list = ", ".join(f"`{f}`" for f in files[:5])
+            lines.append(f"- **{feature}**: {file_list}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _categorize_references(references: list[dict]) -> dict[str, list[dict]]:
+    """Categorize symbol references by file type for intelligent filtering.
+
+    Groups references into source, test, config, and other categories
+    based on file path heuristics. Each reference retains its original
+    data and gains a 'category' field.
+
+    Args:
+        references: List of reference dicts with at least a 'file' key.
+
+    Returns:
+        Dict mapping category names to lists of references.
+    """
+    if not references:
+        return {}
+
+    categories: dict[str, list[dict]] = {}
+
+    for ref in references:
+        file_path = ref.get("file", ref.get("relative_path", "")).lower()
+
+        if any(t in file_path for t in ("test", "spec", "fixture", "conftest")):
+            cat = "test"
+        elif any(c in file_path for c in ("config", "settings", "env", ".cfg", ".ini", ".toml", ".yaml", ".yml")):
+            cat = "config"
+        elif any(s in file_path for s in ("src/", "lib/", "app/", "anamnesis/", "pkg/")):
+            cat = "source"
+        elif file_path.endswith(".py") or file_path.endswith(".ts") or file_path.endswith(".rs"):
+            cat = "source"
+        else:
+            cat = "other"
+
+        ref_with_cat = {**ref, "category": cat}
+        categories.setdefault(cat, []).append(ref_with_cat)
+
+    return categories
+
+
+def _detect_naming_style(name: str) -> str:
+    """Detect the naming convention of a single identifier.
+
+    Args:
+        name: The identifier name to analyze.
+
+    Returns:
+        One of: snake_case, PascalCase, camelCase, UPPER_CASE, flat_case, kebab-case, mixed
+    """
+    if not name or name.startswith("_"):
+        name = name.lstrip("_")
+    if not name:
+        return "unknown"
+
+    if re.match(r"^[A-Z][A-Z0-9_]*$", name) and "_" in name:
+        return "UPPER_CASE"
+    if re.match(r"^[A-Z][a-zA-Z0-9]*$", name):
+        return "PascalCase"
+    if re.match(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$", name):
+        return "snake_case"
+    if re.match(r"^[a-z][a-zA-Z0-9]*$", name) and any(c.isupper() for c in name):
+        return "camelCase"
+    if re.match(r"^[a-z][a-z0-9]*$", name):
+        return "flat_case"
+    if "-" in name:
+        return "kebab-case"
+    return "mixed"
+
+
+def _check_names_against_convention(
+    names: list[str],
+    expected: str,
+    symbol_kind: str,
+) -> list[dict]:
+    """Check a list of symbol names against an expected naming convention.
+
+    Args:
+        names: List of identifier names to check.
+        expected: Expected convention (snake_case, PascalCase, etc.).
+        symbol_kind: Kind of symbol for context (function, class, etc.).
+
+    Returns:
+        List of violation dicts with name, expected, actual, symbol_kind.
+    """
+    violations = []
+    for name in names:
+        # Skip private/dunder names
+        clean = name.lstrip("_")
+        if not clean or clean.startswith("__"):
+            continue
+        actual = _detect_naming_style(name)
+        if actual != expected and actual != "unknown":
+            # flat_case is compatible with snake_case for single-word names
+            if expected == "snake_case" and actual == "flat_case":
+                continue
+            violations.append({
+                "name": name,
+                "expected": expected,
+                "actual": actual,
+                "symbol_kind": symbol_kind,
+            })
+    return violations
+
+
+# =============================================================================
+# Error Handling Decorator
+# =============================================================================
+
+
+def _with_error_handling(operation_name: str, toon_auto: bool = True):
+    """Decorator for MCP tool implementations with error handling and TOON auto-encoding.
+
+    Catches CircuitBreakerError and other exceptions, returning
+    ResponseWrapper-formatted error responses.
+
+    When toon_auto is True (default), successful dict responses are checked
+    for structural TOON eligibility. Eligible responses (flat uniform arrays
+    with ≥5 elements, no nested arrays) are encoded to TOON format for
+    ~25-40% token savings. The encoded string is returned directly — FastMCP
+    wraps it as TextContent. Error responses always stay as JSON dicts for
+    maximum debuggability.
+
+    If TOON encoding fails for any reason, the original dict is returned
+    silently (no error propagated).
+
+    Args:
+        operation_name: Name of the operation for logging and error context.
+        toon_auto: Enable automatic TOON encoding for eligible responses.
+            Set to False for tools where JSON output is required.
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                result = func(*args, **kwargs)
+
+                # Auto-TOON: encode eligible success responses for token savings
+                if toon_auto and isinstance(result, dict) and result.get("success"):
+                    try:
+                        if is_structurally_toon_eligible(result):
+                            return _toon_encoder.encode(result)
+                    except Exception:
+                        pass  # Silent fallback to dict/JSON on any encoding error
+
+                return result
+            except CircuitBreakerError as e:
+                logger.error(
+                    f"Circuit breaker open for operation '{operation_name}'",
+                    extra={
+                        "operation": operation_name,
+                        "circuit_state": "OPEN",
+                        "details": str(e.details) if e.details else None,
+                    },
+                )
+                return ResponseWrapper.failure_result(
+                    e, operation=operation_name
+                ).to_dict()
+            except Exception as e:
+                classification = classify_error(e, {"operation": operation_name})
+                logger.error(
+                    f"Error in operation '{operation_name}': {e}",
+                    extra={
+                        "operation": operation_name,
+                        "category": classification.category.value,
+                        "error_type": type(e).__name__,
+                    },
+                )
+                return ResponseWrapper.failure_result(
+                    e, operation=operation_name
+                ).to_dict()
+
+        return wrapper
+
+    return decorator
