@@ -192,8 +192,8 @@ class TestMCPToolListing:
 
         # Verify tool structure
         tool_names = [t["name"] for t in tools]
-        assert "health_check" in tool_names
-        assert "learn_codebase_intelligence" in tool_names
+        assert "get_system_status" in tool_names
+        assert "auto_learn_if_needed" in tool_names
         assert "get_project_blueprint" in tool_names
 
     def test_tool_has_schema(self, mcp_server):
@@ -222,8 +222,8 @@ class TestMCPToolListing:
 class TestMCPToolExecution:
     """Tests for tool execution via protocol."""
 
-    def test_health_check_tool(self, mcp_server, temp_project):
-        """Execute health_check tool via MCP."""
+    def test_system_status_health_tool(self, mcp_server, temp_project):
+        """Execute get_system_status tool with health section via MCP."""
         mcp_server.send_request(
             "initialize",
             {
@@ -236,8 +236,8 @@ class TestMCPToolExecution:
         response = mcp_server.send_request(
             "tools/call",
             {
-                "name": "health_check",
-                "arguments": {"path": temp_project},
+                "name": "get_system_status",
+                "arguments": {"sections": "health", "path": temp_project},
             },
         )
 
@@ -252,13 +252,14 @@ class TestMCPToolExecution:
         content = result["content"][0]
         assert content["type"] == "text"
 
-        # The text should be JSON with health check results
-        health_data = json.loads(content["text"])
-        assert health_data["healthy"] is True
-        assert "checks" in health_data
+        # The text should be JSON with health section
+        status_data = json.loads(content["text"])
+        assert "health" in status_data
+        assert status_data["health"]["healthy"] is True
+        assert "checks" in status_data["health"]
 
-    def test_learn_codebase_tool(self, mcp_server, temp_project):
-        """Execute learn_codebase_intelligence tool via MCP."""
+    def test_auto_learn_tool(self, mcp_server, temp_project):
+        """Execute auto_learn_if_needed tool via MCP."""
         mcp_server.send_request(
             "initialize",
             {
@@ -271,7 +272,7 @@ class TestMCPToolExecution:
         response = mcp_server.send_request(
             "tools/call",
             {
-                "name": "learn_codebase_intelligence",
+                "name": "auto_learn_if_needed",
                 "arguments": {"path": temp_project, "force": True},
             },
         )
@@ -280,7 +281,7 @@ class TestMCPToolExecution:
         content = response["result"]["content"][0]
         learn_data = json.loads(content["text"])
 
-        assert learn_data["success"] is True
+        assert learn_data["status"] == "learned"
         assert "concepts_learned" in learn_data
 
     def test_get_project_blueprint_tool(self, mcp_server, temp_project):
@@ -298,7 +299,7 @@ class TestMCPToolExecution:
         mcp_server.send_request(
             "tools/call",
             {
-                "name": "learn_codebase_intelligence",
+                "name": "auto_learn_if_needed",
                 "arguments": {"path": temp_project, "force": True},
             },
         )
@@ -366,8 +367,10 @@ class TestMCPToolExecution:
         content = response["result"]["content"][0]
         status = json.loads(content["text"])
 
-        assert status["status"] in ["healthy", "degraded", "unhealthy"]
-        assert "services" in status
+        # Default sections are summary + metrics
+        assert "summary" in status
+        assert status["summary"]["status"] in ["healthy", "degraded", "unhealthy"]
+        assert "metrics" in status
 
 
 class TestMCPErrorHandling:
@@ -428,16 +431,16 @@ class TestMCPErrorHandling:
         response = mcp_server.send_request(
             "tools/call",
             {
-                "name": "health_check",
-                "arguments": {"path": "/nonexistent/path/that/does/not/exist"},
+                "name": "get_system_status",
+                "arguments": {"sections": "health", "path": "/nonexistent/path/that/does/not/exist"},
             },
         )
 
-        # Should return result with healthy=False, not protocol error
+        # Should return result with health.healthy=False, not protocol error
         assert "result" in response
         content = response["result"]["content"][0]
         data = json.loads(content["text"])
-        assert data["healthy"] is False
+        assert data["health"]["healthy"] is False
 
 
 class TestMCPProtocolCompliance:

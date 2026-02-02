@@ -54,10 +54,10 @@ Start with `auto_learn_if_needed` to initialize intelligence, then use
 other tools to query and interact with the learned knowledge.
 
 Use `write_memory` and `read_memory` to persist project knowledge across
-sessions. Use the `think_about_*` tools to reflect before, during, and
-after complex tasks.
+sessions. Use `reflect` to pause and think before, during, and after
+complex tasks.
 
-For multi-project workflows, use `activate_project` to switch between
+For multi-project workflows, use `get_project_config(activate=path)` to switch between
 projects. Each project gets isolated services, preventing cross-project
 data contamination.
 """,
@@ -432,35 +432,6 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
 
 
 @_with_error_handling("learn_codebase_intelligence")
-def _learn_codebase_intelligence_impl(
-    path: str,
-    force: bool = False,
-    max_files: int = 1000,
-) -> dict:
-    """Implementation for learn_codebase_intelligence tool."""
-    # Activate path first so services belong to the correct project context
-    _set_current_path(path)
-    learning_service = _get_learning_service()
-    intelligence_service = _get_intelligence_service()
-
-    options = LearningOptions(
-        force=force,
-        max_files=max_files,
-    )
-
-    result = learning_service.learn_from_codebase(path, options)
-
-    # Transfer learned data to intelligence service
-    if result.success:
-        learned_data = learning_service.get_learned_data(path)
-        if learned_data:
-            concepts = learned_data.get("concepts", [])
-            patterns = learned_data.get("patterns", [])
-            intelligence_service.load_concepts(concepts)
-            intelligence_service.load_patterns(patterns)
-
-    return result.to_dict()
-
 
 @_with_error_handling("get_semantic_insights")
 def _get_semantic_insights_impl(
@@ -594,6 +565,7 @@ def _get_project_blueprint_impl(
 def _auto_learn_if_needed_impl(
     path: Optional[str] = None,
     force: bool = False,
+    max_files: int = 1000,
     include_progress: bool = True,
     include_setup_steps: bool = False,
     skip_learning: bool = False,
@@ -635,7 +607,7 @@ def _auto_learn_if_needed_impl(
     # Perform learning
     options = LearningOptions(
         force=force,
-        max_files=1000,
+        max_files=max_files,
     )
 
     result = learning_service.learn_from_codebase(resolved_path, options)
@@ -698,202 +670,150 @@ def _auto_learn_if_needed_impl(
 
 @_with_error_handling("get_system_status")
 def _get_system_status_impl(
-    include_metrics: bool = True,
-    include_diagnostics: bool = False,
+    sections: str = "summary,metrics",
+    path: Optional[str] = None,
+    include_breakdown: bool = True,
+    run_benchmark: bool = False,
 ) -> dict:
-    """Implementation for get_system_status tool."""
-    learning_service = _get_learning_service()
-    current_path = _get_current_path()
+    """Consolidated monitoring dashboard (was 4 tools: get_system_status,
+    get_intelligence_metrics, get_performance_status, health_check).
 
-    # Get learning status
-    has_intelligence = learning_service.has_intelligence(current_path)
-    learned_data = learning_service.get_learned_data(current_path) if has_intelligence else None
-
-    concepts_count = len(learned_data.get("concepts", [])) if learned_data else 0
-    patterns_count = len(learned_data.get("patterns", [])) if learned_data else 0
-    learned_at = learned_data.get("learned_at") if learned_data else None
-
-    status = {
-        "status": "healthy",
-        "current_path": current_path,
-        "intelligence": {
-            "has_data": has_intelligence,
-            "concepts_count": concepts_count,
-            "patterns_count": patterns_count,
-            "learned_at": learned_at.isoformat() if learned_at else None,
-        },
-        "services": {
-            "learning_service": "active",
-            "intelligence_service": "active",
-            "codebase_service": "active",
-        },
+    Sections: summary, metrics, intelligence, performance, health (comma-separated or 'all').
+    """
+    requested = {s.strip() for s in sections.split(",")} if sections != "all" else {
+        "summary", "metrics", "intelligence", "performance", "health"
     }
 
-    if include_metrics:
-        # Collect actual runtime metrics
+    learning_service = _get_learning_service()
+    current_path = path or _get_current_path()
+    has_intel = learning_service.has_intelligence(current_path)
+    learned_data = learning_service.get_learned_data(current_path) if has_intel else None
+
+    result: dict = {"current_path": current_path}
+
+    # --- summary section ---
+    if "summary" in requested:
+        concepts_count = len(learned_data.get("concepts", [])) if learned_data else 0
+        patterns_count = len(learned_data.get("patterns", [])) if learned_data else 0
+        learned_at = learned_data.get("learned_at") if learned_data else None
+        result["summary"] = {
+            "status": "healthy",
+            "intelligence": {
+                "has_data": has_intel,
+                "concepts_count": concepts_count,
+                "patterns_count": patterns_count,
+                "learned_at": learned_at.isoformat() if learned_at else None,
+            },
+            "services": {
+                "learning_service": "active",
+                "intelligence_service": "active",
+                "codebase_service": "active",
+            },
+        }
+
+    # --- metrics section (runtime metrics) ---
+    if "metrics" in requested:
         gc_stats = gc.get_stats()
         collected_total = sum(s.get("collected", 0) for s in gc_stats)
-
-        # Get process memory info (platform-independent approximation)
         try:
             import resource
             mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-            # Convert to MB (Linux returns KB, macOS returns bytes)
             mem_mb = mem_usage / 1024 if sys.platform != "darwin" else mem_usage / (1024 * 1024)
         except (ImportError, AttributeError):
-            mem_mb = 0  # Windows doesn't have resource module
-
-        status["metrics"] = {
+            mem_mb = 0
+        result["metrics"] = {
             "memory_mb": round(mem_mb, 1),
             "python_objects": len(gc.get_objects()),
             "gc_collections": collected_total,
             "uptime_seconds": round(time.time() - _server_start_time, 1) if _server_start_time else 0,
         }
 
-    if include_diagnostics:
-        status["diagnostics"] = {
-            "last_check": datetime.now().isoformat(),
-            "issues": [],
+    # --- intelligence section (detailed breakdown) ---
+    if "intelligence" in requested:
+        concepts = learned_data.get("concepts", []) if learned_data else []
+        patterns = learned_data.get("patterns", []) if learned_data else []
+        intel_data: dict = {
+            "total_concepts": len(concepts),
+            "total_patterns": len(patterns),
+            "has_intelligence": has_intel,
         }
+        if include_breakdown and learned_data:
+            concept_types: dict[str, int] = {}
+            for concept in concepts:
+                ctype = concept.concept_type.value
+                concept_types[ctype] = concept_types.get(ctype, 0) + 1
+            pattern_types: dict[str, int] = {}
+            for pattern in patterns:
+                ptype = pattern.pattern_type
+                ptype_str = ptype.value if hasattr(ptype, "value") else str(ptype)
+                pattern_types[ptype_str] = pattern_types.get(ptype_str, 0) + 1
+            concept_confidences = [c.confidence for c in concepts]
+            pattern_confidences = [p.confidence for p in patterns]
+            intel_data["breakdown"] = {
+                "concepts_by_type": concept_types,
+                "patterns_by_type": pattern_types,
+                "avg_concept_confidence": sum(concept_confidences) / len(concept_confidences) if concept_confidences else 0,
+                "avg_pattern_confidence": sum(pattern_confidences) / len(pattern_confidences) if pattern_confidences else 0,
+            }
+        result["intelligence"] = intel_data
 
-    return status
-
-
-@_with_error_handling("get_intelligence_metrics")
-def _get_intelligence_metrics_impl(
-    include_breakdown: bool = True,
-) -> dict:
-    """Implementation for get_intelligence_metrics tool."""
-    learning_service = _get_learning_service()
-    current_path = _get_current_path()
-
-    has_intelligence = learning_service.has_intelligence(current_path)
-    learned_data = learning_service.get_learned_data(current_path) if has_intelligence else None
-
-    concepts = learned_data.get("concepts", []) if learned_data else []
-    patterns = learned_data.get("patterns", []) if learned_data else []
-
-    metrics = {
-        "total_concepts": len(concepts),
-        "total_patterns": len(patterns),
-        "has_intelligence": has_intelligence,
-        "current_path": current_path,
-    }
-
-    if include_breakdown and learned_data:
-        # Concept breakdown by type
-        concept_types: dict[str, int] = {}
-        for concept in concepts:
-            ctype = concept.concept_type.value
-            concept_types[ctype] = concept_types.get(ctype, 0) + 1
-
-        # Pattern breakdown by type
-        pattern_types: dict[str, int] = {}
-        for pattern in patterns:
-            ptype = pattern.pattern_type
-            ptype_str = ptype.value if hasattr(ptype, "value") else str(ptype)
-            pattern_types[ptype_str] = pattern_types.get(ptype_str, 0) + 1
-
-        # Confidence distribution
-        concept_confidences = [c.confidence for c in concepts]
-        pattern_confidences = [p.confidence for p in patterns]
-
-        metrics["breakdown"] = {
-            "concepts_by_type": concept_types,
-            "patterns_by_type": pattern_types,
-            "avg_concept_confidence": sum(concept_confidences) / len(concept_confidences) if concept_confidences else 0,
-            "avg_pattern_confidence": sum(pattern_confidences) / len(pattern_confidences) if pattern_confidences else 0,
+    # --- performance section ---
+    if "performance" in requested:
+        perf: dict = {
+            "services": {
+                "learning_service": "operational",
+                "intelligence_service": "operational",
+                "codebase_service": "operational",
+            },
         }
+        if run_benchmark:
+            start = datetime.now()
+            learning_service.has_intelligence(current_path)
+            elapsed = (datetime.now() - start).total_seconds() * 1000
+            perf["benchmark"] = {
+                "intelligence_check_ms": elapsed,
+                "timestamp": datetime.now().isoformat(),
+            }
+        result["performance"] = perf
 
-    return metrics
-
-
-@_with_error_handling("get_performance_status")
-def _get_performance_status_impl(
-    run_benchmark: bool = False,
-) -> dict:
-    """Implementation for get_performance_status tool."""
-    learning_service = _get_learning_service()
-    current_path = _get_current_path()
-
-    status = {
-        "status": "healthy",
-        "current_path": current_path,
-        "metrics": {
-            "learning_service": "operational",
-            "intelligence_service": "operational",
-            "codebase_service": "operational",
-        },
-    }
-
-    if run_benchmark:
-        # Simple benchmark
-        start = datetime.now()
-        learning_service.has_intelligence(current_path)
-        elapsed = (datetime.now() - start).total_seconds() * 1000
-
-        status["benchmark"] = {
-            "intelligence_check_ms": elapsed,
+    # --- health section ---
+    if "health" in requested:
+        resolved_path = Path(current_path).resolve()
+        issues: list[str] = []
+        checks: dict[str, bool] = {}
+        checks["path_exists"] = resolved_path.exists()
+        if not checks["path_exists"]:
+            issues.append(f"Path does not exist: {resolved_path}")
+        checks["is_directory"] = resolved_path.is_dir() if checks["path_exists"] else False
+        if checks["path_exists"] and not checks["is_directory"]:
+            issues.append(f"Path is not a directory: {resolved_path}")
+        try:
+            _get_learning_service()
+            checks["learning_service"] = True
+        except Exception as e:
+            checks["learning_service"] = False
+            issues.append(f"Learning service error: {e}")
+        try:
+            _get_intelligence_service()
+            checks["intelligence_service"] = True
+        except Exception as e:
+            checks["intelligence_service"] = False
+            issues.append(f"Intelligence service error: {e}")
+        try:
+            _get_codebase_service()
+            checks["codebase_service"] = True
+        except Exception as e:
+            checks["codebase_service"] = False
+            issues.append(f"Codebase service error: {e}")
+        checks["has_intelligence"] = has_intel
+        result["health"] = {
+            "healthy": len(issues) == 0,
+            "checks": checks,
+            "issues": issues,
             "timestamp": datetime.now().isoformat(),
         }
 
-    return status
-
-
-@_with_error_handling("health_check")
-def _health_check_impl(
-    path: Optional[str] = None,
-) -> dict:
-    """Implementation for health_check tool."""
-    path = path or os.getcwd()
-    resolved_path = Path(path).resolve()
-
-    issues: list[str] = []
-    checks: dict[str, bool] = {}
-
-    # Check path exists
-    checks["path_exists"] = resolved_path.exists()
-    if not checks["path_exists"]:
-        issues.append(f"Path does not exist: {resolved_path}")
-
-    # Check path is directory
-    checks["is_directory"] = resolved_path.is_dir() if checks["path_exists"] else False
-    if checks["path_exists"] and not checks["is_directory"]:
-        issues.append(f"Path is not a directory: {resolved_path}")
-
-    # Check services are available
-    try:
-        _get_learning_service()
-        checks["learning_service"] = True
-    except Exception as e:
-        checks["learning_service"] = False
-        issues.append(f"Learning service error: {e}")
-
-    try:
-        _get_intelligence_service()
-        checks["intelligence_service"] = True
-    except Exception as e:
-        checks["intelligence_service"] = False
-        issues.append(f"Intelligence service error: {e}")
-
-    try:
-        _get_codebase_service()
-        checks["codebase_service"] = True
-    except Exception as e:
-        checks["codebase_service"] = False
-        issues.append(f"Codebase service error: {e}")
-
-    # Check for existing intelligence
-    learning_service = _get_learning_service()
-    checks["has_intelligence"] = learning_service.has_intelligence(str(resolved_path))
-
-    return {
-        "healthy": len(issues) == 0,
-        "path": str(resolved_path),
-        "checks": checks,
-        "issues": issues,
-        "timestamp": datetime.now().isoformat(),
-    }
+    return result
 
 
 # =============================================================================
@@ -1184,18 +1104,15 @@ def _get_decisions_impl(
 
 
 @_with_error_handling("activate_project")
-def _activate_project_impl(path: str) -> dict:
-    """Implementation for activate_project tool."""
-    ctx = _registry.activate(path)
-    return {
-        "success": True,
-        "project": ctx.to_dict(),
-    }
-
-
-@_with_error_handling("get_current_config")
-def _get_current_config_impl() -> dict:
-    """Implementation for get_current_config tool."""
+def _get_project_config_impl(activate: Optional[str] = None) -> dict:
+    """Implementation for get_project_config tool."""
+    if activate:
+        ctx = _registry.activate(activate)
+        return {
+            "success": True,
+            "activated": ctx.to_dict(),
+            "registry": _registry.to_dict(),
+        }
     return {
         "success": True,
         "registry": _registry.to_dict(),
@@ -1219,27 +1136,25 @@ def _list_projects_impl() -> dict:
 # =============================================================================
 
 
-def _think_about_collected_information_impl() -> dict:
-    """Implementation for think_about_collected_information tool."""
+_REFLECT_PROMPTS = {
+    "collected_information": _THINK_COLLECTED_PROMPT,
+    "task_adherence": _THINK_TASK_ADHERENCE_PROMPT,
+    "whether_done": _THINK_DONE_PROMPT,
+}
+
+
+def _reflect_impl(focus: str = "collected_information") -> dict:
+    """Implementation for reflect tool."""
+    prompt = _REFLECT_PROMPTS.get(focus)
+    if prompt is None:
+        return {
+            "success": False,
+            "error": f"Unknown focus '{focus}'. Choose from: {', '.join(_REFLECT_PROMPTS.keys())}",
+        }
     return {
         "success": True,
-        "prompt": _THINK_COLLECTED_PROMPT,
-    }
-
-
-def _think_about_task_adherence_impl() -> dict:
-    """Implementation for think_about_task_adherence tool."""
-    return {
-        "success": True,
-        "prompt": _THINK_TASK_ADHERENCE_PROMPT,
-    }
-
-
-def _think_about_whether_you_are_done_impl() -> dict:
-    """Implementation for think_about_whether_you_are_done tool."""
-    return {
-        "success": True,
-        "prompt": _THINK_DONE_PROMPT,
+        "focus": focus,
+        "prompt": prompt,
     }
 
 
@@ -1349,29 +1264,6 @@ def _search_memories_impl(
 # =============================================================================
 # MCP Tool Registrations
 # =============================================================================
-
-
-@mcp.tool
-def learn_codebase_intelligence(
-    path: str,
-    force: bool = False,
-    max_files: int = 1000,
-) -> dict:
-    """Build intelligence database from codebase (one-time setup, ~30-60s).
-
-    Required before using predict_coding_approach, get_project_blueprint, or
-    get_pattern_recommendations. Re-run with force=True if codebase has
-    significant changes. Most users should use auto_learn_if_needed instead.
-
-    Args:
-        path: Path to the codebase to learn from
-        force: Force re-learning even if codebase was previously analyzed
-        max_files: Maximum number of files to analyze (default 1000)
-
-    Returns:
-        Learning result with concepts, patterns, and insights discovered
-    """
-    return _learn_codebase_intelligence_impl(path, force, max_files)
 
 
 @mcp.tool
@@ -1511,6 +1403,7 @@ def get_project_blueprint(
 def auto_learn_if_needed(
     path: Optional[str] = None,
     force: bool = False,
+    max_files: int = 1000,
     include_progress: bool = True,
     include_setup_steps: bool = False,
     skip_learning: bool = False,
@@ -1519,11 +1412,13 @@ def auto_learn_if_needed(
 
     Call this first before using other Anamnesis tools - it's a no-op if data
     already exists. Includes project setup and verification. Perfect for
-    seamless agent integration.
+    seamless agent integration. Use force=True and max_files to control
+    re-learning behavior (absorbs former learn_codebase_intelligence tool).
 
     Args:
         path: Path to the codebase directory (defaults to current working directory)
         force: Force re-learning even if data exists
+        max_files: Maximum number of files to analyze (default 1000)
         include_progress: Include detailed progress information
         include_setup_steps: Include detailed setup verification steps
         skip_learning: Skip the learning phase for faster setup
@@ -1531,71 +1426,37 @@ def auto_learn_if_needed(
     Returns:
         Status with learning results or existing data information
     """
-    return _auto_learn_if_needed_impl(path, force, include_progress, include_setup_steps, skip_learning)
+    return _auto_learn_if_needed_impl(path, force, max_files, include_progress, include_setup_steps, skip_learning)
 
 
 @mcp.tool
 def get_system_status(
-    include_metrics: bool = True,
-    include_diagnostics: bool = False,
-) -> dict:
-    """Get comprehensive system status including intelligence data and health.
-
-    Args:
-        include_metrics: Include detailed performance metrics
-        include_diagnostics: Include system diagnostics
-
-    Returns:
-        System status with health indicators
-    """
-    return _get_system_status_impl(include_metrics, include_diagnostics)
-
-
-@mcp.tool
-def get_intelligence_metrics(
+    sections: str = "summary,metrics",
+    path: Optional[str] = None,
     include_breakdown: bool = True,
-) -> dict:
-    """Get detailed metrics about the intelligence database and learning state.
-
-    Args:
-        include_breakdown: Include detailed breakdown by type and confidence
-
-    Returns:
-        Intelligence metrics with database statistics
-    """
-    return _get_intelligence_metrics_impl(include_breakdown)
-
-
-@mcp.tool
-def get_performance_status(
     run_benchmark: bool = False,
 ) -> dict:
-    """Get performance metrics including database size and query times.
+    """Get comprehensive system status including intelligence data, performance, and health.
+
+    This is a unified monitoring dashboard. Use the `sections` parameter to
+    select which information to include.
 
     Args:
-        run_benchmark: Run a quick performance benchmark
+        sections: Comma-separated sections to include:
+            - "summary": Note counts, service status, intelligence overview
+            - "metrics": Runtime metrics (memory, GC, uptime)
+            - "intelligence": Detailed concept/pattern breakdown
+            - "performance": Service health, optional benchmark
+            - "health": Path validation, service checks, issue list
+            - "all": Include all sections (default: "summary,metrics")
+        path: Project path (defaults to current directory)
+        include_breakdown: Include concept/pattern type breakdown in intelligence section
+        run_benchmark: Run a quick performance benchmark in performance section
 
     Returns:
-        Performance status with metrics
+        System status with requested sections
     """
-    return _get_performance_status_impl(run_benchmark)
-
-
-@mcp.tool
-def health_check(
-    path: Optional[str] = None,
-) -> dict:
-    """Verify Anamnesis setup and configuration for a project.
-
-    Checks database accessibility, project structure, and service health.
-
-    Args:
-        path: Project path to check (defaults to current directory)
-
-    Returns:
-        Health check results with any issues found
-    """
-    return _health_check_impl(path)
+    return _get_system_status_impl(sections, path, include_breakdown, run_benchmark)
 
 
 @mcp.tool
@@ -1782,38 +1643,23 @@ def get_decisions(
 
 
 @mcp.tool
-def activate_project(
-    path: str,
+def get_project_config(
+    activate: Optional[str] = None,
 ) -> dict:
-    """Activate a project by path for multi-project workflows.
+    """Get or change the active project configuration.
 
-    Switches the active project context. All subsequent tool calls will
-    use services scoped to this project. Previously activated projects
-    retain their cached state (learning data, sessions, etc.).
-
-    If no project is explicitly activated, the current working directory
-    is used automatically.
+    Without `activate`, returns the current project configuration and
+    registry state. With `activate`, switches the active project context
+    first, then returns the updated configuration.
 
     Args:
-        path: Path to the project root directory
+        activate: Optional path to activate as the current project.
+            If provided, switches context before returning config.
 
     Returns:
-        Project context with active services status
+        Registry state with project details and active project info
     """
-    return _activate_project_impl(path)
-
-
-@mcp.tool
-def get_current_config() -> dict:
-    """Get the current project configuration and registry state.
-
-    Shows the active project, all known projects, and which services
-    are initialized for each.
-
-    Returns:
-        Registry state with project details
-    """
-    return _get_current_config_impl()
+    return _get_project_config_impl(activate)
 
 
 @mcp.tool
@@ -1835,45 +1681,24 @@ def list_projects() -> dict:
 
 
 @mcp.tool
-def think_about_collected_information() -> dict:
-    """Think about the collected information and whether it is sufficient and relevant.
+def reflect(
+    focus: str = "collected_information",
+) -> dict:
+    """Reflect on your current work with metacognitive prompts.
 
-    This tool should be called after completing a sequence of search and
-    exploration steps (find_symbol, search_codebase, etc.) to reflect on
-    whether you have enough information to proceed.
+    Provides structured reflection prompts to help maintain quality and
+    focus during complex tasks. Call at natural checkpoints.
 
-    Returns:
-        A reflective prompt to guide your thinking
-    """
-    return _think_about_collected_information_impl()
-
-
-@mcp.tool
-def think_about_task_adherence() -> dict:
-    """Think about the task at hand and whether you are still on track.
-
-    Especially important during long conversations with significant back
-    and forth. Call this before making code changes to ensure you haven't
-    drifted from the original goal.
+    Args:
+        focus: What to reflect on:
+            - "collected_information": After search/exploration — is the info sufficient?
+            - "task_adherence": Before code changes — still on track with the goal?
+            - "whether_done": Before declaring done — truly complete and communicated?
 
     Returns:
         A reflective prompt to guide your thinking
     """
-    return _think_about_task_adherence_impl()
-
-
-@mcp.tool
-def think_about_whether_you_are_done() -> dict:
-    """Think about whether you are truly done with the task.
-
-    Call this when you believe you've completed the user's request.
-    Helps verify completeness, quality, and communication before
-    declaring the work finished.
-
-    Returns:
-        A reflective prompt to guide your thinking
-    """
-    return _think_about_whether_you_are_done_impl()
+    return _reflect_impl(focus)
 
 
 # =============================================================================

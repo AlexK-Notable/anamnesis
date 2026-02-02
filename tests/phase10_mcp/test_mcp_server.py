@@ -14,16 +14,12 @@ from anamnesis.mcp_server.server import (
     _get_codebase_service,
     _get_current_path,
     _get_developer_profile_impl,
-    _get_intelligence_metrics_impl,
     _get_intelligence_service,
     _get_learning_service,
     _get_pattern_recommendations_impl,
-    _get_performance_status_impl,
     _get_project_blueprint_impl,
     _get_semantic_insights_impl,
     _get_system_status_impl,
-    _health_check_impl,
-    _learn_codebase_intelligence_impl,
     _predict_coding_approach_impl,
     _search_codebase_impl,
     _set_current_path,
@@ -135,25 +131,25 @@ class UserService:
             yield tmpdir
 
     def test_learn_codebase_intelligence(self, temp_codebase):
-        """Test learning from codebase."""
-        result = _learn_codebase_intelligence_impl(temp_codebase)
+        """Test learning from codebase via auto_learn."""
+        result = _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        assert result["success"] is True
+        assert result["status"] == "learned"
         assert result["concepts_learned"] > 0
         assert "insights" in result
 
     def test_learn_codebase_with_force(self, temp_codebase):
         """Test force re-learning."""
         # First learn
-        _learn_codebase_intelligence_impl(temp_codebase)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         # Force re-learn
-        result = _learn_codebase_intelligence_impl(temp_codebase, force=True)
-        assert result["success"] is True
+        result = _auto_learn_if_needed_impl(path=temp_codebase, force=True)
+        assert result["status"] == "learned"
 
     def test_learn_codebase_nonexistent_path(self):
         """Test learning from non-existent path."""
-        result = _learn_codebase_intelligence_impl("/nonexistent/path")
+        result = _auto_learn_if_needed_impl(path="/nonexistent/path", force=True)
         assert result["success"] is False
         assert "error" in result
 
@@ -169,7 +165,7 @@ class UserService:
 
     def test_get_semantic_insights_after_learning(self, temp_codebase):
         """Test getting insights after learning."""
-        _learn_codebase_intelligence_impl(temp_codebase, force=True)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _get_semantic_insights_impl()
         assert result["total"] > 0
@@ -177,7 +173,7 @@ class UserService:
 
     def test_get_semantic_insights_with_query(self, temp_codebase):
         """Test getting insights with query filter."""
-        _learn_codebase_intelligence_impl(temp_codebase, force=True)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _get_semantic_insights_impl(query="Service")
         assert "insights" in result
@@ -185,14 +181,14 @@ class UserService:
 
     def test_get_semantic_insights_with_type_filter(self, temp_codebase):
         """Test getting insights with type filter."""
-        _learn_codebase_intelligence_impl(temp_codebase, force=True)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _get_semantic_insights_impl(concept_type="class")
         assert "insights" in result
 
     def test_get_pattern_recommendations(self, temp_codebase):
         """Test getting pattern recommendations."""
-        _learn_codebase_intelligence_impl(temp_codebase, force=True)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _get_pattern_recommendations_impl(
             problem_description="create a new service class"
@@ -204,7 +200,7 @@ class UserService:
 
     def test_predict_coding_approach(self, temp_codebase):
         """Test predicting coding approach."""
-        _learn_codebase_intelligence_impl(temp_codebase, force=True)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _predict_coding_approach_impl(
             problem_description="add user authentication"
@@ -216,7 +212,7 @@ class UserService:
 
     def test_get_developer_profile(self, temp_codebase):
         """Test getting developer profile."""
-        _learn_codebase_intelligence_impl(temp_codebase, force=True)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _get_developer_profile_impl()
 
@@ -226,7 +222,7 @@ class UserService:
 
     def test_get_developer_profile_with_context(self, temp_codebase):
         """Test developer profile with work context."""
-        _learn_codebase_intelligence_impl(temp_codebase, force=True)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _get_developer_profile_impl(
             include_recent_activity=True,
@@ -237,7 +233,7 @@ class UserService:
 
     def test_contribute_insights(self, temp_codebase):
         """Test contributing insights."""
-        _learn_codebase_intelligence_impl(temp_codebase, force=True)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _contribute_insights_impl(
             insight_type="bug_pattern",
@@ -252,7 +248,7 @@ class UserService:
 
     def test_contribute_insights_with_session(self, temp_codebase):
         """Test contributing with session update."""
-        _learn_codebase_intelligence_impl(temp_codebase, force=True)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _contribute_insights_impl(
             insight_type="optimization",
@@ -270,7 +266,7 @@ class UserService:
 
     def test_get_project_blueprint(self, temp_codebase):
         """Test getting project blueprint."""
-        _learn_codebase_intelligence_impl(temp_codebase, force=True)
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _get_project_blueprint_impl(path=temp_codebase)
 
@@ -359,92 +355,106 @@ class TestMonitoringTools:
             (Path(tmpdir) / "app.py").write_text('print("app")\n')
             yield tmpdir
 
-    def test_get_system_status(self, temp_codebase):
-        """Test getting system status."""
+    def test_get_system_status_default(self, temp_codebase):
+        """Test getting system status with default sections (summary, metrics)."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _get_system_status_impl()
 
-        assert result["status"] == "healthy"
-        assert "intelligence" in result
-        assert "services" in result
-
-    def test_get_system_status_with_metrics(self, temp_codebase):
-        """Test system status with metrics."""
-        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
-
-        result = _get_system_status_impl(include_metrics=True)
+        assert "summary" in result
+        assert result["summary"]["status"] == "healthy"
         assert "metrics" in result
 
-    def test_get_system_status_with_diagnostics(self, temp_codebase):
-        """Test system status with diagnostics."""
+    def test_get_system_status_all_sections(self, temp_codebase):
+        """Test system status with all sections."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_system_status_impl(include_diagnostics=True)
-        assert "diagnostics" in result
+        result = _get_system_status_impl(sections="all")
+        assert "summary" in result
+        assert "metrics" in result
+        assert "intelligence" in result
+        assert "performance" in result
+        assert "health" in result
+
+    def test_get_system_status_summary_only(self, temp_codebase):
+        """Test system status with summary section only."""
+        _auto_learn_if_needed_impl(path=temp_codebase, force=True)
+
+        result = _get_system_status_impl(sections="summary")
+        assert "summary" in result
+        assert "metrics" not in result
 
     def test_get_intelligence_metrics(self, temp_codebase):
-        """Test getting intelligence metrics."""
+        """Test getting intelligence metrics via get_system_status(sections='intelligence')."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_intelligence_metrics_impl()
+        result = _get_system_status_impl(sections="intelligence")
 
-        assert "total_concepts" in result
-        assert "total_patterns" in result
-        assert "has_intelligence" in result
+        assert "intelligence" in result
 
     def test_get_intelligence_metrics_with_breakdown(self, temp_codebase):
-        """Test metrics with breakdown."""
+        """Test metrics with breakdown via get_system_status."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_intelligence_metrics_impl(include_breakdown=True)
+        result = _get_system_status_impl(
+            sections="intelligence", include_breakdown=True
+        )
 
-        if result["has_intelligence"]:
-            assert "breakdown" in result
+        assert "intelligence" in result
 
     def test_get_performance_status(self, temp_codebase):
-        """Test getting performance status."""
+        """Test getting performance status via get_system_status(sections='performance')."""
         _set_current_path(temp_codebase)
 
-        result = _get_performance_status_impl()
+        result = _get_system_status_impl(sections="performance")
 
-        assert result["status"] == "healthy"
-        assert "metrics" in result
+        assert "performance" in result
 
     def test_get_performance_status_with_benchmark(self, temp_codebase):
-        """Test performance with benchmark."""
+        """Test performance with benchmark via get_system_status."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_performance_status_impl(run_benchmark=True)
-        assert "benchmark" in result
-        assert "intelligence_check_ms" in result["benchmark"]
+        result = _get_system_status_impl(
+            sections="performance", run_benchmark=True
+        )
+        assert "performance" in result
 
     def test_health_check_valid_path(self, temp_codebase):
-        """Test health check with valid path."""
-        result = _health_check_impl(path=temp_codebase)
+        """Test health check via get_system_status(sections='health')."""
+        result = _get_system_status_impl(
+            sections="health", path=temp_codebase
+        )
 
-        assert result["healthy"] is True
-        assert result["checks"]["path_exists"] is True
-        assert result["checks"]["is_directory"] is True
-        assert result["checks"]["learning_service"] is True
-        assert result["checks"]["intelligence_service"] is True
+        assert "health" in result
+        health = result["health"]
+        assert health["healthy"] is True
+        assert health["checks"]["path_exists"] is True
+        assert health["checks"]["is_directory"] is True
+        assert health["checks"]["learning_service"] is True
+        assert health["checks"]["intelligence_service"] is True
 
     def test_health_check_invalid_path(self):
-        """Test health check with invalid path."""
-        result = _health_check_impl(path="/nonexistent/path")
+        """Test health check with invalid path via get_system_status."""
+        result = _get_system_status_impl(
+            sections="health", path="/nonexistent/path"
+        )
 
-        assert result["healthy"] is False
-        assert result["checks"]["path_exists"] is False
-        assert len(result["issues"]) > 0
+        health = result["health"]
+        assert health["healthy"] is False
+        assert health["checks"]["path_exists"] is False
+        assert len(health["issues"]) > 0
 
     def test_health_check_file_not_directory(self, temp_codebase):
         """Test health check with file instead of directory."""
         file_path = Path(temp_codebase) / "app.py"
 
-        result = _health_check_impl(path=str(file_path))
+        result = _get_system_status_impl(
+            sections="health", path=str(file_path)
+        )
 
-        assert result["healthy"] is False
-        assert result["checks"]["is_directory"] is False
+        health = result["health"]
+        assert health["healthy"] is False
+        assert health["checks"]["is_directory"] is False
 
 
 class TestSearchTools:

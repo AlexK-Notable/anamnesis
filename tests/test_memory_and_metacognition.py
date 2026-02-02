@@ -342,35 +342,35 @@ class TestMemoryServiceContentLimits:
 
 
 class TestMetacognitionTools:
-    """Tests for metacognition prompt-returning tools."""
+    """Tests for consolidated reflect tool (was 3 separate think_about_* tools)."""
 
-    def test_think_collected_information(self):
-        """think_about_collected_information returns a prompt."""
-        from anamnesis.mcp_server.server import _think_about_collected_information_impl
+    def test_reflect_collected_information(self):
+        """reflect(focus='collected_information') returns a prompt."""
+        from anamnesis.mcp_server.server import _reflect_impl
 
-        result = _think_about_collected_information_impl()
+        result = _reflect_impl(focus="collected_information")
         assert result["success"] is True
         assert "prompt" in result
         assert "Completeness" in result["prompt"]
         assert "Relevance" in result["prompt"]
         assert "Confidence" in result["prompt"]
 
-    def test_think_task_adherence(self):
-        """think_about_task_adherence returns a prompt."""
-        from anamnesis.mcp_server.server import _think_about_task_adherence_impl
+    def test_reflect_task_adherence(self):
+        """reflect(focus='task_adherence') returns a prompt."""
+        from anamnesis.mcp_server.server import _reflect_impl
 
-        result = _think_about_task_adherence_impl()
+        result = _reflect_impl(focus="task_adherence")
         assert result["success"] is True
         assert "prompt" in result
         assert "Original goal" in result["prompt"]
         assert "Scope" in result["prompt"]
         assert "Progress" in result["prompt"]
 
-    def test_think_whether_done(self):
-        """think_about_whether_you_are_done returns a prompt."""
-        from anamnesis.mcp_server.server import _think_about_whether_you_are_done_impl
+    def test_reflect_whether_done(self):
+        """reflect(focus='whether_done') returns a prompt."""
+        from anamnesis.mcp_server.server import _reflect_impl
 
-        result = _think_about_whether_you_are_done_impl()
+        result = _reflect_impl(focus="whether_done")
         assert result["success"] is True
         assert "prompt" in result
         assert "Completeness" in result["prompt"]
@@ -536,13 +536,11 @@ class TestToolRegistration:
     """Tests that all new tools are registered with the MCP server."""
 
     def test_metacognition_tools_registered(self):
-        """All 3 metacognition tools are registered."""
+        """Consolidated reflect tool is registered."""
         from anamnesis.mcp_server.server import mcp
 
         tool_names = set(mcp._tool_manager._tools.keys())
-        assert "think_about_collected_information" in tool_names
-        assert "think_about_task_adherence" in tool_names
-        assert "think_about_whether_you_are_done" in tool_names
+        assert "reflect" in tool_names
 
     def test_memory_tools_registered(self):
         """All 5 memory tools are registered."""
@@ -556,9 +554,9 @@ class TestToolRegistration:
         assert "edit_memory" in tool_names
 
     def test_total_tool_count(self):
-        """Server has expected total tool count (20 original + 12 new + 9 LSP + 1 conventions = 42)."""
+        """Server has expected total tool count after consolidation (42 → 35)."""
         from anamnesis.mcp_server.server import mcp
 
         tool_count = len(mcp._tool_manager._tools)
-        # 20 original + 3 metacognition + 6 memory + 3 project mgmt + 9 LSP + 1 conventions = 42
-        assert tool_count == 42
+        # Phase 2 consolidation: 4 monitoring→1, 2 learning→1, 2 project→1, 3 metacognition→1
+        assert tool_count == 35
