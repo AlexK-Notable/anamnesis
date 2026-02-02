@@ -1214,6 +1214,22 @@ def _edit_memory_impl(
     }
 
 
+@_with_error_handling("search_memories")
+def _search_memories_impl(
+    query: str,
+    limit: int = 5,
+) -> dict:
+    """Implementation for search_memories tool."""
+    memory_service = _get_memory_service()
+    results = memory_service.search_memories(query, limit=limit)
+    return {
+        "success": True,
+        "results": results,
+        "query": query,
+        "total": len(results),
+    }
+
+
 # =============================================================================
 # MCP Tool Registrations
 # =============================================================================
@@ -1839,6 +1855,26 @@ def edit_memory(
         Updated memory content and metadata
     """
     return _edit_memory_impl(memory_file_name, old_text, new_text)
+
+
+@mcp.tool
+def search_memories(
+    query: str,
+    limit: int = 5,
+) -> dict:
+    """Search project memories by semantic similarity.
+
+    Finds memories relevant to a natural language query. Uses embedding-based
+    search when available, falls back to substring matching.
+
+    Args:
+        query: What you're looking for (e.g., "authentication decisions")
+        limit: Maximum results to return (default 5)
+
+    Returns:
+        Matching memories ranked by relevance with snippets
+    """
+    return _search_memories_impl(query, limit)
 
 
 # =============================================================================

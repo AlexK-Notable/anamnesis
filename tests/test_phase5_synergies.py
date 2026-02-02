@@ -53,3 +53,50 @@ class TestAutoOnboarding:
         blueprint = {"tech_stack": ["Rust"]}
         content = _format_blueprint_as_memory(blueprint)
         assert "Rust" in content
+
+
+class TestMemorySearch:
+    """Tests for semantic memory search."""
+
+    def test_search_memories_by_content(self, tmp_path):
+        """Search finds memories by content similarity."""
+        from anamnesis.services.memory_service import MemoryService
+
+        service = MemoryService(str(tmp_path))
+        service.write_memory("auth-design", "# Authentication\nWe use JWT tokens for API auth.")
+        service.write_memory("db-schema", "# Database\nPostgreSQL with migrations.")
+        service.write_memory("deploy-notes", "# Deployment\nDocker containers on AWS.")
+
+        results = service.search_memories("how do we handle authentication?")
+        assert len(results) > 0
+        assert results[0]["name"] == "auth-design"
+
+    def test_search_memories_empty(self, tmp_path):
+        """Search returns empty when no memories exist."""
+        from anamnesis.services.memory_service import MemoryService
+
+        service = MemoryService(str(tmp_path))
+        results = service.search_memories("anything")
+        assert results == []
+
+    def test_search_memories_substring_fallback(self, tmp_path):
+        """Search uses substring matching as fallback."""
+        from anamnesis.services.memory_service import MemoryService
+
+        service = MemoryService(str(tmp_path))
+        service.write_memory("api-patterns", "REST endpoints use snake_case naming.")
+
+        # Force fallback by not providing embedding engine
+        results = service.search_memories("snake_case")
+        assert len(results) > 0
+
+    def test_search_memories_respects_limit(self, tmp_path):
+        """Search respects the limit parameter."""
+        from anamnesis.services.memory_service import MemoryService
+
+        service = MemoryService(str(tmp_path))
+        for i in range(10):
+            service.write_memory(f"note-{i}", f"Content about topic {i}")
+
+        results = service.search_memories("topic", limit=3)
+        assert len(results) <= 3

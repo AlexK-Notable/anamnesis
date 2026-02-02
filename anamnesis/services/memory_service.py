@@ -89,6 +89,17 @@ class MemoryService:
         """
         self._project_path = Path(project_path).resolve()
         self._memories_dir = self._project_path / self.MEMORIES_DIR
+        self._index: Optional[MemoryIndex] = None
+
+    def _get_index(self) -> MemoryIndex:
+        """Get or create the memory index, indexing existing memories."""
+        if self._index is None:
+            self._index = MemoryIndex()
+            for entry in self.list_memories():
+                mem = self.read_memory(entry.name)
+                if mem:
+                    self._index.index(entry.name, mem.content)
+        return self._index
 
     @property
     def project_path(self) -> Path:
@@ -186,6 +197,10 @@ class MemoryService:
 
         logger.info(f"Memory written: {clean_name} ({stat.st_size} bytes)")
 
+        # Update search index
+        if self._index is not None:
+            self._index.index(clean_name, content)
+
         return MemoryInfo(
             name=clean_name,
             content=content,
@@ -268,6 +283,9 @@ class MemoryService:
             return False
 
         path.unlink()
+        # Update search index
+        if self._index is not None:
+            self._index.remove(clean_name)
         logger.info(f"Memory deleted: {clean_name}")
         return True
 
@@ -313,6 +331,10 @@ class MemoryService:
 
         path.write_text(new_content, encoding="utf-8")
 
+        # Update search index
+        if self._index is not None:
+            self._index.index(clean_name, new_content)
+
         stat = path.stat()
         logger.info(f"Memory edited: {clean_name}")
 
@@ -323,3 +345,109 @@ class MemoryService:
             updated_at=datetime.fromtimestamp(stat.st_mtime),
             size_bytes=stat.st_size,
         )
+
+    def search_memories(
+        self, query: str, limit: int = 5
+    ) -> list[dict]:
+        """Search memories by semantic similarity or substring matching.
+
+        Uses sentence-transformers embeddings when available, falls back
+        to substring matching on memory names and content.
+
+        Args:
+            query: Natural language search query.
+            limit: Maximum results to return.
+
+        Returns:
+            List of dicts with name, score, snippet.
+        """
+        memories = self.list_memories()
+        if not memories:
+            return []
+
+        # Try semantic search first
+        index = self._get_index()
+        semantic_results = index.search(query, limit=limit)
+
+        if semantic_results:
+            results = []
+            for name, score in semantic_results:
+                mem = self.read_memory(name)
+                snippet = mem.content[:200] if mem else ""
+                results.append({"name": name, "score": round(score, 3), "snippet": snippet})
+            return results
+
+        # Fallback: substring matching on name + content
+        query_lower = query.lower()
+        scored = []
+        for entry in memories:
+            mem = self.read_memory(entry.name)
+            if not mem:
+                continue
+            score = 0.0
+            if query_lower in entry.name.lower():
+                score += 0.8
+            if query_lower in mem.content.lower():
+                score += 0.5
+            if score > 0:
+                scored.append({"name": entry.name, "score": round(score, 3), "snippet": mem.content[:200]})
+        scored.sort(key=lambda x: x["score"], reverse=True)
+        return scored[:limit]
+
+
+@dataclass
+class MemorySearchResult:
+    """Result from memory search."""
+
+    name: str
+    score: float
+    snippet: str
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "score": round(self.score, 3), "snippet": self.snippet}
+
+
+class MemoryIndex:
+    """Lightweight embedding index for memory search.
+
+    Uses sentence-transformers all-MiniLM-L6-v2 for semantic search.
+    Gracefully falls back to substring matching if the model is unavailable.
+    """
+
+    def __init__(self):
+        self._model = None
+        self._model_loaded = False
+        self._embeddings: dict[str, "np.ndarray"] = {}
+
+    def _load_model(self) -> bool:
+        if self._model_loaded:
+            return self._model is not None
+        self._model_loaded = True
+        try:
+            from sentence_transformers import SentenceTransformer
+            self._model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+            return True
+        except Exception:
+            return False
+
+    def index(self, name: str, content: str) -> None:
+        if not self._load_model() or self._model is None:
+            return
+        import numpy as np
+        embedding = self._model.encode(content[:2000], convert_to_numpy=True, normalize_embeddings=True)
+        self._embeddings[name] = embedding
+
+    def remove(self, name: str) -> None:
+        self._embeddings.pop(name, None)
+
+    def search(self, query: str, limit: int = 5) -> list[tuple[str, float]]:
+        if not self._load_model() or self._model is None or not self._embeddings:
+            return []
+        import numpy as np
+        query_emb = self._model.encode(query, convert_to_numpy=True, normalize_embeddings=True)
+        scores = []
+        for name, emb in self._embeddings.items():
+            sim = float(np.dot(query_emb, emb))
+            scores.append((name, sim))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return scores[:limit]
