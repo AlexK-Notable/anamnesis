@@ -31,6 +31,7 @@ def _get_semantic_insights_impl(
     )
 
     return {
+        "success": True,
         "insights": [i.to_dict() for i in insights],
         "total": total,
         "query": query,
@@ -54,6 +55,7 @@ def _get_pattern_recommendations_impl(
     )
 
     return {
+        "success": True,
         "recommendations": recommendations,
         "reasoning": reasoning,
         "related_files": related_files if include_related_files else [],
@@ -74,6 +76,7 @@ def _predict_coding_approach_impl(
     )
 
     result = prediction.to_dict()
+    result["success"] = True
     result["include_file_routing"] = include_file_routing
 
     return result
@@ -93,7 +96,9 @@ def _get_developer_profile_impl(
         project_path=_get_current_path(),
     )
 
-    return profile.to_dict()
+    result = profile.to_dict()
+    result["success"] = True
+    return result
 
 
 @_with_error_handling("contribute_insights")
@@ -135,7 +140,9 @@ def _get_project_blueprint_impl(
         include_feature_map=include_feature_map,
     )
 
-    return blueprint
+    result = dict(blueprint) if blueprint else {}
+    result["success"] = True
+    return result
 
 
 # =============================================================================

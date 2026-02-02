@@ -48,6 +48,7 @@ def _auto_learn_if_needed_impl(
         patterns_count = len(learned_data.get("patterns", [])) if learned_data else 0
 
         return {
+            "success": True,
             "status": "already_learned",
             "message": "Intelligence data already exists for this codebase",
             "path": resolved_path,
@@ -59,6 +60,7 @@ def _auto_learn_if_needed_impl(
 
     if skip_learning:
         return {
+            "success": True,
             "status": "skipped",
             "message": "Learning skipped as requested",
             "path": resolved_path,
@@ -81,6 +83,7 @@ def _auto_learn_if_needed_impl(
             intelligence_service.load_patterns(learned_data.get("patterns", []))
 
     response = {
+        "success": result.success,
         "status": "learned" if result.success else "failed",
         "message": "Successfully learned from codebase" if result.success else result.error,
         "path": resolved_path,

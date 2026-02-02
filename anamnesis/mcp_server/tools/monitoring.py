@@ -44,7 +44,7 @@ def _get_system_status_impl(
     has_intel = learning_service.has_intelligence(current_path)
     learned_data = learning_service.get_learned_data(current_path) if has_intel else None
 
-    result: dict = {"current_path": current_path}
+    result: dict = {"success": True, "current_path": current_path}
 
     # --- summary section ---
     if "summary" in requested:

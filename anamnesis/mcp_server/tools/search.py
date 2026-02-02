@@ -77,6 +77,7 @@ def _search_codebase_impl(
 
         # Convert to response format
         return {
+            "success": True,
             "results": [
                 {
                     "file": r.file_path,
@@ -96,6 +97,7 @@ def _search_codebase_impl(
         logger.error(f"Search failed: {e}")
         # Return empty results on error
         return {
+            "success": False,
             "results": [],
             "query": query,
             "search_type": search_type,
@@ -121,6 +123,7 @@ def _analyze_codebase_impl(
     )
 
     result = {
+        "success": True,
         "path": path,
         "analysis": analysis_result.to_dict() if hasattr(analysis_result, "to_dict") else analysis_result,
     }

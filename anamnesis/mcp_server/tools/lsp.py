@@ -54,7 +54,7 @@ def _find_symbol_impl(
         include_info=include_info,
         substring_matching=substring_matching,
     )
-    return {"symbols": results, "count": len(results)}
+    return {"success": True, "symbols": results, "count": len(results)}
 
 
 @_with_error_handling("get_symbols_overview")
@@ -63,7 +63,10 @@ def _get_symbols_overview_impl(
     depth: int = 0,
 ) -> dict:
     svc = _get_symbol_service()
-    return svc.get_overview(relative_path, depth=depth)
+    result = svc.get_overview(relative_path, depth=depth)
+    if isinstance(result, dict):
+        result["success"] = True
+    return result
 
 
 @_with_error_handling("find_referencing_symbols")
@@ -78,6 +81,7 @@ def _find_referencing_symbols_impl(
     categorized = _categorize_references(results)
 
     return {
+        "success": True,
         "references": results,
         "count": len(results),
         "categories": categorized,
@@ -91,7 +95,10 @@ def _replace_symbol_body_impl(
     body: str,
 ) -> dict:
     svc = _get_symbol_service()
-    return svc.replace_body(name_path, relative_path, body)
+    result = svc.replace_body(name_path, relative_path, body)
+    if isinstance(result, dict):
+        result.setdefault("success", True)
+    return result
 
 
 @_with_error_handling("insert_after_symbol")
@@ -101,7 +108,10 @@ def _insert_after_symbol_impl(
     body: str,
 ) -> dict:
     svc = _get_symbol_service()
-    return svc.insert_after(name_path, relative_path, body)
+    result = svc.insert_after(name_path, relative_path, body)
+    if isinstance(result, dict):
+        result.setdefault("success", True)
+    return result
 
 
 @_with_error_handling("insert_before_symbol")
@@ -111,7 +121,10 @@ def _insert_before_symbol_impl(
     body: str,
 ) -> dict:
     svc = _get_symbol_service()
-    return svc.insert_before(name_path, relative_path, body)
+    result = svc.insert_before(name_path, relative_path, body)
+    if isinstance(result, dict):
+        result.setdefault("success", True)
+    return result
 
 
 @_with_error_handling("rename_symbol")
@@ -121,7 +134,10 @@ def _rename_symbol_impl(
     new_name: str,
 ) -> dict:
     svc = _get_symbol_service()
-    return svc.rename(name_path, relative_path, new_name)
+    result = svc.rename(name_path, relative_path, new_name)
+    if isinstance(result, dict):
+        result.setdefault("success", True)
+    return result
 
 
 @_with_error_handling("enable_lsp")
@@ -152,7 +168,10 @@ def _enable_lsp_impl(language: str = "") -> dict:
 @_with_error_handling("get_lsp_status")
 def _get_lsp_status_impl() -> dict:
     mgr = _get_lsp_manager()
-    return mgr.get_status()
+    result = mgr.get_status()
+    if isinstance(result, dict):
+        result.setdefault("success", True)
+    return result
 
 
 @_with_error_handling("check_conventions")

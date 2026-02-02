@@ -6,6 +6,22 @@ from pathlib import Path
 
 import pytest
 
+from anamnesis.utils.toon_encoder import ToonEncoder
+
+_toon = ToonEncoder()
+
+
+def _as_dict(result):
+    """Decode TOON-encoded responses back to dict for assertions.
+
+    _impl functions go through _with_error_handling which may TOON-encode
+    eligible success responses. Tests need dict access for assertions.
+    """
+    if isinstance(result, str):
+        return _toon.decode(result)
+    return result
+
+
 # Import implementation functions for direct testing
 from anamnesis.mcp_server.server import (
     _analyze_codebase_impl,
@@ -159,7 +175,7 @@ class UserService:
         service = _get_intelligence_service()
         service.clear()
 
-        result = _get_semantic_insights_impl()
+        result = _as_dict(_get_semantic_insights_impl())
         assert "insights" in result
         assert "total" in result
 
@@ -167,7 +183,7 @@ class UserService:
         """Test getting insights after learning."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_semantic_insights_impl()
+        result = _as_dict(_get_semantic_insights_impl())
         assert result["total"] > 0
         assert len(result["insights"]) > 0
 
@@ -175,7 +191,7 @@ class UserService:
         """Test getting insights with query filter."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_semantic_insights_impl(query="Service")
+        result = _as_dict(_get_semantic_insights_impl(query="Service"))
         assert "insights" in result
         # May or may not have matches depending on extraction
 
@@ -183,16 +199,16 @@ class UserService:
         """Test getting insights with type filter."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_semantic_insights_impl(concept_type="class")
+        result = _as_dict(_get_semantic_insights_impl(concept_type="class"))
         assert "insights" in result
 
     def test_get_pattern_recommendations(self, temp_codebase):
         """Test getting pattern recommendations."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_pattern_recommendations_impl(
+        result = _as_dict(_get_pattern_recommendations_impl(
             problem_description="create a new service class"
-        )
+        ))
 
         assert "recommendations" in result
         assert "reasoning" in result
@@ -202,9 +218,9 @@ class UserService:
         """Test predicting coding approach."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _predict_coding_approach_impl(
+        result = _as_dict(_predict_coding_approach_impl(
             problem_description="add user authentication"
-        )
+        ))
 
         assert "approach" in result
         assert "confidence" in result
@@ -214,7 +230,7 @@ class UserService:
         """Test getting developer profile."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_developer_profile_impl()
+        result = _as_dict(_get_developer_profile_impl())
 
         assert "preferred_patterns" in result
         assert "coding_style" in result
@@ -224,10 +240,10 @@ class UserService:
         """Test developer profile with work context."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_developer_profile_impl(
+        result = _as_dict(_get_developer_profile_impl(
             include_recent_activity=True,
             include_work_context=True,
-        )
+        ))
 
         assert result is not None
 
@@ -268,7 +284,7 @@ class UserService:
         """Test getting project blueprint."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _get_project_blueprint_impl(path=temp_codebase)
+        result = _as_dict(_get_project_blueprint_impl(path=temp_codebase))
 
         assert "tech_stack" in result
         assert "learning_status" in result
