@@ -6,6 +6,7 @@ and monitoring tools for AI-assisted codebase understanding.
 
 import gc
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -290,6 +291,70 @@ def _categorize_references(references: list[dict]) -> dict[str, list[dict]]:
         categories.setdefault(cat, []).append(ref_with_cat)
 
     return categories
+
+
+def _detect_naming_style(name: str) -> str:
+    """Detect the naming convention of a single identifier.
+
+    Args:
+        name: The identifier name to analyze.
+
+    Returns:
+        One of: snake_case, PascalCase, camelCase, UPPER_CASE, flat_case, kebab-case, mixed
+    """
+    if not name or name.startswith("_"):
+        name = name.lstrip("_")
+    if not name:
+        return "unknown"
+
+    if re.match(r"^[A-Z][A-Z0-9_]*$", name) and "_" in name:
+        return "UPPER_CASE"
+    if re.match(r"^[A-Z][a-zA-Z0-9]*$", name):
+        return "PascalCase"
+    if re.match(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$", name):
+        return "snake_case"
+    if re.match(r"^[a-z][a-zA-Z0-9]*$", name) and any(c.isupper() for c in name):
+        return "camelCase"
+    if re.match(r"^[a-z][a-z0-9]*$", name):
+        return "flat_case"
+    if "-" in name:
+        return "kebab-case"
+    return "mixed"
+
+
+def _check_names_against_convention(
+    names: list[str],
+    expected: str,
+    symbol_kind: str,
+) -> list[dict]:
+    """Check a list of symbol names against an expected naming convention.
+
+    Args:
+        names: List of identifier names to check.
+        expected: Expected convention (snake_case, PascalCase, etc.).
+        symbol_kind: Kind of symbol for context (function, class, etc.).
+
+    Returns:
+        List of violation dicts with name, expected, actual, symbol_kind.
+    """
+    violations = []
+    for name in names:
+        # Skip private/dunder names
+        clean = name.lstrip("_")
+        if not clean or clean.startswith("__"):
+            continue
+        actual = _detect_naming_style(name)
+        if actual != expected and actual != "unknown":
+            # flat_case is compatible with snake_case for single-word names
+            if expected == "snake_case" and actual == "flat_case":
+                continue
+            violations.append({
+                "name": name,
+                "expected": expected,
+                "actual": actual,
+                "symbol_kind": symbol_kind,
+            })
+    return violations
 
 
 def _with_error_handling(operation_name: str, toon_auto: bool = True):
@@ -2256,6 +2321,76 @@ def get_lsp_status() -> dict:
         Status dict with supported languages and running servers
     """
     return _get_lsp_status_impl()
+
+
+@_with_error_handling("check_conventions")
+def _check_conventions_impl(
+    relative_path: str,
+) -> dict:
+    """Implementation for check_conventions tool."""
+    # Get symbols from file
+    retriever = _get_symbol_retriever()
+    overview = retriever.get_overview(relative_path, depth=1)
+
+    # Get learned conventions
+    intelligence_service = _get_intelligence_service()
+    profile = intelligence_service.get_developer_profile()
+    conventions = profile.coding_style.get("naming_conventions", {})
+
+    # Map symbol kinds to convention keys
+    kind_map = {
+        "Class": conventions.get("classes", "PascalCase"),
+        "Function": conventions.get("functions", "snake_case"),
+        "Method": conventions.get("functions", "snake_case"),
+        "Variable": conventions.get("variables", "snake_case"),
+        "Constant": conventions.get("constants", "UPPER_CASE"),
+    }
+
+    all_violations = []
+    symbols_checked = 0
+
+    # overview is a dict like {"Class": [...], "Function": [...]}
+    if isinstance(overview, dict):
+        for kind, symbols in overview.items():
+            expected = kind_map.get(kind)
+            if not expected or not isinstance(symbols, list):
+                continue
+            names = []
+            for sym in symbols:
+                if isinstance(sym, str):
+                    names.append(sym)
+                elif isinstance(sym, dict) and "name" in sym:
+                    names.append(sym["name"])
+            symbols_checked += len(names)
+            violations = _check_names_against_convention(names, expected, kind)
+            all_violations.extend(violations)
+
+    return {
+        "success": True,
+        "file": relative_path,
+        "symbols_checked": symbols_checked,
+        "violations": all_violations,
+        "violation_count": len(all_violations),
+        "conventions_used": conventions,
+    }
+
+
+@mcp.tool
+def check_conventions(
+    relative_path: str,
+) -> dict:
+    """Check symbols in a file against learned naming conventions.
+
+    Analyzes function, class, and variable names against the project's
+    established naming patterns. Reports deviations that break consistency.
+
+    Args:
+        relative_path: File to check (relative to project root)
+
+    Returns:
+        Violations with expected vs actual naming style per symbol
+    """
+    return _check_conventions_impl(relative_path)
 
 
 # =============================================================================

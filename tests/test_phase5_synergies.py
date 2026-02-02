@@ -138,3 +138,47 @@ class TestIntelligentReferenceFiltering:
         ]
         categorized = _categorize_references(references)
         assert "other" in categorized
+
+
+class TestConventionChecking:
+    """Tests for pattern-guided convention checking."""
+
+    def test_detect_naming_convention(self):
+        """Detects the dominant naming convention from symbol names."""
+        from anamnesis.mcp_server.server import _detect_naming_style
+
+        assert _detect_naming_style("my_function") == "snake_case"
+        assert _detect_naming_style("MyClass") == "PascalCase"
+        assert _detect_naming_style("myVariable") == "camelCase"
+        assert _detect_naming_style("MY_CONSTANT") == "UPPER_CASE"
+        assert _detect_naming_style("lowercase") == "flat_case"
+
+    def test_check_names_against_convention(self):
+        """Check a list of names and report violations."""
+        from anamnesis.mcp_server.server import _check_names_against_convention
+
+        names = ["get_user", "fetch_data", "processItem", "save_record"]
+        violations = _check_names_against_convention(
+            names, expected="snake_case", symbol_kind="function"
+        )
+        assert len(violations) == 1
+        assert violations[0]["name"] == "processItem"
+        assert violations[0]["expected"] == "snake_case"
+        assert violations[0]["actual"] == "camelCase"
+
+    def test_check_names_no_violations(self):
+        """No violations when all names follow convention."""
+        from anamnesis.mcp_server.server import _check_names_against_convention
+
+        names = ["get_user", "fetch_data", "save_record"]
+        violations = _check_names_against_convention(
+            names, expected="snake_case", symbol_kind="function"
+        )
+        assert violations == []
+
+    def test_check_names_empty(self):
+        """Empty name list returns no violations."""
+        from anamnesis.mcp_server.server import _check_names_against_convention
+
+        violations = _check_names_against_convention([], expected="snake_case", symbol_kind="function")
+        assert violations == []
