@@ -5,13 +5,14 @@ from anamnesis.mcp_server._shared import (
     _check_names_against_convention,
     _get_active_context,
     _get_intelligence_service,
+    _get_symbol_service,
     _with_error_handling,
     mcp,
 )
 
 
 # =============================================================================
-# LSP Helper Functions
+# LSP Helper Functions (kept for backward test compatibility)
 # =============================================================================
 
 
@@ -21,20 +22,13 @@ def _get_lsp_manager():
 
 
 def _get_symbol_retriever():
-    """Get a SymbolRetriever for the active project."""
-    from anamnesis.lsp.symbols import SymbolRetriever
-
-    ctx = _get_active_context()
-    return SymbolRetriever(ctx.path, lsp_manager=ctx.get_lsp_manager())
+    """Get the SymbolRetriever via SymbolService for the active project."""
+    return _get_symbol_service().retriever
 
 
 def _get_code_editor():
-    """Get a CodeEditor for the active project."""
-    from anamnesis.lsp.editor import CodeEditor
-
-    ctx = _get_active_context()
-    retriever = _get_symbol_retriever()
-    return CodeEditor(ctx.path, retriever, lsp_manager=ctx.get_lsp_manager())
+    """Get the CodeEditor via SymbolService for the active project."""
+    return _get_symbol_service().editor
 
 
 # =============================================================================
@@ -51,8 +45,8 @@ def _find_symbol_impl(
     include_info: bool = False,
     substring_matching: bool = False,
 ) -> dict:
-    retriever = _get_symbol_retriever()
-    results = retriever.find(
+    svc = _get_symbol_service()
+    results = svc.find(
         name_path_pattern,
         relative_path=relative_path or None,
         depth=depth,
@@ -68,8 +62,8 @@ def _get_symbols_overview_impl(
     relative_path: str,
     depth: int = 0,
 ) -> dict:
-    retriever = _get_symbol_retriever()
-    return retriever.get_overview(relative_path, depth=depth)
+    svc = _get_symbol_service()
+    return svc.get_overview(relative_path, depth=depth)
 
 
 @_with_error_handling("find_referencing_symbols")
@@ -77,8 +71,8 @@ def _find_referencing_symbols_impl(
     name_path: str,
     relative_path: str,
 ) -> dict:
-    retriever = _get_symbol_retriever()
-    results = retriever.find_referencing_symbols(name_path, relative_path)
+    svc = _get_symbol_service()
+    results = svc.find_referencing_symbols(name_path, relative_path)
 
     # Intelligence augmentation: categorize references
     categorized = _categorize_references(results)
@@ -96,8 +90,8 @@ def _replace_symbol_body_impl(
     relative_path: str,
     body: str,
 ) -> dict:
-    editor = _get_code_editor()
-    return editor.replace_body(name_path, relative_path, body)
+    svc = _get_symbol_service()
+    return svc.replace_body(name_path, relative_path, body)
 
 
 @_with_error_handling("insert_after_symbol")
@@ -106,8 +100,8 @@ def _insert_after_symbol_impl(
     relative_path: str,
     body: str,
 ) -> dict:
-    editor = _get_code_editor()
-    return editor.insert_after_symbol(name_path, relative_path, body)
+    svc = _get_symbol_service()
+    return svc.insert_after(name_path, relative_path, body)
 
 
 @_with_error_handling("insert_before_symbol")
@@ -116,8 +110,8 @@ def _insert_before_symbol_impl(
     relative_path: str,
     body: str,
 ) -> dict:
-    editor = _get_code_editor()
-    return editor.insert_before_symbol(name_path, relative_path, body)
+    svc = _get_symbol_service()
+    return svc.insert_before(name_path, relative_path, body)
 
 
 @_with_error_handling("rename_symbol")
@@ -126,8 +120,8 @@ def _rename_symbol_impl(
     relative_path: str,
     new_name: str,
 ) -> dict:
-    editor = _get_code_editor()
-    return editor.rename_symbol(name_path, relative_path, new_name)
+    svc = _get_symbol_service()
+    return svc.rename(name_path, relative_path, new_name)
 
 
 @_with_error_handling("enable_lsp")
@@ -167,8 +161,8 @@ def _check_conventions_impl(
 ) -> dict:
     """Implementation for check_conventions tool."""
     # Get symbols from file
-    retriever = _get_symbol_retriever()
-    overview = retriever.get_overview(relative_path, depth=1)
+    svc = _get_symbol_service()
+    overview = svc.get_overview(relative_path, depth=1)
 
     # Get learned conventions
     intelligence_service = _get_intelligence_service()

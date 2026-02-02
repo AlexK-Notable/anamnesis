@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from anamnesis.services.intelligence_service import IntelligenceService
     from anamnesis.services.learning_service import LearningService
     from anamnesis.services.session_manager import SessionManager
+    from anamnesis.services.symbol_service import SymbolService
     from anamnesis.search.service import SearchService
 
 
@@ -48,6 +49,7 @@ class ProjectContext:
     _search_service: Optional["SearchService"] = field(default=None, repr=False)
     _semantic_initialized: bool = field(default=False, repr=False)
     _lsp_manager: Optional["LspManager"] = field(default=None, repr=False)
+    _symbol_service: Optional["SymbolService"] = field(default=None, repr=False)
 
     @property
     def name(self) -> str:
@@ -123,6 +125,21 @@ class ProjectContext:
             self._lsp_manager = LspManager(self.path)
         return self._lsp_manager
 
+    def get_symbol_service(self) -> "SymbolService":
+        """Get or create the symbol service for this project.
+
+        Provides a high-level facade over SymbolRetriever (navigation)
+        and CodeEditor (mutations), both backed by the project's LSP
+        manager.
+        """
+        if self._symbol_service is None:
+            from anamnesis.services.symbol_service import SymbolService
+
+            self._symbol_service = SymbolService(
+                self.path, lsp_manager=self.get_lsp_manager(),
+            )
+        return self._symbol_service
+
     def shutdown_lsp(self) -> None:
         """Shut down all LSP servers for this project.
 
@@ -131,6 +148,7 @@ class ProjectContext:
         if self._lsp_manager is not None:
             self._lsp_manager.stop_all()
             self._lsp_manager = None
+        self._symbol_service = None
 
     async def ensure_semantic_search(self) -> bool:
         """Initialize semantic search backend lazily.
@@ -195,6 +213,7 @@ class ProjectContext:
                 "search": self._search_service is not None,
                 "semantic_search": self._semantic_initialized,
                 "lsp": self._lsp_manager is not None,
+                "symbol_service": self._symbol_service is not None,
             },
         }
 

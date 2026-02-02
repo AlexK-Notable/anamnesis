@@ -31,6 +31,7 @@ from anamnesis.mcp_server._shared import (  # noqa: F401
     _registry,
     _server_start_time,
     _set_current_path,
+    _get_symbol_service,
     _toon_encoder,
     _with_error_handling,
     _ensure_semantic_search,

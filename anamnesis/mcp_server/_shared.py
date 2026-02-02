@@ -118,6 +118,11 @@ def _get_session_manager() -> SessionManager:
     return _get_active_context().get_session_manager()
 
 
+def _get_symbol_service():
+    """Get symbol service for the active project."""
+    return _get_active_context().get_symbol_service()
+
+
 def _get_memory_service() -> MemoryService:
     """Get memory service for the active project."""
     return _get_active_context().get_memory_service()
