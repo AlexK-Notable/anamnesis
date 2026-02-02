@@ -495,21 +495,77 @@ class IntelligenceService:
         return profile
 
     def _extract_coding_style(self) -> dict[str, Any]:
-        """Extract coding style from patterns."""
+        """Extract coding style from learned patterns.
+
+        Analyzes naming convention patterns detected by tree-sitter AST
+        analysis and structural patterns from the pattern engine.
+        Falls back to defaults only when no patterns have been learned.
+        """
+        naming = self._extract_naming_from_patterns()
+        structural = self._extract_structural_preferences()
+
         return {
-            "naming_conventions": {
-                "functions": "snake_case",
-                "classes": "PascalCase",
-                "constants": "UPPER_CASE",
-                "variables": "snake_case",
-            },
-            "structural_preferences": [
-                "modular_design",
-                "single_responsibility",
-                "dependency_injection",
-            ],
-            "testing_approach": "pytest_with_fixtures",
+            "naming_conventions": naming,
+            "structural_preferences": structural,
+            "source": "learned" if self._patterns else "defaults",
         }
+
+    def _extract_naming_from_patterns(self) -> dict[str, str]:
+        """Extract naming conventions from detected patterns."""
+        # Defaults
+        conventions = {
+            "functions": "snake_case",
+            "classes": "PascalCase",
+            "constants": "UPPER_CASE",
+            "variables": "snake_case",
+        }
+
+        if not self._patterns:
+            return conventions
+
+        # Count naming convention patterns from learned data
+        naming_counts: dict[str, int] = {}
+        for pattern in self._patterns:
+            key = _pattern_type_key(pattern).lower()
+            if "camelcase_function" in key or "camelcase" in key:
+                naming_counts["camelCase_functions"] = naming_counts.get("camelCase_functions", 0) + 1
+            elif "pascalcase_class" in key or "pascalcase" in key:
+                naming_counts["PascalCase_classes"] = naming_counts.get("PascalCase_classes", 0) + 1
+            elif "screaming_snake" in key:
+                naming_counts["SCREAMING_constants"] = naming_counts.get("SCREAMING_constants", 0) + 1
+            elif "snake_case" in key:
+                naming_counts["snake_case_vars"] = naming_counts.get("snake_case_vars", 0) + 1
+
+        # Override defaults based on detected patterns
+        if naming_counts.get("camelCase_functions", 0) > 0:
+            conventions["functions"] = "camelCase"
+        if naming_counts.get("snake_case_vars", 0) > 0:
+            conventions["variables"] = "snake_case"
+
+        return conventions
+
+    def _extract_structural_preferences(self) -> list[str]:
+        """Extract structural preferences from detected patterns."""
+        if not self._patterns:
+            return ["modular_design", "single_responsibility", "dependency_injection"]
+
+        prefs = set()
+        for pattern in self._patterns:
+            key = _pattern_type_key(pattern).lower()
+            if "singleton" in key:
+                prefs.add("singleton_pattern")
+            elif "factory" in key:
+                prefs.add("factory_pattern")
+            elif "dependency" in key or "injection" in key:
+                prefs.add("dependency_injection")
+            elif "decorator" in key:
+                prefs.add("decorator_pattern")
+            elif "observer" in key:
+                prefs.add("observer_pattern")
+            elif "strategy" in key:
+                prefs.add("strategy_pattern")
+
+        return list(prefs) if prefs else ["modular_design"]
 
     def _extract_expertise_areas(self) -> list[str]:
         """Extract expertise areas from patterns."""

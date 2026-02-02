@@ -599,5 +599,16 @@ class LearningService:
             self._learned_data.clear()
 
     def has_intelligence(self, path: str) -> bool:
-        """Check if intelligence exists for path."""
-        return str(Path(path).resolve()) in self._learned_data
+        """Check if intelligence exists for path.
+
+        Checks both in-memory cache and persistent backend storage.
+        """
+        resolved = str(Path(path).resolve())
+        if resolved in self._learned_data:
+            return True
+        # Fall back to backend check
+        if self._backend:
+            stats = self._backend.get_stats()
+            if stats.get("semantic_concepts", 0) > 0 or stats.get("developer_patterns", 0) > 0:
+                return True
+        return False

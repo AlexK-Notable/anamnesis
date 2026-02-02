@@ -1001,11 +1001,24 @@ def _analyze_codebase_impl(
         include_dependencies=True,
     )
 
-    return {
+    result = {
         "path": path,
         "analysis": analysis_result.to_dict() if hasattr(analysis_result, "to_dict") else analysis_result,
-        "include_file_content": include_file_content,
     }
+
+    if include_file_content and hasattr(analysis_result, "file_contents"):
+        result["file_contents"] = analysis_result.file_contents
+    elif include_file_content:
+        # Read file content directly if the analysis doesn't provide it
+        from pathlib import Path as P
+        target = P(path)
+        if target.is_file():
+            try:
+                result["file_contents"] = {str(target): target.read_text(encoding="utf-8", errors="replace")[:50000]}
+            except OSError:
+                result["file_contents"] = {}
+
+    return result
 
 
 # =============================================================================

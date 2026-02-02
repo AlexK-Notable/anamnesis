@@ -395,18 +395,6 @@ class MemoryService:
         return scored[:limit]
 
 
-@dataclass
-class MemorySearchResult:
-    """Result from memory search."""
-
-    name: str
-    score: float
-    snippet: str
-
-    def to_dict(self) -> dict:
-        return {"name": self.name, "score": round(self.score, 3), "snippet": self.snippet}
-
-
 class MemoryIndex:
     """Lightweight embedding index for memory search.
 
