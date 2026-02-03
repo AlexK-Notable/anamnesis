@@ -454,7 +454,11 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                 "details": str(e.details) if e.details else None,
             },
         )
-        return _failure_response(str(e))
+        return _failure_response(
+            str(e),
+            error_code="circuit_breaker",
+            is_retryable=True,
+        )
 
     def _handle_exception(e: Exception):
         classification = classify_error(e, {"operation": operation_name})
@@ -466,7 +470,11 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                 "error_type": type(e).__name__,
             },
         )
-        return _failure_response(_sanitize_error_message(str(e)))
+        return _failure_response(
+            _sanitize_error_message(str(e)),
+            error_code=classification.category.value,
+            is_retryable=classification.is_retryable,
+        )
 
     def decorator(func):
         if inspect.iscoroutinefunction(func):

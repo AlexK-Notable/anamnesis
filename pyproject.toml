@@ -38,7 +38,7 @@ dependencies = [
     "anyio>=4.0.0",
 
     # TOON format for token-efficient LLM responses
-    "toon-format @ git+https://github.com/toon-format/toon-python.git",
+    "toon-format @ git+https://github.com/toon-format/toon-python.git@6b26984a01279defdcf40ab9d09bc418fe8133ac",
 ]
 
 [project.scripts]

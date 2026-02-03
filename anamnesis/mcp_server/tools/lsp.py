@@ -55,7 +55,7 @@ def _find_symbol_impl(
         include_info=include_info,
         substring_matching=substring_matching,
     )
-    return {"success": True, "symbols": results, "count": len(results)}
+    return {"success": True, "symbols": results, "total": len(results)}
 
 
 @_with_error_handling("get_symbols_overview")
@@ -84,7 +84,7 @@ def _find_referencing_symbols_impl(
     return {
         "success": True,
         "references": results,
-        "count": len(results),
+        "total": len(results),
         "categories": categorized,
     }
 

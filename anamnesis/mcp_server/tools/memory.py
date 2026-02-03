@@ -52,7 +52,7 @@ def _list_memories_impl() -> dict:
     return {
         "success": True,
         "memories": [m.to_dict() for m in memories],
-        "count": len(memories),
+        "total": len(memories),
     }
 
 

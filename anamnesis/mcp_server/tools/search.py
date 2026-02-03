@@ -9,6 +9,7 @@ from anamnesis.utils.logger import logger
 
 from anamnesis.mcp_server._shared import (
     _ensure_semantic_search,
+    _failure_response,
     _get_codebase_service,
     _get_current_path,
     _get_search_service,
@@ -45,7 +46,11 @@ async def _search_codebase_impl(
         "pattern": SearchType.PATTERN,
         "semantic": SearchType.SEMANTIC,
     }
-    search_type_enum = type_map.get(search_type.lower(), SearchType.TEXT)
+    search_type_enum = type_map.get(search_type.lower())
+    if search_type_enum is None:
+        return _failure_response(
+            f"Unknown search_type '{search_type}'. Choose from: {', '.join(type_map)}"
+        )
 
     # Initialize semantic search lazily if requested
     if search_type_enum == SearchType.SEMANTIC:

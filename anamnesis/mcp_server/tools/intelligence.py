@@ -3,11 +3,14 @@
 from typing import Optional
 
 from anamnesis.mcp_server._shared import (
+    _failure_response,
     _get_current_path,
     _get_intelligence_service,
     _with_error_handling,
     mcp,
 )
+
+_VALID_INSIGHT_TYPES = frozenset({"bug_pattern", "optimization", "refactor_suggestion", "best_practice"})
 
 
 # =============================================================================
@@ -112,6 +115,10 @@ def _contribute_insights_impl(
     session_update: Optional[dict] = None,
 ) -> dict:
     """Implementation for contribute_insights tool."""
+    if insight_type not in _VALID_INSIGHT_TYPES:
+        return _failure_response(
+            f"Unknown insight_type '{insight_type}'. Choose from: {', '.join(sorted(_VALID_INSIGHT_TYPES))}"
+        )
     intelligence_service = _get_intelligence_service()
 
     success, insight_id, message = intelligence_service.contribute_insight(

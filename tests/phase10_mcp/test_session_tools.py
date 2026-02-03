@@ -199,7 +199,7 @@ class TestListSessions:
         result = _list_sessions_impl()
 
         assert result["success"] is True
-        assert result["count"] == 3
+        assert result["total"] == 3
         assert len(result["sessions"]) == 3
 
     def test_list_active_only(self):
@@ -211,7 +211,7 @@ class TestListSessions:
         result = _list_sessions_impl(active_only=True)
 
         assert result["success"] is True
-        assert result["count"] == 1
+        assert result["total"] == 1
         assert result["sessions"][0]["name"] == "Session 2"
 
     def test_list_sessions_with_limit(self):
@@ -237,7 +237,7 @@ class TestGetDecisions:
         result = _get_decisions_impl()
 
         assert result["success"] is True
-        assert result["count"] == 3
+        assert result["total"] == 3
 
     def test_get_decisions_by_session(self):
         """Get decisions for a specific session."""
@@ -255,7 +255,7 @@ class TestGetDecisions:
         result = _get_decisions_impl(session_id=session_id)
 
         assert result["success"] is True
-        assert result["count"] == 2
+        assert result["total"] == 2
 
     def test_get_decisions_with_limit(self):
         """Get decisions respects limit."""
@@ -304,4 +304,4 @@ class TestSessionIntegration:
 
         # Verify decisions still accessible
         decisions_result = _get_decisions_impl(session_id=session_id)
-        assert decisions_result["count"] == 2
+        assert decisions_result["total"] == 2

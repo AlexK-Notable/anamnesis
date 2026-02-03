@@ -437,7 +437,7 @@ class TestMCPProjectTools:
 
         result = _list_projects_impl()
         assert result["success"] is True
-        assert result["count"] == 2
+        assert result["total"] == 2
 
     def test_project_switch_affects_services(self, project_a, project_b):
         """Switching active project changes which services are returned."""

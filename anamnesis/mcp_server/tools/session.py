@@ -129,7 +129,7 @@ def _list_sessions_impl(
     return {
         "success": True,
         "sessions": [s.to_dict() for s in sessions],
-        "count": len(sessions),
+        "total": len(sessions),
         "active_session_id": session_manager.active_session_id,
     }
 
@@ -151,7 +151,7 @@ def _get_decisions_impl(
     return {
         "success": True,
         "decisions": [d.to_dict() for d in decisions],
-        "count": len(decisions),
+        "total": len(decisions),
     }
 
 

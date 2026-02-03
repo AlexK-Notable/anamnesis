@@ -41,7 +41,7 @@ def _list_projects_impl() -> dict:
     return {
         "success": True,
         "projects": [p.to_dict() for p in projects],
-        "count": len(projects),
+        "total": len(projects),
         "active_path": _registry.active_path,
     }
 

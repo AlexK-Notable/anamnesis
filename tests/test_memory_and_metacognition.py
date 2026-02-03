@@ -452,7 +452,7 @@ class TestListMemoriesTool:
 
         result = _list_memories_impl()
         assert result["success"] is True
-        assert result["count"] == 0
+        assert result["total"] == 0
         assert result["memories"] == []
 
     def test_list_after_writes(self):
@@ -467,7 +467,7 @@ class TestListMemoriesTool:
 
         result = _list_memories_impl()
         assert result["success"] is True
-        assert result["count"] == 2
+        assert result["total"] == 2
 
 
 class TestDeleteMemoryTool:
