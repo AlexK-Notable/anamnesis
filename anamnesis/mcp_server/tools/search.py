@@ -1,5 +1,6 @@
 """Search tools — codebase search and analysis."""
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -35,6 +36,7 @@ async def _search_codebase_impl(
     - pattern: Regex and AST structural patterns
     - semantic: Vector similarity search (requires indexing)
     """
+    limit = max(1, min(limit, 500))
     current_path = _get_current_path()
 
     # Map string to SearchType enum
@@ -108,12 +110,15 @@ def _analyze_codebase_impl(
         result["file_contents"] = analysis_result.file_contents
     elif include_file_content:
         # Read file content directly if the analysis doesn't provide it
-        target = Path(path)
-        if target.is_file():
+        target = Path(path).resolve()
+        project_root = Path(_get_current_path()).resolve()
+        if target.is_file() and (target == project_root or str(target).startswith(str(project_root) + os.sep)):
             try:
                 result["file_contents"] = {str(target): target.read_text(encoding="utf-8", errors="replace")[:50000]}
             except OSError:
                 result["file_contents"] = {}
+        elif include_file_content:
+            result["file_contents"] = {}
 
     return result
 

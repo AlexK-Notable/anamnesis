@@ -32,6 +32,7 @@ def _auto_learn_if_needed_impl(
     skip_learning: bool = False,
 ) -> dict:
     """Implementation for auto_learn_if_needed tool."""
+    max_files = max(1, min(max_files, 10_000))
     path = path or os.getcwd()
     resolved_path = str(Path(path).resolve())
     _set_current_path(resolved_path)

@@ -231,6 +231,8 @@ class PatternSearchBackend(SearchBackend):
                     matches.append(match)
             except re.error as e:
                 logger.debug(f"Invalid regex '{query}': {e}")
+            except TimeoutError:
+                logger.warning(f"Regex search timed out for pattern '{query[:100]}'")
 
         return matches
 

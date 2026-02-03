@@ -22,6 +22,7 @@ def _get_semantic_insights_impl(
     limit: int = 50,
 ) -> dict:
     """Implementation for get_semantic_insights tool."""
+    limit = max(1, min(limit, 500))
     intelligence_service = _get_intelligence_service()
 
     insights, total = intelligence_service.get_semantic_insights(

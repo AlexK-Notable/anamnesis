@@ -18,6 +18,15 @@ from anamnesis.lsp.solidlsp.lsp_protocol_handler import lsp_types
 log = logging.getLogger(__name__)
 
 
+def _safe_join(root: str, relative_path: str) -> str:
+    """Join root and relative path, ensuring result stays within root."""
+    abs_path = os.path.realpath(os.path.join(root, relative_path))
+    root_real = os.path.realpath(root)
+    if not (abs_path == root_real or abs_path.startswith(root_real + os.sep)):
+        raise ValueError(f"Path traversal denied: '{relative_path}' resolves outside '{root_real}'")
+    return abs_path
+
+
 # ---------------------------------------------------------------------------
 # Core types
 # ---------------------------------------------------------------------------
@@ -87,7 +96,10 @@ class LspSymbol:
 
     def get_body(self, project_root: str, encoding: str = "utf-8") -> str | None:
         """Read the symbol's body from disk."""
-        abs_path = os.path.join(project_root, self.location.relative_path)
+        try:
+            abs_path = _safe_join(project_root, self.location.relative_path)
+        except ValueError:
+            return None
         if not os.path.exists(abs_path):
             return None
         try:
@@ -438,7 +450,10 @@ class SymbolRetriever:
             from anamnesis.extraction.backends.tree_sitter_backend import TreeSitterBackend
             from anamnesis.extraction.cache import ParseCache
 
-            abs_path = os.path.join(self._project_root, relative_path)
+            try:
+                abs_path = _safe_join(self._project_root, relative_path)
+            except ValueError:
+                return []
             if not os.path.exists(abs_path):
                 return []
 
@@ -653,7 +668,10 @@ class SymbolRetriever:
         self, relative_path: str, line: int, context: int = 2
     ) -> str:
         """Read a few lines around a position for context display."""
-        abs_path = os.path.join(self._project_root, relative_path)
+        try:
+            abs_path = _safe_join(self._project_root, relative_path)
+        except ValueError:
+            return ""
         if not os.path.exists(abs_path):
             return ""
         try:

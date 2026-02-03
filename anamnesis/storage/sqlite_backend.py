@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from anamnesis.constants import utcnow
+from anamnesis.utils.security import escape_sql_like
 
 import aiosqlite
 
@@ -211,11 +212,12 @@ class SQLiteBackend:
     ) -> list[SemanticConcept]:
         """Search concepts by name or description."""
         self._ensure_connected()
-        pattern = f"%{query}%"
+        escaped_query = escape_sql_like(query)
+        pattern = f"%{escaped_query}%"
         cursor = await self._conn.execute(
             """
             SELECT * FROM semantic_concepts
-            WHERE name LIKE ? OR description LIKE ?
+            WHERE name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\'
             ORDER BY name
             LIMIT ?
             """,
@@ -852,11 +854,12 @@ class SQLiteBackend:
     async def search_features(self, query: str) -> list[FeatureMap]:
         """Search features by name or keywords."""
         self._ensure_connected()
-        pattern = f"%{query}%"
+        escaped_query = escape_sql_like(query)
+        pattern = f"%{escaped_query}%"
         cursor = await self._conn.execute(
             """
             SELECT * FROM feature_maps
-            WHERE feature_name LIKE ? OR description LIKE ? OR keywords LIKE ?
+            WHERE feature_name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR keywords LIKE ? ESCAPE '\\'
             """,
             (pattern, pattern, pattern),
         )

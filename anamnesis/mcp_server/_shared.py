@@ -375,6 +375,24 @@ def _check_names_against_convention(
 # =============================================================================
 
 
+def _sanitize_error_message(error_msg: str) -> str:
+    """Remove sensitive details from error messages returned to clients."""
+    import re as _re
+    _unix_path_re = r"(?:/(?:home|tmp|var|etc|usr|opt|root|Users|Windows)[^\s'\",:;)\}\]]*)"
+    sanitized = _re.sub(
+        _unix_path_re,
+        lambda m: '.../' + m.group(0).rsplit('/', 1)[-1] if '/' in m.group(0) else m.group(0),
+        error_msg,
+    )
+    _win_path_re = r"(?:[A-Z]:\\[^\s'\",:;)\}\]]+)"
+    sanitized = _re.sub(
+        _win_path_re,
+        lambda m: '...\\' + m.group(0).rsplit('\\', 1)[-1] if '\\' in m.group(0) else m.group(0),
+        sanitized,
+    )
+    return sanitized
+
+
 def _failure_response(error_message: str, **extra: object) -> dict:
     """Build a standard failure response dict.
 
@@ -442,7 +460,7 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                 "error_type": type(e).__name__,
             },
         )
-        return _failure_response(str(e))
+        return _failure_response(_sanitize_error_message(str(e)))
 
     def decorator(func):
         if inspect.iscoroutinefunction(func):

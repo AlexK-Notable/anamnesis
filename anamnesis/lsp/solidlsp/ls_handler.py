@@ -33,7 +33,7 @@ from anamnesis.lsp.solidlsp.lsp_protocol_handler.server import (
     make_request,
     make_response,
 )
-from anamnesis.lsp.solidlsp.util.subprocess_util import quote_arg, subprocess_kwargs
+from anamnesis.lsp.solidlsp.util.subprocess_util import subprocess_kwargs
 
 log = logging.getLogger(__name__)
 
@@ -187,10 +187,9 @@ class SolidLanguageServerHandler:
 
         cmd = self.process_launch_info.cmd
         is_windows = platform.system() == "Windows"
-        if not isinstance(cmd, str) and not is_windows:
-            # Since we are using the shell, we need to convert the command list to a single string
-            # on Linux/macOS
-            cmd = " ".join(map(quote_arg, cmd))
+        if not is_windows and isinstance(cmd, str):
+            import shlex
+            cmd = shlex.split(cmd)
         log.info("Starting language server process via command: %s", self.process_launch_info.cmd)
         kwargs = subprocess_kwargs()
         kwargs["start_new_session"] = self.start_independent_lsp_process
@@ -201,7 +200,7 @@ class SolidLanguageServerHandler:
             stderr=subprocess.PIPE,
             env=child_proc_env,
             cwd=self.process_launch_info.cwd,
-            shell=True,
+            shell=is_windows,
             **kwargs,
         )
 

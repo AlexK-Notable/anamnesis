@@ -118,6 +118,7 @@ def _list_sessions_impl(
     limit: int = 10,
 ) -> dict:
     """Implementation for list_sessions tool."""
+    limit = max(1, min(limit, 100))
     session_manager = _get_session_manager()
 
     if active_only:
@@ -139,6 +140,7 @@ def _get_decisions_impl(
     limit: int = 10,
 ) -> dict:
     """Implementation for get_decisions tool."""
+    limit = max(1, min(limit, 100))
     session_manager = _get_session_manager()
 
     if session_id:

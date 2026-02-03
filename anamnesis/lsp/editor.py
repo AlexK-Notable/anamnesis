@@ -73,13 +73,23 @@ class CodeEditor:
                 return sym
         raise ValueError(f"Symbol '{name_path}' resolved in query but not in walk")
 
+    def _resolve_safe_path(self, relative_path: str) -> str:
+        """Resolve a relative path safely within the project root."""
+        abs_path = os.path.realpath(os.path.join(self._project_root, relative_path))
+        root_real = os.path.realpath(self._project_root)
+        if not (abs_path == root_real or abs_path.startswith(root_real + os.sep)):
+            raise ValueError(
+                f"Path traversal denied: '{relative_path}' resolves outside project root"
+            )
+        return abs_path
+
     def _read_file(self, relative_path: str) -> str:
-        abs_path = os.path.join(self._project_root, relative_path)
+        abs_path = self._resolve_safe_path(relative_path)
         with open(abs_path, encoding=self._encoding) as f:
             return f.read()
 
     def _write_file(self, relative_path: str, content: str) -> None:
-        abs_path = os.path.join(self._project_root, relative_path)
+        abs_path = self._resolve_safe_path(relative_path)
         with open(abs_path, "w", encoding=self._encoding) as f:
             f.write(content)
 

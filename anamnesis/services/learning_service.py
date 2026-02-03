@@ -11,6 +11,7 @@ from anamnesis.constants import DEFAULT_IGNORE_DIRS
 from anamnesis.intelligence.pattern_engine import PatternEngine
 from anamnesis.intelligence.semantic_engine import SemanticEngine
 from anamnesis.utils.error_classifier import classify_error
+from anamnesis.utils.security import is_sensitive_file
 from anamnesis.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -368,6 +369,7 @@ class LearningService:
 
         # Limit files
         files = files[:max_files]
+        files = [f for f in files if not is_sensitive_file(str(f))]
 
         for file_path in files:
             try:
@@ -420,6 +422,7 @@ class LearningService:
                 for part in f.parts
             )
         ][:max_files]
+        files = [f for f in files if not is_sensitive_file(str(f))]
 
         for file_path in files:
             try:
@@ -462,6 +465,7 @@ class LearningService:
                 for part in f.parts
             )
         ][:max_files]
+        files = [f for f in files if not is_sensitive_file(str(f))]
 
         for file_path in files:
             try:

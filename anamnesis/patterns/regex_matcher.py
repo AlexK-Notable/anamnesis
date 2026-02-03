@@ -7,6 +7,8 @@ constructs across multiple languages.
 from __future__ import annotations
 
 import re
+import os
+import signal
 from dataclasses import dataclass
 from typing import Iterator, Optional
 
@@ -43,6 +45,9 @@ class RegexPatternMatcher(PatternMatcher):
         for match in matcher.match_pattern(content, "src/app.py", r"TODO:.*"):
             print(f"TODO found: {match.matched_text}")
     """
+
+    _MAX_REGEX_CONTENT_SIZE = 1_048_576  # 1MB
+    _REGEX_TIMEOUT_SECONDS = 5.0
 
     # Builtin patterns organized by language
     BUILTIN_PATTERNS: dict[str, list[RegexPattern]] = {
@@ -387,7 +392,7 @@ class RegexPatternMatcher(PatternMatcher):
         pattern: str,
         flags: int = 0,
     ) -> Iterator[PatternMatch]:
-        """Match a single custom pattern.
+        """Match a single custom pattern with ReDoS protection.
 
         Args:
             content: File content to search.
@@ -398,20 +403,57 @@ class RegexPatternMatcher(PatternMatcher):
         Yields:
             PatternMatch for each match found.
         """
+        from loguru import logger
+
+        # Guard: truncate oversized content
+        if len(content) > self._MAX_REGEX_CONTENT_SIZE:
+            logger.warning(
+                f"Content size {len(content)} exceeds limit "
+                f"{self._MAX_REGEX_CONTENT_SIZE}, truncating for regex match"
+            )
+            content = content[: self._MAX_REGEX_CONTENT_SIZE]
+
         lines = content.split("\n")
 
         try:
             compiled = re.compile(pattern, flags)
         except re.error as e:
-            from loguru import logger
-
             logger.warning(f"Invalid regex pattern '{pattern}': {e}")
             return
 
-        for match in compiled.finditer(content):
-            yield self._create_match(
-                match, content, lines, file_path, "_custom"
+        match_count = 0
+        max_matches = 10_000
+
+        def _timeout_handler(signum, frame):
+            raise TimeoutError("Regex match timed out")
+
+        use_alarm = os.name != "nt" and hasattr(signal, "SIGALRM")
+
+        if use_alarm:
+            old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
+            signal.alarm(int(self._REGEX_TIMEOUT_SECONDS))
+
+        try:
+            for match in compiled.finditer(content):
+                match_count += 1
+                if match_count > max_matches:
+                    logger.warning(
+                        f"Regex match count exceeded {max_matches} for pattern "
+                        f"'{pattern[:100]}', stopping"
+                    )
+                    break
+                yield self._create_match(
+                    match, content, lines, file_path, "_custom"
+                )
+        except TimeoutError:
+            logger.warning(
+                f"Regex search timed out after {self._REGEX_TIMEOUT_SECONDS}s "
+                f"for pattern '{pattern[:100]}'"
             )
+        finally:
+            if use_alarm:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
 
     def supports_language(self, language: str) -> bool:
         """Check if patterns exist for a language.
