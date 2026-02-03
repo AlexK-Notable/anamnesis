@@ -36,7 +36,7 @@ from .errors import (
     MCPErrorCode,
     MCPErrorUtils,
     ResourceError,
-    SystemError,
+    AnamnesisSystemError,
     ValidationError,
 )
 
@@ -188,7 +188,7 @@ __all__ = [
     "LearningError",
     "ExecutionError",
     "ConfigurationError",
-    "SystemError",
+    "AnamnesisSystemError",
     "DatabaseError",
     "ErrorFactory",
     "MCPErrorUtils",

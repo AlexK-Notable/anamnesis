@@ -1,7 +1,7 @@
 """Synchronous wrapper for SQLiteBackend.
 
 Bridges async storage layer to synchronous service layer.
-Uses asyncio.run() for individual operations or persistent loop for batches.
+Uses a persistent event loop for all operations.
 """
 
 import asyncio
@@ -52,30 +52,20 @@ class SyncSQLiteBackend:
             db_path: Path to SQLite database file or ":memory:"
         """
         self._async_backend = SQLiteBackend(db_path)
-        self._batch_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
 
     def _run(self, coro):
-        """Run coroutine synchronously.
-
-        Uses batch loop if in batch context, otherwise creates new loop.
-        """
-        if self._batch_loop is not None:
-            return self._batch_loop.run_until_complete(coro)
-        return asyncio.run(coro)
+        """Run coroutine synchronously using the persistent event loop."""
+        return self._loop.run_until_complete(coro)
 
     @contextmanager
     def batch_context(self) -> Generator[None, None, None]:
-        """Context manager for batch operations with persistent event loop.
+        """Context manager for batch operations.
 
-        More efficient for multiple sequential operations as it reuses
-        a single event loop instead of creating one per operation.
+        Retained for API compatibility. All operations already share
+        a persistent event loop, so this is now a no-op context.
         """
-        self._batch_loop = asyncio.new_event_loop()
-        try:
-            yield
-        finally:
-            self._batch_loop.close()
-            self._batch_loop = None
+        yield
 
     # =========================================================================
     # Connection Management
@@ -91,8 +81,9 @@ class SyncSQLiteBackend:
         self._run(self._async_backend.connect())
 
     def close(self) -> None:
-        """Close database connection."""
+        """Close database connection and event loop."""
         self._run(self._async_backend.close())
+        self._loop.close()
 
     def get_migration_status(self) -> dict:
         """Get migration status."""

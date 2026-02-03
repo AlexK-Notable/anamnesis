@@ -9,7 +9,7 @@ Ported from TypeScript error-types.ts
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import IntEnum
+from enum import Enum, IntEnum
 from typing import Any
 
 
@@ -80,7 +80,7 @@ class ErrorCode(IntEnum):
     VALIDATION_FAILED = 6003
 
 
-class ErrorSeverity(str):
+class ErrorSeverity(str, Enum):
     """Error severity levels."""
 
     LOW = "low"
@@ -397,7 +397,7 @@ class ResourceError(AnamnesisError):
         )
 
 
-class SystemError(AnamnesisError):
+class AnamnesisSystemError(AnamnesisError):
     """Error related to system/infrastructure issues."""
 
     def __init__(
