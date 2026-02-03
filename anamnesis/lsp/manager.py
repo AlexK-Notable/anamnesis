@@ -133,7 +133,7 @@ class LspManager:
             )
             ls_class = lang_enum.get_ls_class()
             server = ls_class(config, self._project_root, self._settings)
-            server._start_server()
+            server._start_server_process()
             self._servers[lang_enum] = server
             log.info("Started %s language server for project %s",
                      language, os.path.basename(self._project_root))
@@ -150,7 +150,7 @@ class LspManager:
 
         server = self._servers.pop(lang_enum)
         try:
-            server.shutdown()
+            server.stop()
             log.info("Stopped %s language server", language)
         except Exception:
             log.warning("Error stopping %s language server", language, exc_info=True)
@@ -160,7 +160,7 @@ class LspManager:
         for lang_enum in list(self._servers.keys()):
             server = self._servers.pop(lang_enum)
             try:
-                server.shutdown()
+                server.stop()
                 log.info("Stopped %s language server", lang_enum.value)
             except Exception:
                 log.warning("Error stopping %s language server",
