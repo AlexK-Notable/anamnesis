@@ -64,6 +64,7 @@ from anamnesis.mcp_server.tools import (  # noqa: F401
     _list_sessions_impl,
     _get_decisions_impl,
     # project
+    _activate_project_impl,
     _get_project_config_impl,
     _list_projects_impl,
     # memory + metacognition

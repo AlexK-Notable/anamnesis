@@ -44,6 +44,7 @@ from anamnesis.mcp_server.tools.monitoring import (  # noqa: F401
     _get_system_status_impl,
 )
 from anamnesis.mcp_server.tools.project import (  # noqa: F401
+    _activate_project_impl,
     _get_project_config_impl,
     _list_projects_impl,
 )

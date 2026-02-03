@@ -76,11 +76,11 @@ def _predict_coding_approach_impl(
         problem_description=problem_description,
     )
 
-    result = prediction.to_dict()
-    result["success"] = True
-    result["include_file_routing"] = include_file_routing
-
-    return result
+    return {
+        "success": True,
+        "prediction": prediction.to_dict(),
+        "include_file_routing": include_file_routing,
+    }
 
 
 @_with_error_handling("get_developer_profile")
@@ -97,9 +97,10 @@ def _get_developer_profile_impl(
         project_path=_get_current_path(),
     )
 
-    result = profile.to_dict()
-    result["success"] = True
-    return result
+    return {
+        "success": True,
+        "profile": profile.to_dict(),
+    }
 
 
 @_with_error_handling("contribute_insights")
@@ -142,9 +143,10 @@ def _get_project_blueprint_impl(
         include_feature_map=include_feature_map,
     )
 
-    result = dict(blueprint) if blueprint else {}
-    result["success"] = True
-    return result
+    return {
+        "success": True,
+        "blueprint": dict(blueprint) if blueprint else {},
+    }
 
 
 # =============================================================================

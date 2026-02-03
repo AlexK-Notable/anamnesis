@@ -54,7 +54,7 @@ Use `write_memory` and `read_memory` to persist project knowledge across
 sessions. Use `reflect` to pause and think before, during, and after
 complex tasks.
 
-For multi-project workflows, use `get_project_config(activate=path)` to switch between
+For multi-project workflows, use `activate_project(path)` to switch between
 projects. Each project gets isolated services, preventing cross-project
 data contamination.
 """,

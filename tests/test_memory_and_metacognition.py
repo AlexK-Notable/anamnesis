@@ -554,9 +554,9 @@ class TestToolRegistration:
         assert "edit_memory" in tool_names
 
     def test_total_tool_count(self):
-        """Server has expected total tool count after consolidation (42 → 35)."""
+        """Server has expected total tool count after consolidation + API split."""
         from anamnesis.mcp_server.server import mcp
 
         tool_count = len(mcp._tool_manager._tools)
-        # Phase 2 consolidation: 4 monitoring→1, 2 learning→1, 2 project→1, 3 metacognition→1
-        assert tool_count == 35
+        # Phase 2 consolidation: 42→35, then +1 activate_project (CQS split from get_project_config)
+        assert tool_count == 36

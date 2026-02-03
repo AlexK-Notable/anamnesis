@@ -1,4 +1,4 @@
-"""Project management tools — config and project listing."""
+"""Project management tools — config, activation, and project listing."""
 
 from typing import Optional
 
@@ -14,18 +14,22 @@ from anamnesis.mcp_server._shared import (
 # =============================================================================
 
 
-@_with_error_handling("activate_project")
-def _get_project_config_impl(activate: Optional[str] = None) -> dict:
-    """Implementation for get_project_config tool."""
-    if activate:
-        ctx = _registry.activate(activate)
-        return {
-            "success": True,
-            "activated": ctx.to_dict(),
-            "registry": _registry.to_dict(),
-        }
+@_with_error_handling("get_project_config")
+def _get_project_config_impl() -> dict:
+    """Implementation for get_project_config tool (read-only)."""
     return {
         "success": True,
+        "registry": _registry.to_dict(),
+    }
+
+
+@_with_error_handling("activate_project")
+def _activate_project_impl(path: str) -> dict:
+    """Implementation for activate_project tool."""
+    ctx = _registry.activate(path)
+    return {
+        "success": True,
+        "activated": ctx.to_dict(),
         "registry": _registry.to_dict(),
     }
 
@@ -51,20 +55,41 @@ def _list_projects_impl() -> dict:
 def get_project_config(
     activate: Optional[str] = None,
 ) -> dict:
-    """Get or change the active project configuration.
+    """Get the current project configuration and registry state.
 
-    Without `activate`, returns the current project configuration and
-    registry state. With `activate`, switches the active project context
-    first, then returns the updated configuration.
+    Returns the active project context and all known projects.
+
+    For multi-project workflows, use `activate_project(path)` to switch
+    between projects. Each project gets isolated services, preventing
+    cross-project data contamination.
 
     Args:
-        activate: Optional path to activate as the current project.
-            If provided, switches context before returning config.
+        activate: Deprecated — use activate_project() instead.
+            If provided, activates the project for backward compatibility.
 
     Returns:
         Registry state with project details and active project info
     """
-    return _get_project_config_impl(activate)
+    if activate:
+        return _activate_project_impl(activate)
+    return _get_project_config_impl()
+
+
+@mcp.tool
+def activate_project(path: str) -> dict:
+    """Switch the active project context to a different directory.
+
+    Each project gets isolated services (database, intelligence, sessions),
+    preventing cross-project data contamination. After activation, all
+    subsequent tool calls operate on the newly activated project.
+
+    Args:
+        path: Absolute path to the project directory to activate.
+
+    Returns:
+        Activated project details and updated registry state
+    """
+    return _activate_project_impl(path)
 
 
 @mcp.tool

@@ -315,8 +315,10 @@ class TestMCPToolExecution:
         content = response["result"]["content"][0]
         blueprint = json.loads(content["text"])
 
-        assert "tech_stack" in blueprint
-        assert "learning_status" in blueprint
+        assert "blueprint" in blueprint
+        bp = blueprint["blueprint"]
+        assert "tech_stack" in bp
+        assert "learning_status" in bp
 
     def test_auto_learn_if_needed_tool(self, mcp_server, temp_project):
         """Execute auto_learn_if_needed tool via MCP."""

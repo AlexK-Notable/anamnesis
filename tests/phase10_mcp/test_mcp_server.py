@@ -221,9 +221,11 @@ class UserService:
             problem_description="add user authentication"
         ))
 
-        assert "approach" in result
-        assert "confidence" in result
-        assert "reasoning" in result
+        assert "prediction" in result
+        prediction = result["prediction"]
+        assert "approach" in prediction
+        assert "confidence" in prediction
+        assert "reasoning" in prediction
 
     def test_get_developer_profile(self, temp_codebase):
         """Test getting developer profile."""
@@ -231,9 +233,11 @@ class UserService:
 
         result = _as_dict(_get_developer_profile_impl())
 
-        assert "preferred_patterns" in result
-        assert "coding_style" in result
-        assert "expertise_areas" in result
+        assert "profile" in result
+        profile = result["profile"]
+        assert "preferred_patterns" in profile
+        assert "coding_style" in profile
+        assert "expertise_areas" in profile
 
     def test_get_developer_profile_with_context(self, temp_codebase):
         """Test developer profile with work context."""
@@ -285,8 +289,10 @@ class UserService:
 
         result = _as_dict(_get_project_blueprint_impl(path=temp_codebase))
 
-        assert "tech_stack" in result
-        assert "learning_status" in result
+        assert "blueprint" in result
+        blueprint = result["blueprint"]
+        assert "tech_stack" in blueprint
+        assert "learning_status" in blueprint
 
 
 class TestAutomationTools:
