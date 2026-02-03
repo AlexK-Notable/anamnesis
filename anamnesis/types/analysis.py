@@ -9,9 +9,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from .core import ComplexityMetrics
+from .core import AnalyzedConcept, ComplexityMetrics
 from .patterns import AnalyzedPattern
-from .semantic import AnalyzedConcept
 
 
 @dataclass

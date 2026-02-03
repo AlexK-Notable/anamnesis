@@ -3,13 +3,10 @@ Anamnesis utility modules.
 
 This package provides shared utilities used across the Anamnesis codebase:
 - Logging (MCP-safe)
-- Caching (LRU with TTL)
 - Security (path validation, sensitive file detection)
-- Progress tracking (multi-phase with console rendering)
 - Language detection and registry
-- Graceful shutdown management
-- Resilience (retry, circuit breaker, error classification)
-- Response wrapping (standardized operation results)
+- Resilience (circuit breaker, error classification)
+- TOON encoding and response formatting
 """
 
 # Logger
@@ -27,15 +24,6 @@ from .logger import (
     with_correlation_id,
 )
 
-# LRU Cache
-from .lru_cache import (
-    AsyncLRUCache,
-    CacheEntry,
-    LRUCache,
-    LRUCacheStats,
-    ttl_cache,
-)
-
 # Security
 from .security import (
     PathValidationResult,
@@ -50,14 +38,6 @@ from .security import (
     validate_enum_value,
     validate_positive_integer,
     validate_string_length,
-)
-
-# Console Progress
-from .console_progress import (
-    ConsoleProgressRenderer,
-    PhaseProgress,
-    ProgressPhase,
-    ProgressTracker,
 )
 
 # Language Registry
@@ -85,37 +65,6 @@ from .language_registry import (
     should_ignore_path,
 )
 
-# Shutdown Manager
-from .shutdown_manager import (
-    ShutdownCallback,
-    ShutdownManager,
-    ShutdownPriority,
-    ShutdownReport,
-    ShutdownResult,
-    get_shutdown_manager,
-    graceful_shutdown,
-    is_shutdown_requested,
-    on_shutdown,
-    register_shutdown_callback,
-    request_shutdown,
-)
-
-# Retry (Phase 2)
-from .retry import (
-    Retrier,
-    RetryConfig,
-    RetryResult,
-    RetryStats,
-    calculate_delay,
-    create_api_retry_config,
-    create_database_retry_config,
-    create_file_retry_config,
-    get_default_retrier,
-    is_retryable,
-    retry,
-    retry_async,
-)
-
 # Circuit Breaker (Phase 2)
 from .circuit_breaker import (
     CircuitBreaker,
@@ -141,16 +90,6 @@ from .error_classifier import (
     get_default_classifier,
     is_retryable as is_error_retryable,
     should_trip_breaker,
-)
-
-# Response Wrapper (Phase 2)
-from .response_wrapper import (
-    BatchResponse,
-    PaginatedResponse,
-    ResponseMetadata,
-    ResponseWrapper,
-    wrap_async_operation,
-    wrap_operation,
 )
 
 # TOON Encoder (Phase 13)
@@ -189,12 +128,6 @@ __all__ = [
     "logger",
     "run_with_request_context",
     "with_correlation_id",
-    # LRU Cache
-    "AsyncLRUCache",
-    "CacheEntry",
-    "LRUCache",
-    "LRUCacheStats",
-    "ttl_cache",
     # Security
     "PathValidationResult",
     "PathValidator",
@@ -208,11 +141,6 @@ __all__ = [
     "validate_enum_value",
     "validate_positive_integer",
     "validate_string_length",
-    # Console Progress
-    "ConsoleProgressRenderer",
-    "PhaseProgress",
-    "ProgressPhase",
-    "ProgressTracker",
     # Language Registry
     "DEFAULT_IGNORE_FILES",
     "EXTENSION_TO_LANGUAGE",
@@ -235,31 +163,6 @@ __all__ = [
     "is_code_file",
     "normalize_language_name",
     "should_ignore_path",
-    # Shutdown Manager
-    "ShutdownCallback",
-    "ShutdownManager",
-    "ShutdownPriority",
-    "ShutdownReport",
-    "ShutdownResult",
-    "get_shutdown_manager",
-    "graceful_shutdown",
-    "is_shutdown_requested",
-    "on_shutdown",
-    "register_shutdown_callback",
-    "request_shutdown",
-    # Retry (Phase 2)
-    "Retrier",
-    "RetryConfig",
-    "RetryResult",
-    "RetryStats",
-    "calculate_delay",
-    "create_api_retry_config",
-    "create_database_retry_config",
-    "create_file_retry_config",
-    "get_default_retrier",
-    "is_retryable",
-    "retry",
-    "retry_async",
     # Circuit Breaker (Phase 2)
     "CircuitBreaker",
     "CircuitBreakerError",
@@ -281,13 +184,6 @@ __all__ = [
     "get_default_classifier",
     "is_error_retryable",
     "should_trip_breaker",
-    # Response Wrapper (Phase 2)
-    "BatchResponse",
-    "PaginatedResponse",
-    "ResponseMetadata",
-    "ResponseWrapper",
-    "wrap_async_operation",
-    "wrap_operation",
     # TOON Encoder (Phase 13)
     "ResponseFormat",
     "ToonEncoder",

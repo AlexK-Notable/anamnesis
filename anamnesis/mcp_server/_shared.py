@@ -306,6 +306,13 @@ def _categorize_references(references: list[dict]) -> dict[str, list[dict]]:
     return categories
 
 
+_RE_UPPER_CASE = re.compile(r"^[A-Z][A-Z0-9_]*$")
+_RE_PASCAL_CASE = re.compile(r"^[A-Z][a-zA-Z0-9]*$")
+_RE_SNAKE_CASE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$")
+_RE_CAMEL_CASE = re.compile(r"^[a-z][a-zA-Z0-9]*$")
+_RE_FLAT_CASE = re.compile(r"^[a-z][a-z0-9]*$")
+
+
 def _detect_naming_style(name: str) -> str:
     """Detect the naming convention of a single identifier.
 
@@ -320,15 +327,15 @@ def _detect_naming_style(name: str) -> str:
     if not name:
         return "unknown"
 
-    if re.match(r"^[A-Z][A-Z0-9_]*$", name) and "_" in name:
+    if _RE_UPPER_CASE.match(name) and "_" in name:
         return "UPPER_CASE"
-    if re.match(r"^[A-Z][a-zA-Z0-9]*$", name):
+    if _RE_PASCAL_CASE.match(name):
         return "PascalCase"
-    if re.match(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$", name):
+    if _RE_SNAKE_CASE.match(name):
         return "snake_case"
-    if re.match(r"^[a-z][a-zA-Z0-9]*$", name) and any(c.isupper() for c in name):
+    if _RE_CAMEL_CASE.match(name) and any(c.isupper() for c in name):
         return "camelCase"
-    if re.match(r"^[a-z][a-z0-9]*$", name):
+    if _RE_FLAT_CASE.match(name):
         return "flat_case"
     if "-" in name:
         return "kebab-case"
@@ -375,18 +382,17 @@ def _check_names_against_convention(
 # =============================================================================
 
 
+_RE_UNIX_PATH = re.compile(r"(?:/(?:home|tmp|var|etc|usr|opt|root|Users|Windows)[^\s'\",:;)\}\]]*)")
+_RE_WIN_PATH = re.compile(r"(?:[A-Z]:\\[^\s'\",:;)\}\]]+)")
+
+
 def _sanitize_error_message(error_msg: str) -> str:
     """Remove sensitive details from error messages returned to clients."""
-    import re as _re
-    _unix_path_re = r"(?:/(?:home|tmp|var|etc|usr|opt|root|Users|Windows)[^\s'\",:;)\}\]]*)"
-    sanitized = _re.sub(
-        _unix_path_re,
+    sanitized = _RE_UNIX_PATH.sub(
         lambda m: '.../' + m.group(0).rsplit('/', 1)[-1] if '/' in m.group(0) else m.group(0),
         error_msg,
     )
-    _win_path_re = r"(?:[A-Z]:\\[^\s'\",:;)\}\]]+)"
-    sanitized = _re.sub(
-        _win_path_re,
+    sanitized = _RE_WIN_PATH.sub(
         lambda m: '...\\' + m.group(0).rsplit('\\', 1)[-1] if '\\' in m.group(0) else m.group(0),
         sanitized,
     )

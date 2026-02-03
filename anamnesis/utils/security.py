@@ -408,24 +408,23 @@ def get_sensitivity_reason(file_path: str) -> str | None:
     """
     normalized = file_path.replace("\\", "/").lower()
 
-    if re.search(r"\.env", normalized):
-        return "Environment file may contain secrets"
-    if re.search(r"\.(pem|key|p12|pfx)$", normalized):
-        return "Private key file"
-    if re.search(r"credentials\.(json|yaml|yml)$", normalized):
-        return "Credentials file"
-    if re.search(r"id_(rsa|dsa|ed25519|ecdsa)$", normalized):
-        return "SSH private key"
-    if re.search(r"\.aws/", normalized):
-        return "AWS configuration"
-    if re.search(r"\.ssh/", normalized):
-        return "SSH configuration"
-    if re.search(r"\.kube/|kubeconfig", normalized):
-        return "Kubernetes configuration"
-    if re.search(r"\.db$|\.sqlite$", normalized):
-        return "Database file"
+    for pattern, reason in _SENSITIVE_REASON_PATTERNS:
+        if pattern.search(normalized):
+            return reason
 
     return None
+
+
+_SENSITIVE_REASON_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"\.env", re.IGNORECASE), "Environment file may contain secrets"),
+    (re.compile(r"\.(pem|key|p12|pfx)$", re.IGNORECASE), "Private key file"),
+    (re.compile(r"credentials\.(json|yaml|yml)$", re.IGNORECASE), "Credentials file"),
+    (re.compile(r"id_(rsa|dsa|ed25519|ecdsa)$", re.IGNORECASE), "SSH private key"),
+    (re.compile(r"\.aws/", re.IGNORECASE), "AWS configuration"),
+    (re.compile(r"\.ssh/", re.IGNORECASE), "SSH configuration"),
+    (re.compile(r"\.kube/|kubeconfig", re.IGNORECASE), "Kubernetes configuration"),
+    (re.compile(r"\.db$|\.sqlite$", re.IGNORECASE), "Database file"),
+]
 
 
 # ============================================================================
