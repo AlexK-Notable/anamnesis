@@ -4,8 +4,6 @@ Tests that prove learned data persists to and loads from SyncSQLiteBackend.
 Uses real database, no mocks.
 """
 
-import tempfile
-from pathlib import Path
 
 import pytest
 

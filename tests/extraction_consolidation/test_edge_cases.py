@@ -4,10 +4,8 @@ These tests verify that tree-sitter extraction handles degenerate inputs
 gracefully: malformed code, empty files, unicode, large files, etc.
 """
 
-import pytest
 
 from anamnesis.extractors.symbol_extractor import extract_symbols_from_source
-from anamnesis.extractors.pattern_extractor import extract_patterns_from_source
 
 
 class TestMalformedCode:

@@ -2,7 +2,7 @@
 
 import pytest
 
-from anamnesis.parsing.ast_types import NodeType, ParsedNode
+from anamnesis.parsing.ast_types import NodeType
 from anamnesis.parsing.tree_sitter_wrapper import (
     LANGUAGE_MAP,
     TreeSitterParser,

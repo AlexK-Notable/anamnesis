@@ -12,7 +12,6 @@ Bug Caught by Each Test:
 - test_round_trip_*: Data loss during encode/decode cycle
 """
 
-import json
 from typing import Any
 
 import pytest

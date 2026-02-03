@@ -1,6 +1,5 @@
 """Tests for symbol extractor module."""
 
-import pytest
 
 from anamnesis.extractors.symbol_extractor import (
     ExtractedSymbol,

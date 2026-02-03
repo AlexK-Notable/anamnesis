@@ -6,7 +6,6 @@ based on learned patterns from the codebase.
 
 from __future__ import annotations
 
-import hashlib
 import re
 from dataclasses import dataclass, field
 from enum import Enum

@@ -9,11 +9,8 @@ Tests for the change analyzer including:
 - Insight generation
 """
 
-import time
-from datetime import datetime
 from unittest.mock import MagicMock
 
-import pytest
 
 from anamnesis.watchers.change_analyzer import (
     AnalyzerOptions,

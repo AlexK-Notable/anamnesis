@@ -18,7 +18,7 @@ from pathlib import Path
 # Add parent to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from tests.conftest import RUST_OUTPUT_DIR, compare_concepts
+from tests.conftest import RUST_OUTPUT_DIR
 
 
 def compare_phase(phase: int) -> tuple[int, list[str]]:

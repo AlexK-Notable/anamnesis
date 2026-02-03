@@ -8,7 +8,6 @@ from anamnesis.utils.logger import logger
 
 from anamnesis.mcp_server._shared import (
     _ensure_semantic_search,
-    _failure_response,
     _get_codebase_service,
     _get_current_path,
     _get_search_service,
@@ -63,37 +62,25 @@ async def _search_codebase_impl(
         language=language,
     )
 
-    # Execute search
-    try:
-        results = await search_service.search(search_query)
+    # Execute search (errors propagate to _with_error_handling decorator)
+    results = await search_service.search(search_query)
 
-        return {
-            "success": True,
-            "results": [
-                {
-                    "file": r.file_path,
-                    "matches": r.matches,
-                    "score": r.score,
-                }
-                for r in results
-            ],
-            "query": query,
-            "search_type": search_type,
-            "total": len(results),
-            "path": current_path,
-            "available_types": [t.value for t in search_service.get_available_backends()],
-        }
-
-    except Exception as e:
-        logger.error(f"Search failed: {e}")
-        return _failure_response(
-            str(e),
-            results=[],
-            query=query,
-            search_type=search_type,
-            total=0,
-            path=current_path,
-        )
+    return {
+        "success": True,
+        "results": [
+            {
+                "file": r.file_path,
+                "matches": r.matches,
+                "score": r.score,
+            }
+            for r in results
+        ],
+        "query": query,
+        "search_type": search_type,
+        "total": len(results),
+        "path": current_path,
+        "available_types": [t.value for t in search_service.get_available_backends()],
+    }
 
 
 @_with_error_handling("analyze_codebase")

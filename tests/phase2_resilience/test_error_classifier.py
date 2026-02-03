@@ -10,7 +10,6 @@ Tests for the error classifier module including:
 - AnamnesisError integration
 """
 
-import pytest
 
 from anamnesis.types.errors import (
     AnamnesisError,

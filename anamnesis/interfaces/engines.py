@@ -7,7 +7,6 @@ and loose coupling between components.
 Ported from TypeScript engines.ts
 """
 
-from abc import abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Literal, Protocol, TypeVar

@@ -3,7 +3,6 @@
 import pytest
 from pathlib import Path
 import tempfile
-import os
 
 from anamnesis.intelligence.semantic_engine import (
     ConceptType,

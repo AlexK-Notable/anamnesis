@@ -11,7 +11,6 @@ from typing import Any, Callable, Optional
 from watchdog.events import (
     DirCreatedEvent,
     DirDeletedEvent,
-    DirModifiedEvent,
     FileCreatedEvent,
     FileDeletedEvent,
     FileModifiedEvent,

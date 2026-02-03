@@ -11,10 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Callable, Protocol
+from dataclasses import dataclass
+from typing import Any, Protocol
 
 from anamnesis.constants import utcnow
 

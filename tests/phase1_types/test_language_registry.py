@@ -10,13 +10,11 @@ Tests for language detection and metadata registry including:
 
 import pytest
 
+from anamnesis.constants import DEFAULT_IGNORE_DIRS
 from anamnesis.utils import (
-    DEFAULT_IGNORE_DIRS,
     DEFAULT_IGNORE_FILES,
     EXTENSION_TO_LANGUAGE,
-    LANGUAGES,
     LanguageCategory,
-    LanguageInfo,
     detect_language,
     detect_language_from_extension,
     get_all_extensions,
@@ -25,7 +23,6 @@ from anamnesis.utils import (
     get_compiled_languages,
     get_default_watch_patterns,
     get_extensions_for_language,
-    get_file_patterns_for_language,
     get_language_info,
     get_languages_by_category,
     get_typed_languages,

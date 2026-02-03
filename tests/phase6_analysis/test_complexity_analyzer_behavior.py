@@ -5,7 +5,6 @@ Each test uses code with predictable complexity values.
 """
 
 import tempfile
-from pathlib import Path
 
 import pytest
 

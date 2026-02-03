@@ -13,7 +13,6 @@ Consolidated from patterns found across the TypeScript In-Memoria codebase.
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Literal
 
 
 # ============================================================================
@@ -730,7 +729,7 @@ def get_default_watch_patterns() -> list[str]:
 
 
 # Common directories to ignore during file scanning
-DEFAULT_IGNORE_DIRS = frozenset({
+_SCAN_IGNORE_DIRS = frozenset({
     "node_modules",
     "__pycache__",
     ".git",
@@ -802,7 +801,7 @@ def should_ignore_path(path: str) -> bool:
 
     # Check if any parent directory is in ignore list
     for part in path_obj.parts:
-        if part in DEFAULT_IGNORE_DIRS:
+        if part in _SCAN_IGNORE_DIRS:
             return True
 
     # Check filename

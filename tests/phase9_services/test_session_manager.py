@@ -3,9 +3,9 @@
 Tests session lifecycle management and decision recording.
 """
 
-from datetime import datetime
-
 import pytest
+
+from anamnesis.constants import utcnow
 
 from anamnesis.services.session_manager import (
     DecisionInfo,
@@ -35,7 +35,7 @@ class TestSessionInfo:
 
     def test_creation(self):
         """Test SessionInfo creation."""
-        now = datetime.utcnow()
+        now = utcnow()
         info = SessionInfo(
             session_id="session_123",
             name="Test Session",
@@ -52,7 +52,7 @@ class TestSessionInfo:
 
     def test_to_dict(self):
         """Test SessionInfo.to_dict()."""
-        now = datetime.utcnow()
+        now = utcnow()
         info = SessionInfo(
             session_id="session_123",
             name="Test",
@@ -74,7 +74,7 @@ class TestDecisionInfo:
 
     def test_creation(self):
         """Test DecisionInfo creation."""
-        now = datetime.utcnow()
+        now = utcnow()
         info = DecisionInfo(
             decision_id="decision_123",
             decision="Use JWT",
@@ -90,7 +90,7 @@ class TestDecisionInfo:
 
     def test_to_dict(self):
         """Test DecisionInfo.to_dict()."""
-        now = datetime.utcnow()
+        now = utcnow()
         info = DecisionInfo(
             decision_id="decision_123",
             decision="Use JWT",

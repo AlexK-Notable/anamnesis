@@ -1,6 +1,5 @@
 """Tests for import extractor module."""
 
-import pytest
 
 from anamnesis.extractors.import_extractor import (
     ExtractedImport,

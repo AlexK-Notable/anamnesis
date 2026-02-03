@@ -85,7 +85,6 @@ def _auto_learn_if_needed_impl(
     response = {
         "success": result.success,
         "status": "learned" if result.success else "failed",
-        "message": "Successfully learned from codebase" if result.success else result.error,
         "path": resolved_path,
         "action_taken": "learn",
         "concepts_learned": result.concepts_learned,
@@ -93,6 +92,10 @@ def _auto_learn_if_needed_impl(
         "features_learned": result.features_learned,
         "time_elapsed_ms": result.time_elapsed_ms,
     }
+    if result.success:
+        response["message"] = "Successfully learned from codebase"
+    else:
+        response["error"] = result.error
 
     if include_progress:
         response["insights"] = result.insights

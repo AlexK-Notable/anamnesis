@@ -1,6 +1,5 @@
 """Tests for AST types module."""
 
-import pytest
 
 from anamnesis.parsing.ast_types import (
     ASTContext,

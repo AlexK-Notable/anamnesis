@@ -15,6 +15,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from anamnesis.constants import DEFAULT_IGNORE_DIRS
+
 
 class ConceptType(str, Enum):
     """Types of semantic concepts.
@@ -302,17 +304,7 @@ class SemanticEngine:
         Returns:
             Dictionary mapping languages to file counts.
         """
-        ignore_dirs = ignore_dirs or {
-            "node_modules",
-            ".git",
-            "__pycache__",
-            ".venv",
-            "venv",
-            ".tox",
-            "dist",
-            "build",
-            "target",
-        }
+        ignore_dirs = ignore_dirs or DEFAULT_IGNORE_DIRS | {"dist", "build", "target", ".tox"}
 
         language_counts: dict[str, int] = {}
         dir_path = Path(directory)
@@ -548,15 +540,7 @@ class SemanticEngine:
             subdir_name = subdir.name.lower()
 
             # Skip hidden and common non-code directories
-            if subdir_name.startswith(".") or subdir_name in {
-                "node_modules",
-                "__pycache__",
-                "venv",
-                ".venv",
-                "dist",
-                "build",
-                "target",
-            }:
+            if subdir_name.startswith(".") or subdir_name in (DEFAULT_IGNORE_DIRS | {"dist", "build", "target"}):
                 continue
 
             # Determine directory type
@@ -630,16 +614,7 @@ class SemanticEngine:
                 continue
 
             # Skip ignored directories
-            if any(
-                part in {
-                    "node_modules",
-                    ".git",
-                    "__pycache__",
-                    ".venv",
-                    "venv",
-                }
-                for part in file_path.parts
-            ):
+            if any(part in DEFAULT_IGNORE_DIRS for part in file_path.parts):
                 continue
 
             total_files += 1

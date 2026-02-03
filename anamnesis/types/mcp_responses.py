@@ -7,7 +7,7 @@ Ported from TypeScript mcp-responses.ts
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
 from .analysis import DirectoryStructure
 from .core import ComplexityMetrics, ConceptSummary

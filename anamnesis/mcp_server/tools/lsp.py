@@ -3,6 +3,7 @@
 from anamnesis.mcp_server._shared import (
     _categorize_references,
     _check_names_against_convention,
+    _failure_response,
     _get_active_context,
     _get_intelligence_service,
     _get_symbol_service,
@@ -147,11 +148,10 @@ def _enable_lsp_impl(language: str = "") -> dict:
         success = mgr.start(language)
         if success:
             return {"success": True, "message": f"LSP server for '{language}' started"}
-        return {
-            "success": False,
-            "error": f"Failed to start LSP server for '{language}'. "
-                     f"Ensure the language server binary is installed.",
-        }
+        return _failure_response(
+            f"Failed to start LSP server for '{language}'. "
+            f"Ensure the language server binary is installed."
+        )
     # Start all available
     results = {}
     for lang in ["python", "go", "rust", "typescript"]:

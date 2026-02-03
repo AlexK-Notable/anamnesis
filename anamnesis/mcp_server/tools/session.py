@@ -3,6 +3,7 @@
 from typing import Optional
 
 from anamnesis.mcp_server._shared import (
+    _failure_response,
     _get_session_manager,
     _with_error_handling,
     mcp,
@@ -47,10 +48,7 @@ def _end_session_impl(
 
     target_id = session_id or session_manager.active_session_id
     if not target_id:
-        return {
-            "success": False,
-            "error": "No active session to end",
-        }
+        return _failure_response("No active session to end")
 
     success = session_manager.end_session(target_id)
 
@@ -62,10 +60,7 @@ def _end_session_impl(
             "message": f"Session '{target_id}' ended",
         }
     else:
-        return {
-            "success": False,
-            "error": f"Session '{target_id}' not found",
-        }
+        return _failure_response(f"Session '{target_id}' not found")
 
 
 @_with_error_handling("record_decision")
@@ -105,11 +100,7 @@ def _get_session_impl(
 
     target_id = session_id or session_manager.active_session_id
     if not target_id:
-        return {
-            "success": False,
-            "session": None,
-            "error": "No active session",
-        }
+        return _failure_response("No active session", session=None)
 
     session = session_manager.get_session(target_id)
     if session:
@@ -118,11 +109,7 @@ def _get_session_impl(
             "session": session.to_dict(),
         }
     else:
-        return {
-            "success": False,
-            "session": None,
-            "error": f"Session '{target_id}' not found",
-        }
+        return _failure_response(f"Session '{target_id}' not found", session=None)
 
 
 @_with_error_handling("list_sessions")

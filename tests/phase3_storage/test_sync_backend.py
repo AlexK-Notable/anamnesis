@@ -8,27 +8,19 @@ Tests the synchronous wrapper for SQLiteBackend including:
 """
 
 import tempfile
-from datetime import datetime
 from pathlib import Path
+
+from anamnesis.constants import utcnow
 
 import pytest
 
 from anamnesis.storage.schema import (
     AIInsight,
-    ArchitecturalDecision,
     ConceptType,
-    DecisionStatus,
     DeveloperPattern,
-    EntryPoint,
-    FeatureMap,
-    FileIntelligence,
     InsightType,
-    KeyDirectory,
     PatternType,
-    ProjectDecision,
-    ProjectMetadata,
     SemanticConcept,
-    SharedPattern,
     WorkSession,
 )
 from anamnesis.storage.sync_backend import SyncSQLiteBackend
@@ -266,7 +258,7 @@ class TestSyncWorkSessionCRUD:
         ended_session = WorkSession(
             id="ended-1",
             name="Ended Session",
-            ended_at=datetime.utcnow(),
+            ended_at=utcnow(),
         )
 
         memory_backend.save_work_session(active_session)
@@ -534,7 +526,7 @@ class TestSyncRoundTrip:
 
     def test_work_session_round_trip_full_fields(self, memory_backend):
         """Work session with all fields survives round-trip."""
-        started_at = datetime.utcnow()
+        started_at = utcnow()
         original = WorkSession(
             id="round-trip-session",
             name="Feature Implementation",

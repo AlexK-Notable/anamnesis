@@ -562,6 +562,3 @@ def log(message: str) -> None:
             # Verify we got meaningful results
             assert blueprint is not None
             assert "tech_stack" in blueprint
-
-            # The pipeline should complete without errors
-            assert True

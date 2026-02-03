@@ -1,7 +1,5 @@
 """Tests for pattern detection and learning engine."""
 
-import pytest
-from pathlib import Path
 import tempfile
 
 from anamnesis.intelligence.pattern_engine import (

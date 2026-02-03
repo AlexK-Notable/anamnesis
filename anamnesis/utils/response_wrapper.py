@@ -16,13 +16,11 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Generic, TypeVar, overload
+from typing import Any, Callable, Generic, TypeVar
 
 from ..types.errors import (
     AnamnesisError,
-    ErrorContext,
     MCPErrorCode,
-    MCPErrorResponse,
 )
 
 T = TypeVar("T")

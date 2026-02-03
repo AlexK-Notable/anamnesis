@@ -11,10 +11,8 @@ This module handles unified->engine conversion.
 from __future__ import annotations
 
 from anamnesis.extraction.types import (
-    ConfidenceTier,
     PatternKind,
     SymbolKind,
-    UnifiedImport,
     UnifiedPattern,
     UnifiedSymbol,
 )

@@ -6,9 +6,7 @@ Tests for the shared serialize_to_primitives() function.
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-import math
 
-import pytest
 
 from anamnesis.utils.serialization import is_serialized, serialize_to_primitives
 

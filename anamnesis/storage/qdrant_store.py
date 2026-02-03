@@ -10,7 +10,7 @@ This module provides a Qdrant-backed vector store that supports:
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 

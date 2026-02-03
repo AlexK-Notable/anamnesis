@@ -14,7 +14,6 @@ Ported from patterns in TypeScript In-Memoria MCP server.
 import asyncio
 import atexit
 import signal
-import sys
 import threading
 import time
 from contextlib import asynccontextmanager, contextmanager

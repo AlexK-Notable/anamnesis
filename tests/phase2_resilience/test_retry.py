@@ -11,8 +11,6 @@ Tests for the retry module including:
 - Pre-configured retry configs
 """
 
-import asyncio
-import time
 
 import pytest
 

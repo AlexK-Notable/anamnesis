@@ -8,7 +8,6 @@ Tests cover:
 
 from unittest.mock import patch
 
-import pytest
 
 from anamnesis.utils.toon_encoder import (
     ToonEncoder,
@@ -298,3 +297,91 @@ class TestToonRoundtrip:
         assert decoded["success"] is True
         assert len(decoded["results"]) == 6
         assert decoded["total"] == 6
+
+
+# =============================================================================
+# Async Error Handling Tests
+# =============================================================================
+
+
+import pytest
+
+from anamnesis.mcp_server._shared import _with_error_handling
+from anamnesis.utils.circuit_breaker import (
+    CircuitBreakerError,
+    CircuitBreakerOptions,
+    CircuitBreakerStats,
+    CircuitState,
+    ErrorDetails,
+)
+
+
+class TestAsyncErrorHandling:
+    """Tests for async path in _with_error_handling decorator."""
+
+    @pytest.mark.asyncio
+    async def test_async_success_returns_dict(self):
+        """Async tool returning a success dict passes through."""
+
+        @_with_error_handling("test_async_op")
+        async def async_tool():
+            return {"success": True, "data": "hello"}
+
+        result = await async_tool()
+        assert isinstance(result, dict)
+        assert result["success"] is True
+        assert result["data"] == "hello"
+
+    @pytest.mark.asyncio
+    async def test_async_exception_returns_error_dict(self):
+        """Async tool raising an exception returns standardized error dict."""
+
+        @_with_error_handling("test_async_op")
+        async def failing_async_tool():
+            raise ValueError("async boom")
+
+        result = await failing_async_tool()
+        assert result["success"] is False
+        assert "async boom" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_async_circuit_breaker_returns_error_dict(self):
+        """Async tool raising CircuitBreakerError returns error dict."""
+        stats = CircuitBreakerStats(
+            state=CircuitState.OPEN,
+            failures=5,
+            successes=0,
+            total_requests=5,
+        )
+        details = ErrorDetails(
+            message="circuit open",
+            state=CircuitState.OPEN,
+            failures=5,
+            success_rate=0.0,
+            stats=stats,
+        )
+        options = CircuitBreakerOptions()
+
+        @_with_error_handling("test_async_op")
+        async def breaker_tool():
+            raise CircuitBreakerError("circuit open", details, options)
+
+        result = await breaker_tool()
+        assert result["success"] is False
+        assert "circuit open" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_async_toon_encoding_on_eligible_data(self):
+        """Async tool returning TOON-eligible data gets encoded."""
+
+        @_with_error_handling("test_async_op")
+        async def async_tool():
+            return {
+                "success": True,
+                "results": [{"id": i, "name": f"item_{i}", "value": i * 10} for i in range(6)],
+                "total": 6,
+            }
+
+        result = await async_tool()
+        # Should be TOON-encoded (string), not a dict
+        assert isinstance(result, str)

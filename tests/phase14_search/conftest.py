@@ -5,7 +5,6 @@ All fixtures create REAL files in temp directories. No mocks.
 
 import pytest
 from pathlib import Path
-from typing import Generator
 
 
 @pytest.fixture

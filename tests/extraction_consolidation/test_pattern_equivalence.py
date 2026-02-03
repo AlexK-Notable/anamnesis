@@ -6,7 +6,7 @@ patterns as regex-based PatternEngine for overlapping pattern types.
 
 import pytest
 
-from anamnesis.intelligence.pattern_engine import PatternEngine, PatternType
+from anamnesis.intelligence.pattern_engine import PatternType
 from anamnesis.extractors.pattern_extractor import (
     PatternExtractor,
     PatternKind,

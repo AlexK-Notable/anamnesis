@@ -191,7 +191,7 @@ class TestFallbackBehavior:
 
     def test_fallback_to_json_on_circular_ref(self):
         """Falls back to JSON when TOON encoding fails on circular reference."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
         from anamnesis.utils.toon_encoder import ToonEncodingError
 
         formatter = ResponseFormatter(fallback_enabled=True)

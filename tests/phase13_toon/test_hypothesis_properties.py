@@ -12,7 +12,6 @@ Properties tested:
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-import pytest
 
 from anamnesis.utils.serialization import serialize_to_primitives, is_serialized
 from anamnesis.utils.toon_encoder import ToonEncoder, has_nested_arrays

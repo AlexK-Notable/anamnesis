@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from .core import ComplexityMetrics, TechnicalDebtLevel
+from .core import ComplexityMetrics
 from .patterns import AnalyzedPattern
 from .semantic import AnalyzedConcept
 

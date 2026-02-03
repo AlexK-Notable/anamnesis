@@ -1,8 +1,5 @@
 """Tests for Phase 5: Intelligence-enhanced navigation synergies."""
 
-import pytest
-from unittest.mock import MagicMock, patch
-from pathlib import Path
 
 
 class TestAutoOnboarding:

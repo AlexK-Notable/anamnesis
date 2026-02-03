@@ -7,7 +7,6 @@ from anamnesis.parsing.language_parsers import (
     ExtractedImport,
     ExtractedSymbol,
     GoParser,
-    LanguageParser,
     ParseResult,
     PythonParser,
     RustParser,

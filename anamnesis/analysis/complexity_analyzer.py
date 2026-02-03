@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from anamnesis.extractors.symbol_extractor import ExtractedSymbol
-    from anamnesis.parsing.ast_types import ParsedNode
 
 
 class ComplexityLevel(str, Enum):

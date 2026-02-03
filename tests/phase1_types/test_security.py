@@ -15,7 +15,6 @@ from pathlib import Path
 import pytest
 
 from anamnesis.utils import (
-    PathValidationResult,
     PathValidator,
     escape_sql_like,
     escape_sql_string,

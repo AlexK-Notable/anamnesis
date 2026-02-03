@@ -1,6 +1,5 @@
 """Tests for complexity analyzer module."""
 
-import pytest
 
 from anamnesis.analysis.complexity_analyzer import (
     CognitiveComplexity,

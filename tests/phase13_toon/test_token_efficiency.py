@@ -10,7 +10,6 @@ Bug Caught by Each Test:
 """
 
 import json
-from typing import Any
 
 import pytest
 

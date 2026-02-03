@@ -2,6 +2,7 @@
 
 
 from anamnesis.mcp_server._shared import (
+    _failure_response,
     _get_memory_service,
     _REFLECT_PROMPTS,
     _with_error_handling,
@@ -36,10 +37,7 @@ def _read_memory_impl(
     memory_service = _get_memory_service()
     result = memory_service.read_memory(memory_file_name)
     if result is None:
-        return {
-            "success": False,
-            "error": f"Memory '{memory_file_name}' not found",
-        }
+        return _failure_response(f"Memory '{memory_file_name}' not found")
     return {
         "success": True,
         "memory": result.to_dict(),
@@ -66,10 +64,7 @@ def _delete_memory_impl(
     memory_service = _get_memory_service()
     deleted = memory_service.delete_memory(memory_file_name)
     if not deleted:
-        return {
-            "success": False,
-            "error": f"Memory '{memory_file_name}' not found",
-        }
+        return _failure_response(f"Memory '{memory_file_name}' not found")
     return {
         "success": True,
         "deleted": memory_file_name,
@@ -86,10 +81,7 @@ def _edit_memory_impl(
     memory_service = _get_memory_service()
     result = memory_service.edit_memory(memory_file_name, old_text, new_text)
     if result is None:
-        return {
-            "success": False,
-            "error": f"Memory '{memory_file_name}' not found",
-        }
+        return _failure_response(f"Memory '{memory_file_name}' not found")
     return {
         "success": True,
         "memory": result.to_dict(),
@@ -121,10 +113,7 @@ def _reflect_impl(focus: str = "collected_information") -> dict:
     """Implementation for reflect tool."""
     prompt = _REFLECT_PROMPTS.get(focus)
     if prompt is None:
-        return {
-            "success": False,
-            "error": f"Unknown focus '{focus}'. Choose from: {', '.join(_REFLECT_PROMPTS.keys())}",
-        }
+        return _failure_response(f"Unknown focus '{focus}'. Choose from: {', '.join(_REFLECT_PROMPTS.keys())}")
     return {
         "success": True,
         "focus": focus,

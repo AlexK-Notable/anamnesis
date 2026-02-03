@@ -1,6 +1,5 @@
 """Tests for dependency graph module."""
 
-import pytest
 
 from anamnesis.analysis.dependency_graph import (
     CircularDependency,

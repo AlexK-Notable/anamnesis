@@ -11,8 +11,9 @@ from datetime import datetime
 
 import pytest
 
+from anamnesis.constants import utcnow
+
 from anamnesis.storage.adapters import (
-    AdapterError,
     AIInsightAdapter,
     ArchitecturalDecisionAdapter,
     DeveloperPatternAdapter,
@@ -31,22 +32,11 @@ from anamnesis.storage.adapters import (
     adapt_to_dict,
 )
 from anamnesis.storage.schema import (
-    AIInsight,
-    ArchitecturalDecision,
     ConceptType,
     DecisionStatus,
-    DeveloperPattern,
-    EntryPoint,
-    FeatureMap,
-    FileIntelligence,
     InsightType,
-    KeyDirectory,
     PatternType,
-    ProjectDecision,
-    ProjectMetadata,
     SemanticConcept,
-    SharedPattern,
-    WorkSession,
 )
 
 
@@ -257,7 +247,7 @@ class TestWorkSessionAdapter:
 
     def test_from_dict_full(self):
         """Converts dict with all fields."""
-        started_at = datetime.utcnow()
+        started_at = utcnow()
         data = {
             "id": "session-1",
             "name": "Feature Work",

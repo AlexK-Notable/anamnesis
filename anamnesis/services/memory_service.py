@@ -421,7 +421,6 @@ class MemoryIndex:
     def index(self, name: str, content: str) -> None:
         if not self._load_model() or self._model is None:
             return
-        import numpy as np
         embedding = self._model.encode(content[:2000], convert_to_numpy=True, normalize_embeddings=True)
         self._embeddings[name] = embedding
 

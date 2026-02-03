@@ -7,7 +7,7 @@ Provides a clean interface to tree-sitter parsing with:
 - Query execution support
 """
 
-from typing import Any, Callable, Iterator
+from typing import Callable, Iterator
 
 import tree_sitter_language_pack as ts_pack
 from tree_sitter import Language, Node, Parser, Query, QueryCursor, Tree

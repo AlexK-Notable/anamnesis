@@ -17,11 +17,9 @@ Tests are structured as:
 
 import pytest
 
-from anamnesis.intelligence.semantic_engine import SemanticEngine, ConceptType
+from anamnesis.intelligence.semantic_engine import ConceptType
 from anamnesis.extractors.symbol_extractor import (
-    SymbolExtractor,
     SymbolKind,
-    extract_symbols_from_source,
 )
 
 from .conftest import PYTHON_SAMPLES

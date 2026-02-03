@@ -8,7 +8,6 @@ Mark with @pytest.mark.lsp for conditional execution:
 Skip these tests if Pyright is not installed.
 """
 
-import os
 import shutil
 import subprocess
 

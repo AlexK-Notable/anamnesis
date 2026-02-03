@@ -16,7 +16,7 @@ from loguru import logger
 from .matcher import PatternMatcher, PatternMatch
 
 if TYPE_CHECKING:
-    from tree_sitter import Language, Parser, Query
+    from tree_sitter import Language, Parser
 
 
 # Language name normalization

@@ -11,6 +11,7 @@ from typing import Optional
 
 from loguru import logger
 
+from anamnesis.constants import DEFAULT_IGNORE_DIRS
 from anamnesis.interfaces.search import SearchBackend, SearchQuery, SearchResult, SearchType
 
 
@@ -165,21 +166,7 @@ class TextSearchBackend(SearchBackend):
         Returns:
             True if the path should be skipped.
         """
-        skip_dirs = {
-            "__pycache__",
-            ".git",
-            ".svn",
-            "node_modules",
-            ".venv",
-            "venv",
-            ".tox",
-            ".mypy_cache",
-            ".pytest_cache",
-            "dist",
-            "build",
-            ".eggs",
-            "*.egg-info",
-        }
+        skip_dirs = DEFAULT_IGNORE_DIRS | {".svn", ".tox", ".mypy_cache", ".pytest_cache", "dist", "build", ".eggs", "*.egg-info"}
 
         for part in path.parts:
             if part in skip_dirs or part.endswith(".egg-info"):

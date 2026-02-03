@@ -32,7 +32,6 @@ from typing import Any, Literal
 from toon_format import encode as toon_encode, decode as toon_decode
 from toon_format.types import EncodeOptions
 
-from anamnesis.utils.logger import logger
 from anamnesis.utils.serialization import serialize_to_primitives
 
 

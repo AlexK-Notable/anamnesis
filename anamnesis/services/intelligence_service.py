@@ -12,13 +12,11 @@ from anamnesis.intelligence.embedding_engine import (
     EmbeddingEngine,
 )
 from anamnesis.intelligence.pattern_engine import (
-    DetectedPattern,
     PatternEngine,
     PatternRecommendation,
     _pattern_type_key,
 )
 from anamnesis.intelligence.semantic_engine import (
-    ProjectBlueprint,
     SemanticConcept,
     SemanticEngine,
 )

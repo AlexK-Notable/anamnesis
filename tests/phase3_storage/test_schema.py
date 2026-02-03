@@ -11,7 +11,8 @@ Tests for the storage schema dataclasses including:
 
 from datetime import datetime
 
-import pytest
+
+from anamnesis.constants import utcnow
 
 from anamnesis.storage.schema import (
     AIInsight,
@@ -172,7 +173,7 @@ class TestSemanticConcept:
 
     def test_to_dict(self):
         """Serializes to dictionary correctly."""
-        now = datetime.utcnow()
+        now = utcnow()
         concept = SemanticConcept(
             id="test-id",
             name="TestFunc",
@@ -431,7 +432,7 @@ class TestFileIntelligence:
 
     def test_to_dict(self):
         """Serializes to dictionary correctly."""
-        now = datetime.utcnow()
+        now = utcnow()
         intel = FileIntelligence(
             id="file-2",
             file_path="/src/utils.py",
@@ -799,7 +800,7 @@ class TestWorkSession:
         session = WorkSession(id="s1")
         assert session.is_active is True
 
-        session.ended_at = datetime.utcnow()
+        session.ended_at = utcnow()
         assert session.is_active is False
 
     def test_roundtrip(self):

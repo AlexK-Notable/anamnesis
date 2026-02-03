@@ -16,10 +16,10 @@ from __future__ import annotations
 import asyncio
 import random
 import time
-from collections.abc import Callable, Awaitable, Sequence
+from collections.abc import Callable, Awaitable
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, ParamSpec, TypeVar, overload
+from typing import Any, ParamSpec, TypeVar
 
 from .logger import logger
 

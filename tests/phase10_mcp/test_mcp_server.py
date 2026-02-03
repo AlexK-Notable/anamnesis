@@ -1,6 +1,5 @@
 """Tests for MCP Server implementation."""
 
-import os
 import tempfile
 from pathlib import Path
 

@@ -62,7 +62,6 @@ from .console_progress import (
 
 # Language Registry
 from .language_registry import (
-    DEFAULT_IGNORE_DIRS,
     DEFAULT_IGNORE_FILES,
     EXTENSION_TO_LANGUAGE,
     LANGUAGES,
@@ -215,7 +214,6 @@ __all__ = [
     "ProgressPhase",
     "ProgressTracker",
     # Language Registry
-    "DEFAULT_IGNORE_DIRS",
     "DEFAULT_IGNORE_FILES",
     "EXTENSION_TO_LANGUAGE",
     "LANGUAGES",

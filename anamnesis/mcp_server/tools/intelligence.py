@@ -120,11 +120,12 @@ def _contribute_insights_impl(
         session_update=session_update,
     )
 
-    return {
-        "success": success,
-        "insight_id": insight_id,
-        "message": message,
-    }
+    result = {"success": success, "insight_id": insight_id}
+    if success:
+        result["message"] = message
+    else:
+        result["error"] = message
+    return result
 
 
 @_with_error_handling("get_project_blueprint")

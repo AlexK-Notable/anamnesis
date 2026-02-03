@@ -4,10 +4,10 @@ Provides adapters for converting between external formats (dict/JSON)
 and internal schema types with validation and error handling.
 """
 
-from dataclasses import fields, is_dataclass
+from dataclasses import fields
 from datetime import datetime
 from enum import Enum
-from typing import Any, TypeVar, get_type_hints
+from typing import Any, TypeVar
 
 from .schema import (
     AIInsight,

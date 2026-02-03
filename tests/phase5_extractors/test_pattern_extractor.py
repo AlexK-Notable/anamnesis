@@ -1,6 +1,5 @@
 """Tests for pattern extractor module."""
 
-import pytest
 
 from anamnesis.extractors.pattern_extractor import (
     DetectedPattern,

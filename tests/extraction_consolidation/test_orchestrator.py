@@ -18,7 +18,6 @@ from anamnesis.extraction import (
 from anamnesis.extraction.types import (
     ConfidenceTier,
     DetectedFramework,
-    PatternKind,
     SymbolKind,
     UnifiedImport,
     UnifiedPattern,

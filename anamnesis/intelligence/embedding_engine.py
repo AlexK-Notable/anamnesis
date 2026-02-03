@@ -9,7 +9,6 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from anamnesis.constants import utcnow
@@ -17,7 +16,7 @@ from anamnesis.constants import utcnow
 import numpy as np
 from loguru import logger
 
-from anamnesis.interfaces.engines import CodeMetadata, SemanticSearchResult
+from anamnesis.interfaces.engines import SemanticSearchResult
 
 if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer

@@ -11,7 +11,6 @@ import os
 from typing import Any
 
 from anamnesis.lsp.solidlsp.ls_config import Language, LanguageServerConfig
-from anamnesis.lsp.solidlsp.ls_exceptions import SolidLSPException
 from anamnesis.lsp.solidlsp.settings import SolidLSPSettings
 
 log = logging.getLogger(__name__)

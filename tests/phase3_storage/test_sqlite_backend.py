@@ -10,8 +10,9 @@ Tests for the SQLite storage backend including:
 """
 
 import tempfile
-from datetime import datetime
 from pathlib import Path
+
+from anamnesis.constants import utcnow
 
 import pytest
 
@@ -376,7 +377,7 @@ class TestFileIntelligenceCRUD:
             exports=["main"],
             complexity_score=3.5,
             metrics={"lines_of_code": 150},
-            last_analyzed=datetime.utcnow(),
+            last_analyzed=utcnow(),
         )
 
         await memory_backend.save_file_intelligence(intel)
