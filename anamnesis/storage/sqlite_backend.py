@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, TypeVar, Generic
 
+from anamnesis.constants import utcnow
+
 import aiosqlite
 
 from .schema import (
@@ -1122,7 +1124,7 @@ class SQLiteBackend:
         self._ensure_connected()
         cursor = await self._conn.execute(
             "UPDATE work_sessions SET ended_at = ? WHERE id = ?",
-            (datetime.utcnow().isoformat(), session_id),
+            (utcnow().isoformat(), session_id),
         )
         await self._conn.commit()
         return cursor.rowcount > 0

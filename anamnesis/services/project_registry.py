@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from anamnesis.constants import utcnow
 from anamnesis.services.memory_service import MemoryService
 from anamnesis.utils.logger import logger
 
@@ -284,7 +285,7 @@ class ProjectRegistry:
             logger.info(f"New project registered: {resolved}")
 
         ctx = self._projects[resolved]
-        ctx.activated_at = datetime.utcnow()
+        ctx.activated_at = utcnow()
         self._active_path = resolved
 
         logger.info(f"Project activated: {ctx.name} ({resolved})")

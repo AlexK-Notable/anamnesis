@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
+from anamnesis.constants import DEFAULT_IGNORE_DIRS
 from anamnesis.intelligence.pattern_engine import PatternEngine
 from anamnesis.intelligence.semantic_engine import SemanticEngine
 from anamnesis.utils.error_classifier import classify_error
@@ -415,7 +416,7 @@ class LearningService:
         files = [
             f for f in files
             if not any(
-                part in {"node_modules", ".git", "__pycache__", ".venv", "venv"}
+                part in DEFAULT_IGNORE_DIRS
                 for part in f.parts
             )
         ][:max_files]
@@ -457,7 +458,7 @@ class LearningService:
         files = [
             f for f in files
             if not any(
-                part in {"node_modules", ".git", "__pycache__", ".venv", "venv"}
+                part in DEFAULT_IGNORE_DIRS
                 for part in f.parts
             )
         ][:max_files]

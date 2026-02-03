@@ -231,12 +231,19 @@ class TestSemanticInsights:
             name = i.concept if hasattr(i, "concept") else i.get("concept", "")
             db_names.add(name.lower())
 
-        # At least one set should have relevant terms if results exist
-        if auth_names:
-            # Some auth-related name should appear
-            auth_related = any("auth" in n or "user" in n or "login" in n for n in auth_names)
-            # It's OK if not found - depends on implementation
-            pass
+        # Both queries should return results from the learned codebase
+        assert len(auth_insights) > 0 or len(db_insights) > 0, (
+            "At least one semantic query should return results "
+            "from the learned codebase with auth/database modules"
+        )
+
+        # If both returned results, verify they are not identical
+        # (proving the query parameter actually filters)
+        if auth_names and db_names:
+            assert auth_names != db_names, (
+                "Queries for 'auth' and 'repository' returned identical results -- "
+                "query parameter may not be filtering"
+            )
 
     def test_concept_type_filter(self, learned_project, intelligence_service):
         """Verify concept_type parameter filters by type."""
@@ -264,11 +271,13 @@ class TestSemanticInsights:
         class_names = {i.concept if hasattr(i, "concept") else i.get("concept", "") for i in class_insights}
         func_names = {i.concept if hasattr(i, "concept") else i.get("concept", "") for i in func_insights}
 
-        # If both have results, they should be largely different
+        # If type filtering works, class results and function results
+        # should not be identical sets
         if class_names and func_names:
-            overlap = class_names.intersection(func_names)
-            # Should not be 100% overlap
-            assert overlap != class_names or overlap != func_names or len(overlap) == 0
+            assert class_names != func_names, (
+                "Class filter and function filter returned identical results -- "
+                "concept_type parameter may not be filtering"
+            )
 
 
 class TestPatternRecommendations:
@@ -314,15 +323,20 @@ class TestPatternRecommendations:
             problem_description="implement data persistence layer",
         )
 
-        # Recommendations or reasoning should differ based on context
-        # (unless the implementation returns static data)
-        if auth_reason and db_reason:
-            # At least the reasoning should mention different concepts
-            auth_lower = auth_reason.lower()
-            db_lower = db_reason.lower()
-            # They may be different, or one may be more specific
-            assert auth_reason is not None
-            assert db_reason is not None
+        # Both should return non-empty reasoning strings
+        assert isinstance(auth_reason, str) and len(auth_reason) > 0, (
+            "Auth recommendations should include non-empty reasoning"
+        )
+        assert isinstance(db_reason, str) and len(db_reason) > 0, (
+            "DB recommendations should include non-empty reasoning"
+        )
+
+        # Different problem descriptions should produce different reasoning
+        if len(auth_reason) > 10 and len(db_reason) > 10:
+            assert auth_reason != db_reason, (
+                "Different problem descriptions produced identical reasoning -- "
+                "recommendations may not be context-aware"
+            )
 
 
 class TestCodingApproachPrediction:
@@ -372,10 +386,17 @@ class TestCodingApproachPrediction:
         # The prediction should exist
         assert prediction is not None
 
-        # If there's reasoning, it might reference existing patterns
+        # If there's reasoning, verify it's a non-empty string
         if hasattr(prediction, "reasoning"):
-            # Just verify we got some reasoning
-            assert prediction.reasoning is not None or True
+            assert prediction.reasoning is not None, (
+                "Prediction reasoning should not be None"
+            )
+            assert isinstance(prediction.reasoning, str), (
+                f"Reasoning should be a string, got {type(prediction.reasoning)}"
+            )
+            assert len(prediction.reasoning) > 0, (
+                "Reasoning should be non-empty"
+            )
 
 
 class TestProjectBlueprint:

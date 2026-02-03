@@ -10,6 +10,8 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from anamnesis.constants import utcnow
+
 if TYPE_CHECKING:
     from anamnesis.intelligence.pattern_engine import DetectedPattern
     from anamnesis.intelligence.semantic_engine import SemanticConcept as EngineSemanticConcept
@@ -257,5 +259,5 @@ def service_insight_to_storage(
         confidence=confidence,
         suggested_action=suggested_action,
         metadata=metadata,
-        created_at=created_at or datetime.utcnow(),
+        created_at=created_at or utcnow(),
     )

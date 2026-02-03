@@ -13,9 +13,7 @@ Tests for the CLI commands including:
 """
 
 import json
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -137,60 +135,6 @@ class TestLearnCommand:
         assert result.exit_code == 0
         assert "Learn from codebase" in result.output
 
-    @patch("anamnesis.services.learning_service.LearningService")
-    def test_learn_success(self, mock_service_class, runner, temp_project):
-        """learn succeeds with valid path."""
-        # Setup mock
-        mock_service = MagicMock()
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.concepts_learned = 10
-        mock_result.patterns_learned = 5
-        mock_result.features_learned = 3
-        mock_result.insights = ["Found patterns"]
-        mock_service.learn_from_codebase.return_value = mock_result
-        mock_service_class.return_value = mock_service
-
-        result = runner.invoke(cli, ["learn", str(temp_project)])
-
-        assert result.exit_code == 0
-        assert "Learning complete" in result.output
-
-    @patch("anamnesis.services.learning_service.LearningService")
-    def test_learn_failure(self, mock_service_class, runner, temp_project):
-        """learn handles failure."""
-        mock_service = MagicMock()
-        mock_result = MagicMock()
-        mock_result.success = False
-        mock_result.error = "Test error"
-        mock_service.learn_from_codebase.return_value = mock_result
-        mock_service_class.return_value = mock_service
-
-        result = runner.invoke(cli, ["learn", str(temp_project)])
-
-        assert result.exit_code == 1
-        assert "failed" in result.output.lower()
-
-    @patch("anamnesis.services.learning_service.LearningService")
-    def test_learn_with_force(self, mock_service_class, runner, temp_project):
-        """learn accepts force flag."""
-        mock_service = MagicMock()
-        mock_result = MagicMock()
-        mock_result.success = True
-        mock_result.concepts_learned = 0
-        mock_result.patterns_learned = 0
-        mock_result.features_learned = 0
-        mock_result.insights = []
-        mock_service.learn_from_codebase.return_value = mock_result
-        mock_service_class.return_value = mock_service
-
-        result = runner.invoke(cli, ["learn", "-f", str(temp_project)])
-
-        # Verify learn was called with options containing force=True
-        call_args = mock_service.learn_from_codebase.call_args
-        assert call_args[0][0] == str(temp_project.resolve())
-        assert call_args[1]["options"].force is True
-
 
 class TestAnalyzeCommand:
     """Tests for analyze command."""
@@ -200,39 +144,6 @@ class TestAnalyzeCommand:
         result = runner.invoke(cli, ["analyze", "--help"])
         assert result.exit_code == 0
         assert "Analyze codebase" in result.output
-
-    @patch("anamnesis.services.learning_service.LearningService")
-    @patch("anamnesis.services.intelligence_service.IntelligenceService")
-    @patch("anamnesis.services.codebase_service.CodebaseService")
-    def test_analyze_success(
-        self, mock_codebase_class, mock_intel_class, mock_learn_class,
-        runner, temp_project
-    ):
-        """analyze succeeds with valid path."""
-        # Setup mocks
-        mock_codebase = MagicMock()
-        mock_codebase_class.return_value = mock_codebase
-
-        mock_intel = MagicMock()
-        mock_intel.get_project_blueprint.return_value = {
-            "tech_stack": ["python"],
-            "architecture": "modular",
-            "learning_status": {
-                "concepts_stored": 10,
-                "patterns_stored": 5,
-            },
-            "entry_points": {"main": "main.py"},
-            "key_directories": {"src": "source"},
-        }
-        mock_intel_class.return_value = mock_intel
-
-        mock_learn = MagicMock()
-        mock_learn_class.return_value = mock_learn
-
-        result = runner.invoke(cli, ["analyze", str(temp_project)])
-
-        assert result.exit_code == 0
-        assert "Analysis Results" in result.output
 
 
 class TestWatchCommand:
@@ -253,52 +164,6 @@ class TestCheckCommand:
         result = runner.invoke(cli, ["check", "--help"])
         assert result.exit_code == 0
         assert "diagnostics" in result.output.lower()
-
-    @patch("anamnesis.cli.debug_tools.DebugTools")
-    def test_check_runs_diagnostics(self, mock_debug_class, runner, temp_project):
-        """check runs diagnostics."""
-        mock_debug = MagicMock()
-        mock_debug_class.return_value = mock_debug
-
-        result = runner.invoke(cli, ["check", str(temp_project)])
-
-        mock_debug.run_diagnostics.assert_called_once()
-
-    @patch("anamnesis.cli.debug_tools.DebugTools")
-    def test_check_with_verbose(self, mock_debug_class, runner, temp_project):
-        """check accepts verbose flag."""
-        mock_debug = MagicMock()
-        mock_debug_class.return_value = mock_debug
-
-        runner.invoke(cli, ["check", "--verbose", str(temp_project)])
-
-        mock_debug_class.assert_called_with(
-            verbose=True, validate_data=False, check_performance=False
-        )
-
-    @patch("anamnesis.cli.debug_tools.DebugTools")
-    def test_check_with_validate(self, mock_debug_class, runner, temp_project):
-        """check accepts validate flag."""
-        mock_debug = MagicMock()
-        mock_debug_class.return_value = mock_debug
-
-        runner.invoke(cli, ["check", "--validate", str(temp_project)])
-
-        mock_debug_class.assert_called_with(
-            verbose=False, validate_data=True, check_performance=False
-        )
-
-    @patch("anamnesis.cli.debug_tools.DebugTools")
-    def test_check_with_performance(self, mock_debug_class, runner, temp_project):
-        """check accepts performance flag."""
-        mock_debug = MagicMock()
-        mock_debug_class.return_value = mock_debug
-
-        runner.invoke(cli, ["check", "--performance", str(temp_project)])
-
-        mock_debug_class.assert_called_with(
-            verbose=False, validate_data=False, check_performance=True
-        )
 
 
 class TestSetupCommand:

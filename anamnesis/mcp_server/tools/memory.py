@@ -1,6 +1,5 @@
 """Memory and metacognition tools — CRUD for project memories + reflect."""
 
-from typing import Optional
 
 from anamnesis.mcp_server._shared import (
     _get_memory_service,

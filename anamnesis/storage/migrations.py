@@ -16,6 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
+from anamnesis.constants import utcnow
+
 logger = logging.getLogger(__name__)
 
 
@@ -606,7 +608,7 @@ class DatabaseMigrator:
                         migration.version,
                         migration.name,
                         migration.checksum,
-                        datetime.utcnow().isoformat(),
+                        utcnow().isoformat(),
                         int(execution_time),
                     ),
                 )

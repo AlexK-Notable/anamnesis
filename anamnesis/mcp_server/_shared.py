@@ -6,23 +6,16 @@ across all tool modules. Extracted from server.py for better modularity.
 """
 
 import functools
-import gc
-import os
+import inspect
 import re
-import sys
 import time
-from datetime import datetime
-from pathlib import Path
-from typing import Optional
 
 from fastmcp import FastMCP
 
-from anamnesis.interfaces.search import SearchQuery, SearchType
 from anamnesis.search.service import SearchService
 from anamnesis.services import (
     CodebaseService,
     IntelligenceService,
-    LearningOptions,
     LearningService,
     MemoryService,
     SessionManager,
@@ -31,7 +24,6 @@ from anamnesis.services.project_registry import ProjectContext, ProjectRegistry
 from anamnesis.utils.circuit_breaker import CircuitBreakerError
 from anamnesis.utils.error_classifier import classify_error
 from anamnesis.utils.logger import logger
-from anamnesis.utils.response_wrapper import ResponseWrapper, wrap_async_operation
 from anamnesis.utils.toon_encoder import ToonEncoder, is_structurally_toon_eligible
 
 # =============================================================================
@@ -379,15 +371,29 @@ def _check_names_against_convention(
 
 
 # =============================================================================
-# Error Handling Decorator
+# Error Handling Helpers & Decorator
 # =============================================================================
+
+
+def _failure_response(error_message: str, **extra: object) -> dict:
+    """Build a standard failure response dict.
+
+    All MCP tool failures should use this shape so LLM consumers see a
+    single, predictable structure: ``{"success": False, "error": "..."}``.
+
+    Args:
+        error_message: Human-readable error description.
+        **extra: Additional keys merged into the response (e.g. ``results=[]``).
+    """
+    return {"success": False, "error": error_message, **extra}
 
 
 def _with_error_handling(operation_name: str, toon_auto: bool = True):
     """Decorator for MCP tool implementations with error handling and TOON auto-encoding.
 
     Catches CircuitBreakerError and other exceptions, returning
-    ResponseWrapper-formatted error responses.
+    standardized ``{"success": False, "error": "..."}`` error responses.
+    Supports both sync and async tool implementations.
 
     When toon_auto is True (default), successful dict responses are checked
     for structural TOON eligibility. Eligible responses (flat uniform arrays
@@ -405,47 +411,65 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
             Set to False for tools where JSON output is required.
     """
 
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
+    def _apply_toon(result):
+        """Apply TOON encoding to eligible success dicts."""
+        if toon_auto and isinstance(result, dict) and result.get("success"):
             try:
-                result = func(*args, **kwargs)
+                if is_structurally_toon_eligible(result):
+                    return _toon_encoder.encode(result)
+            except Exception:
+                pass  # Silent fallback to dict/JSON on any encoding error
+        return result
 
-                # Auto-TOON: encode eligible success responses for token savings
-                if toon_auto and isinstance(result, dict) and result.get("success"):
-                    try:
-                        if is_structurally_toon_eligible(result):
-                            return _toon_encoder.encode(result)
-                    except Exception:
-                        pass  # Silent fallback to dict/JSON on any encoding error
+    def _handle_circuit_breaker(e: CircuitBreakerError):
+        logger.error(
+            f"Circuit breaker open for operation '{operation_name}'",
+            extra={
+                "operation": operation_name,
+                "circuit_state": "OPEN",
+                "details": str(e.details) if e.details else None,
+            },
+        )
+        return _failure_response(str(e))
 
-                return result
-            except CircuitBreakerError as e:
-                logger.error(
-                    f"Circuit breaker open for operation '{operation_name}'",
-                    extra={
-                        "operation": operation_name,
-                        "circuit_state": "OPEN",
-                        "details": str(e.details) if e.details else None,
-                    },
-                )
-                return ResponseWrapper.failure_result(
-                    e, operation=operation_name
-                ).to_dict()
-            except Exception as e:
-                classification = classify_error(e, {"operation": operation_name})
-                logger.error(
-                    f"Error in operation '{operation_name}': {e}",
-                    extra={
-                        "operation": operation_name,
-                        "category": classification.category.value,
-                        "error_type": type(e).__name__,
-                    },
-                )
-                return ResponseWrapper.failure_result(
-                    e, operation=operation_name
-                ).to_dict()
+    def _handle_exception(e: Exception):
+        classification = classify_error(e, {"operation": operation_name})
+        logger.error(
+            f"Error in operation '{operation_name}': {e}",
+            extra={
+                "operation": operation_name,
+                "category": classification.category.value,
+                "error_type": type(e).__name__,
+            },
+        )
+        return _failure_response(str(e))
 
-        return wrapper
+    def decorator(func):
+        if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                try:
+                    result = await func(*args, **kwargs)
+                    return _apply_toon(result)
+                except CircuitBreakerError as e:
+                    return _handle_circuit_breaker(e)
+                except Exception as e:
+                    return _handle_exception(e)
+
+            return async_wrapper
+        else:
+
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                try:
+                    result = func(*args, **kwargs)
+                    return _apply_toon(result)
+                except CircuitBreakerError as e:
+                    return _handle_circuit_breaker(e)
+                except Exception as e:
+                    return _handle_exception(e)
+
+            return wrapper
 
     return decorator

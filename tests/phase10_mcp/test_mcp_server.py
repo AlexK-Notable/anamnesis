@@ -492,21 +492,21 @@ def process_data(data):
             )
             yield tmpdir
 
-    def test_search_codebase(self, temp_codebase):
+    async def test_search_codebase(self, temp_codebase):
         """Test searching codebase."""
         _set_current_path(temp_codebase)
 
-        result = _search_codebase_impl(query="helper")
+        result = await _search_codebase_impl(query="helper")
 
         assert "results" in result
         assert "query" in result
         assert result["query"] == "helper"
 
-    def test_search_codebase_with_type(self, temp_codebase):
+    async def test_search_codebase_with_type(self, temp_codebase):
         """Test search with type filter."""
         _set_current_path(temp_codebase)
 
-        result = _search_codebase_impl(query="def", search_type="text")
+        result = await _search_codebase_impl(query="def", search_type="text")
 
         assert result["search_type"] == "text"
 

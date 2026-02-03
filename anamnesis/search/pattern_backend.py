@@ -12,6 +12,7 @@ from typing import Optional
 
 from loguru import logger
 
+from anamnesis.constants import DEFAULT_IGNORE_DIRS, DEFAULT_SOURCE_PATTERNS
 from anamnesis.interfaces.search import SearchBackend, SearchQuery, SearchResult, SearchType
 from anamnesis.patterns import RegexPatternMatcher, ASTPatternMatcher, PatternMatch
 
@@ -162,18 +163,10 @@ class PatternSearchBackend(SearchBackend):
             extensions = LANGUAGE_EXTENSIONS.get(language.lower(), [f".{language}"])
             patterns = [f"**/*{ext}" for ext in extensions]
         else:
-            patterns = ["**/*.py", "**/*.js", "**/*.ts", "**/*.tsx", "**/*.go"]
+            patterns = list(DEFAULT_SOURCE_PATTERNS)
 
         files = []
-        skip_dirs = {
-            "__pycache__",
-            ".git",
-            "node_modules",
-            ".venv",
-            "venv",
-            "dist",
-            "build",
-        }
+        skip_dirs = DEFAULT_IGNORE_DIRS | {"dist", "build"}
 
         for pattern in patterns:
             for file_path in self._base_path.glob(pattern):

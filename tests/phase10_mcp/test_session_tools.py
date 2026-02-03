@@ -103,7 +103,7 @@ class TestEndSession:
         result = _end_session_impl()
 
         assert result["success"] is False
-        assert "No active session" in result["message"]
+        assert "No active session" in result["error"]
 
 
 class TestRecordDecision:
@@ -177,14 +177,14 @@ class TestGetSession:
         result = _get_session_impl(session_id="nonexistent")
 
         assert result["success"] is False
-        assert "not found" in result["message"]
+        assert "not found" in result["error"]
 
     def test_get_session_no_active(self):
         """Get session when none active returns error."""
         result = _get_session_impl()
 
         assert result["success"] is False
-        assert "No active session" in result["message"]
+        assert "No active session" in result["error"]
 
 
 class TestListSessions:

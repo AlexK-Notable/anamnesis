@@ -11,6 +11,7 @@ from typing import Optional
 
 from loguru import logger
 
+from anamnesis.constants import DEFAULT_IGNORE_DIRS, DEFAULT_SOURCE_PATTERNS
 from anamnesis.interfaces.search import SearchBackend, SearchQuery, SearchResult, SearchType
 from anamnesis.storage.qdrant_store import QdrantVectorStore, QdrantConfig
 from anamnesis.intelligence.embedding_engine import EmbeddingEngine, EmbeddingConfig
@@ -242,10 +243,10 @@ class SemanticSearchBackend(SearchBackend):
         dir_path = Path(directory) if directory else self._base_path
 
         if patterns is None:
-            patterns = ["**/*.py", "**/*.js", "**/*.ts", "**/*.tsx", "**/*.go"]
+            patterns = list(DEFAULT_SOURCE_PATTERNS)
 
         if exclude is None:
-            exclude = ["__pycache__", ".git", "node_modules", ".venv", "venv"]
+            exclude = list(DEFAULT_IGNORE_DIRS)
 
         indexed_count = 0
 

@@ -1,6 +1,5 @@
 """Search tools — codebase search and analysis."""
 
-import asyncio
 from pathlib import Path
 from typing import Optional
 
@@ -9,6 +8,7 @@ from anamnesis.utils.logger import logger
 
 from anamnesis.mcp_server._shared import (
     _ensure_semantic_search,
+    _failure_response,
     _get_codebase_service,
     _get_current_path,
     _get_search_service,
@@ -23,7 +23,7 @@ from anamnesis.mcp_server._shared import (
 
 
 @_with_error_handling("search_codebase")
-def _search_codebase_impl(
+async def _search_codebase_impl(
     query: str,
     search_type: str = "text",
     limit: int = 50,
@@ -46,21 +46,13 @@ def _search_codebase_impl(
     }
     search_type_enum = type_map.get(search_type.lower(), SearchType.TEXT)
 
-    # Get or create event loop
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
     # Initialize semantic search lazily if requested
     if search_type_enum == SearchType.SEMANTIC:
-        semantic_available = loop.run_until_complete(_ensure_semantic_search())
+        semantic_available = await _ensure_semantic_search()
         if not semantic_available:
             logger.warning("Semantic search not available, falling back to text search")
-            # Will fall back via SearchService logic
 
-    # Get search service (may have been upgraded to async version)
+    # Get search service
     search_service = _get_search_service()
 
     # Build search query
@@ -73,9 +65,8 @@ def _search_codebase_impl(
 
     # Execute search
     try:
-        results = loop.run_until_complete(search_service.search(search_query))
+        results = await search_service.search(search_query)
 
-        # Convert to response format
         return {
             "success": True,
             "results": [
@@ -95,16 +86,14 @@ def _search_codebase_impl(
 
     except Exception as e:
         logger.error(f"Search failed: {e}")
-        # Return empty results on error
-        return {
-            "success": False,
-            "results": [],
-            "query": query,
-            "search_type": search_type,
-            "total": 0,
-            "path": current_path,
-            "error": str(e),
-        }
+        return _failure_response(
+            str(e),
+            results=[],
+            query=query,
+            search_type=search_type,
+            total=0,
+            path=current_path,
+        )
 
 
 @_with_error_handling("analyze_codebase")
@@ -148,7 +137,7 @@ def _analyze_codebase_impl(
 
 
 @mcp.tool
-def search_codebase(
+async def search_codebase(
     query: str,
     search_type: str = "text",
     limit: int = 50,
@@ -168,7 +157,7 @@ def search_codebase(
     Returns:
         Search results with file paths and matched content
     """
-    return _search_codebase_impl(query, search_type, limit, language)
+    return await _search_codebase_impl(query, search_type, limit, language)
 
 
 @mcp.tool

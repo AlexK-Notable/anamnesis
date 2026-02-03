@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
+from anamnesis.constants import utcnow
 from anamnesis.services.type_converters import generate_id
 from anamnesis.storage.schema import ProjectDecision, WorkSession
 
@@ -149,7 +150,7 @@ class SessionManager:
             SessionInfo with the new session details
         """
         session_id = generate_id("session")
-        now = datetime.utcnow()
+        now = utcnow()
 
         session = WorkSession(
             id=session_id,
@@ -314,7 +315,7 @@ class SessionManager:
             session.notes = notes
         if metadata is not None:
             session.metadata.update(metadata)
-        session.updated_at = datetime.utcnow()
+        session.updated_at = utcnow()
 
         self._backend.save_work_session(session)
 
@@ -344,7 +345,7 @@ class SessionManager:
 
         if file_path not in session.files:
             session.files.append(file_path)
-            session.updated_at = datetime.utcnow()
+            session.updated_at = utcnow()
             self._backend.save_work_session(session)
 
         return True
@@ -373,7 +374,7 @@ class SessionManager:
 
         if task not in session.tasks:
             session.tasks.append(task)
-            session.updated_at = datetime.utcnow()
+            session.updated_at = utcnow()
             self._backend.save_work_session(session)
 
         return True
@@ -404,7 +405,7 @@ class SessionManager:
         """
         decision_id = generate_id("decision")
         target_session = session_id or self._active_session_id or ""
-        now = datetime.utcnow()
+        now = utcnow()
 
         project_decision = ProjectDecision(
             id=decision_id,

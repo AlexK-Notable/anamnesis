@@ -12,6 +12,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
+from anamnesis.constants import utcnow
+
 
 class ConceptType(str, Enum):
     """Types of semantic concepts in code."""
@@ -104,10 +106,10 @@ class SemanticConcept:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata about the concept."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     """When the concept was first discovered."""
 
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=utcnow)
     """When the concept was last updated."""
 
     confidence: float = 1.0
@@ -175,10 +177,10 @@ class DeveloperPattern:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional pattern metadata."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     """When the pattern was first detected."""
 
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=utcnow)
     """When the pattern was last seen."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -240,10 +242,10 @@ class ArchitecturalDecision:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     """When the decision was created."""
 
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=utcnow)
     """When the decision was last updated."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -314,7 +316,7 @@ class FileIntelligence:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata."""
 
-    last_analyzed: datetime = field(default_factory=datetime.utcnow)
+    last_analyzed: datetime = field(default_factory=utcnow)
     """When the file was last analyzed."""
 
     content_hash: str = ""
@@ -370,10 +372,10 @@ class SharedPattern:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     """When the pattern was first detected."""
 
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=utcnow)
     """When the pattern was last updated."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -432,7 +434,7 @@ class AIInsight:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     """When the insight was generated."""
 
     acknowledged: bool = False
@@ -503,13 +505,13 @@ class ProjectMetadata:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     """When the project was first analyzed."""
 
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=utcnow)
     """When the project was last updated."""
 
-    last_analyzed: datetime = field(default_factory=datetime.utcnow)
+    last_analyzed: datetime = field(default_factory=utcnow)
     """When the last full analysis was run."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -564,10 +566,10 @@ class FeatureMap:
     confidence: float = 1.0
     """Confidence in the mapping."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     """When the mapping was created."""
 
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=utcnow)
     """When the mapping was last updated."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -616,7 +618,7 @@ class EntryPoint:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     """When the entry point was discovered."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -665,7 +667,7 @@ class KeyDirectory:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     """When the directory was discovered."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -712,10 +714,10 @@ class WorkSession:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata."""
 
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=utcnow)
     """When the session started."""
 
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=utcnow)
     """When the session was last updated."""
 
     ended_at: datetime | None = None
@@ -779,7 +781,7 @@ class ProjectDecision:
     metadata: dict[str, Any] = field(default_factory=dict)
     """Additional metadata."""
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
     """When the decision was made."""
 
     def to_dict(self) -> dict[str, Any]:

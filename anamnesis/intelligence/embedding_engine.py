@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from anamnesis.constants import utcnow
+
 import numpy as np
 from loguru import logger
 
@@ -105,7 +107,7 @@ class IndexedConcept:
     file_path: str
     embedding: np.ndarray
     metadata: dict = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=utcnow)
 
 
 class EmbeddingEngine:

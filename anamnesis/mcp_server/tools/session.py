@@ -49,7 +49,7 @@ def _end_session_impl(
     if not target_id:
         return {
             "success": False,
-            "message": "No active session to end",
+            "error": "No active session to end",
         }
 
     success = session_manager.end_session(target_id)
@@ -64,7 +64,7 @@ def _end_session_impl(
     else:
         return {
             "success": False,
-            "message": f"Session '{target_id}' not found",
+            "error": f"Session '{target_id}' not found",
         }
 
 
@@ -108,7 +108,7 @@ def _get_session_impl(
         return {
             "success": False,
             "session": None,
-            "message": "No active session",
+            "error": "No active session",
         }
 
     session = session_manager.get_session(target_id)
@@ -121,7 +121,7 @@ def _get_session_impl(
         return {
             "success": False,
             "session": None,
-            "message": f"Session '{target_id}' not found",
+            "error": f"Session '{target_id}' not found",
         }
 
 
