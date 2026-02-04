@@ -8,6 +8,7 @@ Covers:
 - Backward compatibility: single-project usage auto-activates cwd
 """
 
+import json
 import os
 from pathlib import Path
 
@@ -23,8 +24,8 @@ from anamnesis.services.project_registry import ProjectContext, ProjectRegistry
 
 @pytest.fixture
 def registry():
-    """Fresh ProjectRegistry for each test."""
-    return ProjectRegistry()
+    """Fresh ProjectRegistry for each test (no disk I/O)."""
+    return ProjectRegistry(persist_path=None)
 
 
 @pytest.fixture
@@ -388,9 +389,13 @@ class TestMCPProjectTools:
         """Reset server global state between tests."""
         import anamnesis.mcp_server.server as server_module
 
+        # Disable disk persistence for the global registry during tests
+        orig_persist = server_module._registry._persist_path
+        server_module._registry._persist_path = None
         server_module._registry.reset()
         yield
         server_module._registry.reset()
+        server_module._registry._persist_path = orig_persist
 
     def test_activate_project_via_dedicated_tool(self, project_a):
         from anamnesis.mcp_server.server import _activate_project_impl
@@ -474,3 +479,141 @@ class TestMCPToolRegistration:
         tools = mcp._tool_manager._tools
         assert "get_project_config" in tools
         assert "list_projects" in tools
+
+
+# ---------------------------------------------------------------------------
+# Persistence tests
+# ---------------------------------------------------------------------------
+
+
+class TestProjectPersistence:
+    """Tests for project registry persistence to disk."""
+
+    @pytest.fixture
+    def persist_file(self, tmp_path):
+        """Return a path for the persist file (does not exist yet)."""
+        return tmp_path / "anamnesis" / "projects.json"
+
+    def test_save_creates_file_on_activate(self, persist_file, project_a):
+        reg = ProjectRegistry(persist_path=persist_file)
+        assert not persist_file.exists()
+
+        reg.activate(project_a)
+        assert persist_file.exists()
+
+        data = json.loads(persist_file.read_text())
+        resolved_a = str(Path(project_a).resolve())
+        assert resolved_a in data["projects"]
+
+    def test_load_restores_known_projects(self, persist_file, project_a, project_b):
+        # Activate two projects to populate the file
+        reg1 = ProjectRegistry(persist_path=persist_file)
+        reg1.activate(project_a)
+        reg1.activate(project_b)
+
+        # Create a fresh registry that loads from the same file
+        reg2 = ProjectRegistry(persist_path=persist_file)
+        names = {p.name for p in reg2.list_projects()}
+        assert "project_a" in names
+        assert "project_b" in names
+
+    def test_loaded_projects_are_not_active(self, persist_file, project_a):
+        reg1 = ProjectRegistry(persist_path=persist_file)
+        reg1.activate(project_a)
+
+        reg2 = ProjectRegistry(persist_path=persist_file)
+        assert reg2.active_path is None
+        # The project exists but has no activated_at
+        resolved = str(Path(project_a).resolve())
+        ctx = reg2.get_project(resolved)
+        assert ctx is not None
+        assert ctx.activated_at is None
+
+    def test_deactivate_persists_removal(self, persist_file, project_a, project_b):
+        reg = ProjectRegistry(persist_path=persist_file)
+        reg.activate(project_a)
+        reg.activate(project_b)
+        reg.deactivate(project_a)
+
+        data = json.loads(persist_file.read_text())
+        resolved_a = str(Path(project_a).resolve())
+        resolved_b = str(Path(project_b).resolve())
+        assert resolved_a not in data["projects"]
+        assert resolved_b in data["projects"]
+
+    def test_missing_file_is_fine(self, persist_file):
+        # persist_file doesn't exist — should not raise
+        reg = ProjectRegistry(persist_path=persist_file)
+        assert reg.list_projects() == []
+
+    def test_corrupted_file_logs_warning_and_continues(self, persist_file):
+        persist_file.parent.mkdir(parents=True, exist_ok=True)
+        persist_file.write_text("NOT VALID JSON {{{", encoding="utf-8")
+
+        reg = ProjectRegistry(persist_path=persist_file)
+        assert reg.list_projects() == []
+
+    def test_missing_directory_skipped(self, persist_file, tmp_path):
+        # Write a file referencing a directory that doesn't exist
+        persist_file.parent.mkdir(parents=True, exist_ok=True)
+        gone = str(tmp_path / "gone_project")
+        persist_file.write_text(
+            json.dumps({
+                "version": 1,
+                "projects": {gone: {"last_activated_at": None}},
+            }),
+            encoding="utf-8",
+        )
+
+        reg = ProjectRegistry(persist_path=persist_file)
+        assert reg.list_projects() == []
+
+    def test_persist_path_none_disables_persistence(self, project_a):
+        reg = ProjectRegistry(persist_path=None)
+        reg.activate(project_a)
+        # No file anywhere — nothing to assert on disk, just no crash
+        assert reg.list_projects() != []
+
+    def test_reset_does_not_touch_disk(self, persist_file, project_a):
+        reg = ProjectRegistry(persist_path=persist_file)
+        reg.activate(project_a)
+        assert persist_file.exists()
+
+        # Snapshot file content before reset
+        before = persist_file.read_text()
+        reg.reset()
+        after = persist_file.read_text()
+        assert before == after  # File unchanged
+
+    def test_version_field_present(self, persist_file, project_a):
+        reg = ProjectRegistry(persist_path=persist_file)
+        reg.activate(project_a)
+
+        data = json.loads(persist_file.read_text())
+        assert data["version"] == 1
+
+    def test_atomic_write_no_partial_file(self, persist_file, project_a):
+        reg = ProjectRegistry(persist_path=persist_file)
+        reg.activate(project_a)
+
+        # The file should be valid JSON (no partial writes)
+        data = json.loads(persist_file.read_text())
+        assert "projects" in data
+        # No .tmp files left behind
+        tmp_files = list(persist_file.parent.glob("*.tmp"))
+        assert tmp_files == []
+
+    def test_activate_restores_then_adds(self, persist_file, project_a, project_b):
+        # First session: activate project_a
+        reg1 = ProjectRegistry(persist_path=persist_file)
+        reg1.activate(project_a)
+
+        # Second session: loads project_a, then activates project_b
+        reg2 = ProjectRegistry(persist_path=persist_file)
+        reg2.activate(project_b)
+
+        data = json.loads(persist_file.read_text())
+        resolved_a = str(Path(project_a).resolve())
+        resolved_b = str(Path(project_b).resolve())
+        assert resolved_a in data["projects"]
+        assert resolved_b in data["projects"]

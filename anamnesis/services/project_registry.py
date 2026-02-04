@@ -9,15 +9,19 @@ state across project switches — a latent cross-contamination bug.
 
 from __future__ import annotations
 
+import json
 import os
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 from anamnesis.constants import utcnow
 from anamnesis.services.memory_service import MemoryService
 from anamnesis.utils.logger import logger
+
+_DEFAULT_PERSIST_PATH: Path = Path.home() / ".anamnesis" / "projects.json"
 
 if TYPE_CHECKING:
     from anamnesis.lsp.manager import LspManager
@@ -240,9 +244,16 @@ class ProjectRegistry:
         ctx = registry.get_active()
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        persist_path: Optional[Union[str, Path]] = _DEFAULT_PERSIST_PATH,
+    ) -> None:
         self._projects: dict[str, ProjectContext] = {}
         self._active_path: Optional[str] = None
+        self._persist_path: Optional[Path] = (
+            Path(persist_path) if persist_path is not None else None
+        )
+        self._load()
 
     @property
     def active_path(self) -> Optional[str]:
@@ -255,6 +266,87 @@ class ProjectRegistry:
         if self._active_path is not None:
             return self._projects.get(self._active_path)
         return None
+
+    # -----------------------------------------------------------------
+    # Persistence helpers
+    # -----------------------------------------------------------------
+
+    def _load(self) -> None:
+        """Load known projects from the persist file.
+
+        Pre-registers projects with ``activated_at=None`` (known but not
+        active).  Silently skips directories that no longer exist and
+        gracefully handles missing files, corrupt JSON, and permission
+        errors.
+        """
+        if self._persist_path is None:
+            return
+        try:
+            data = json.loads(self._persist_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return
+        except (json.JSONDecodeError, OSError) as exc:
+            logger.warning("Failed to load project registry from %s: %s", self._persist_path, exc)
+            return
+
+        projects = data.get("projects", {})
+        for project_path, _meta in projects.items():
+            resolved = str(Path(project_path).resolve())
+            if not Path(resolved).is_dir():
+                logger.debug("Skipping persisted project (directory missing): %s", resolved)
+                continue
+            if resolved not in self._projects:
+                self._projects[resolved] = ProjectContext(path=resolved)
+                logger.info("Restored known project: %s", resolved)
+
+    def _save(self) -> None:
+        """Persist known projects to disk using atomic write.
+
+        Creates the ``~/.anamnesis/`` directory on first save.
+        Writes to a temporary file then renames for crash safety.
+        Gracefully handles write/permission errors.
+        """
+        if self._persist_path is None:
+            return
+        payload: dict[str, object] = {
+            "version": 1,
+            "projects": {
+                p.path: {
+                    "last_activated_at": (
+                        p.activated_at.isoformat() if p.activated_at else None
+                    ),
+                }
+                for p in self._projects.values()
+            },
+        }
+        try:
+            self._persist_path.parent.mkdir(parents=True, exist_ok=True)
+            fd = tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".tmp",
+                dir=self._persist_path.parent,
+                delete=False,
+                encoding="utf-8",
+            )
+            try:
+                json.dump(payload, fd, indent=2)
+                fd.flush()
+                os.fsync(fd.fileno())
+                fd.close()
+                os.rename(fd.name, self._persist_path)
+            except BaseException:
+                fd.close()
+                try:
+                    os.unlink(fd.name)
+                except OSError:
+                    pass
+                raise
+        except OSError as exc:
+            logger.warning("Failed to save project registry to %s: %s", self._persist_path, exc)
+
+    # -----------------------------------------------------------------
+    # Public API
+    # -----------------------------------------------------------------
 
     def activate(self, path: str) -> ProjectContext:
         """Activate a project by path.
@@ -289,6 +381,7 @@ class ProjectRegistry:
         self._active_path = resolved
 
         logger.info(f"Project activated: {ctx.name} ({resolved})")
+        self._save()
         return ctx
 
     def get_active(self) -> ProjectContext:
@@ -351,6 +444,7 @@ class ProjectRegistry:
         if self._active_path == resolved:
             self._active_path = None
         logger.info(f"Project deactivated: {resolved}")
+        self._save()
         return True
 
     def reset(self) -> None:

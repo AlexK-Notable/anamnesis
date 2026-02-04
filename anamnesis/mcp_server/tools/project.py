@@ -96,8 +96,8 @@ def activate_project(path: str) -> dict:
 def list_projects() -> dict:
     """List all known projects in the registry.
 
-    Shows projects that have been activated during this server session,
-    sorted by most recently activated first.
+    Shows projects that have been activated during this or previous
+    server sessions, sorted by most recently activated first.
 
     Returns:
         List of projects with their service status

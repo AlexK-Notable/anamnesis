@@ -869,7 +869,7 @@ class TestProjectContextLsp:
         proj = tmp_path / "proj"
         proj.mkdir()
 
-        registry = ProjectRegistry()
+        registry = ProjectRegistry(persist_path=None)
         ctx = registry.activate(str(proj))
         ctx.get_lsp_manager()  # Create the manager
 
