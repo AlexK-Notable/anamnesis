@@ -216,14 +216,20 @@ _REFLECT_PROMPTS = {
 # =============================================================================
 
 
-def _format_blueprint_as_memory(blueprint: dict) -> str:
+def _format_blueprint_as_memory(
+    blueprint: dict,
+    symbol_data: dict[str, list[dict[str, str]]] | None = None,
+) -> str:
     """Format a project blueprint dict as a readable markdown memory.
 
     Called during auto-onboarding to generate a project-overview memory
-    from the learned blueprint. Handles missing/empty fields gracefully.
+    from the learned blueprint. Optionally enriched with top-level
+    symbols extracted via tree-sitter during learning.
 
     Args:
         blueprint: Dict from IntelligenceService.get_project_blueprint().
+        symbol_data: Optional mapping of file paths to lists of symbol dicts,
+            each with ``name`` and ``kind`` keys (e.g. "Class", "Function").
 
     Returns:
         Markdown string suitable for MemoryService.write_memory().
@@ -265,7 +271,105 @@ def _format_blueprint_as_memory(blueprint: dict) -> str:
             lines.append(f"- **{feature}**: {file_list}")
         lines.append("")
 
+    if symbol_data:
+        lines.append("## Key Symbols")
+        for file_path, symbols in sorted(symbol_data.items()):
+            if not symbols:
+                continue
+            lines.append(f"### `{file_path}`")
+            for sym in symbols:
+                kind = sym.get("kind", "Symbol")
+                name = sym.get("name", "?")
+                lines.append(f"- {kind}: **{name}**")
+            lines.append("")
+
     return "\n".join(lines)
+
+
+def _collect_key_symbols(
+    blueprint: dict,
+    project_path: str,
+    max_files: int = 10,
+    max_symbols_per_file: int = 20,
+) -> dict[str, list[dict[str, str]]] | None:
+    """Collect top-level symbols from key project files via tree-sitter.
+
+    Uses the fast tree-sitter backend (no LSP startup required) to extract
+    classes and functions from entry point files identified in the blueprint.
+    Returns None on any failure — callers should treat this as optional
+    enrichment.
+
+    Args:
+        blueprint: Project blueprint with ``entry_points`` and ``feature_map``.
+        project_path: Absolute path to the project root.
+        max_files: Maximum number of files to scan.
+        max_symbols_per_file: Maximum symbols to include per file.
+
+    Returns:
+        Dict mapping relative file paths to lists of ``{name, kind}`` dicts,
+        or None if extraction fails or no symbols found.
+    """
+    import os
+
+    from anamnesis.extraction.backends import get_shared_tree_sitter
+    from anamnesis.extraction.types import SymbolKind
+    from anamnesis.utils.language_registry import detect_language
+
+    # Gather candidate files from entry points and feature map
+    candidates: list[str] = []
+    for _etype, epath in blueprint.get("entry_points", {}).items():
+        if epath and isinstance(epath, str):
+            candidates.append(epath)
+    for _feature, files in blueprint.get("feature_map", {}).items():
+        if isinstance(files, list):
+            candidates.extend(f for f in files if isinstance(f, str))
+
+    # Deduplicate and limit
+    seen: set[str] = set()
+    unique: list[str] = []
+    for c in candidates:
+        if c not in seen:
+            seen.add(c)
+            unique.append(c)
+    unique = unique[:max_files]
+
+    if not unique:
+        return None
+
+    backend = get_shared_tree_sitter()
+    symbol_data: dict[str, list[dict[str, str]]] = {}
+    _TOP_LEVEL_KINDS = {SymbolKind.CLASS, SymbolKind.FUNCTION, SymbolKind.INTERFACE}
+
+    for rel_path in unique:
+        abs_path = os.path.join(project_path, rel_path)
+        if not os.path.isfile(abs_path):
+            continue
+
+        lang = detect_language(rel_path)
+        if lang == "unknown" or not backend.supports_language(lang):
+            continue
+
+        try:
+            with open(abs_path, encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+            result = backend.extract_all(content, rel_path, lang)
+        except Exception:
+            continue
+
+        file_symbols: list[dict[str, str]] = []
+        for sym in result.symbols:
+            if sym.kind in _TOP_LEVEL_KINDS:
+                file_symbols.append({
+                    "name": sym.name,
+                    "kind": str(sym.kind),
+                })
+            if len(file_symbols) >= max_symbols_per_file:
+                break
+
+        if file_symbols:
+            symbol_data[rel_path] = file_symbols
+
+    return symbol_data if symbol_data else None
 
 
 def _categorize_references(references: list[dict]) -> dict[str, list[dict]]:

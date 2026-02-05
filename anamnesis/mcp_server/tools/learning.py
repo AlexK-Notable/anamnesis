@@ -7,6 +7,7 @@ from typing import Optional
 from anamnesis.services import LearningOptions
 
 from anamnesis.mcp_server._shared import (
+    _collect_key_symbols,
     _format_blueprint_as_memory,
     _get_intelligence_service,
     _get_learning_service,
@@ -122,9 +123,16 @@ def _auto_learn_if_needed_impl(
                     path=resolved_path, include_feature_map=True,
                 )
                 if blueprint:
-                    content = _format_blueprint_as_memory(blueprint)
+                    # S5: Enrich with top-level symbols from key files
+                    symbol_data = _collect_key_symbols(blueprint, resolved_path)
+                    content = _format_blueprint_as_memory(
+                        blueprint, symbol_data=symbol_data,
+                    )
                     memory_service.write_memory("project-overview", content)
-                    response["auto_onboarding"] = "project-overview memory created"
+                    onboarding_msg = "project-overview memory created"
+                    if symbol_data:
+                        onboarding_msg += f" (enriched with symbols from {len(symbol_data)} files)"
+                    response["auto_onboarding"] = onboarding_msg
         except Exception:
             pass  # Non-critical — don't break learning on onboarding failure
 

@@ -52,6 +52,138 @@ class TestAutoOnboarding:
         assert "Rust" in content
 
 
+class TestSymbolEnrichedOnboarding:
+    """Tests for S5: LSP-enriched onboarding via tree-sitter."""
+
+    def test_format_blueprint_with_symbol_data(self):
+        """Blueprint formatter includes Key Symbols section when data provided."""
+        from anamnesis.mcp_server.server import _format_blueprint_as_memory
+
+        blueprint = {
+            "tech_stack": ["Python"],
+            "entry_points": {"cli": "src/main.py"},
+            "key_directories": {},
+            "architecture": "",
+        }
+        symbol_data = {
+            "src/main.py": [
+                {"name": "App", "kind": "class"},
+                {"name": "main", "kind": "function"},
+            ],
+            "src/models.py": [
+                {"name": "User", "kind": "class"},
+                {"name": "Product", "kind": "class"},
+            ],
+        }
+
+        content = _format_blueprint_as_memory(blueprint, symbol_data=symbol_data)
+        assert "## Key Symbols" in content
+        assert "### `src/main.py`" in content
+        assert "class: **App**" in content
+        assert "function: **main**" in content
+        assert "### `src/models.py`" in content
+        assert "class: **User**" in content
+
+    def test_format_blueprint_without_symbol_data_unchanged(self):
+        """Blueprint formatter omits Key Symbols when no data provided."""
+        from anamnesis.mcp_server.server import _format_blueprint_as_memory
+
+        blueprint = {
+            "tech_stack": ["Rust"],
+            "entry_points": {"main": "src/main.rs"},
+            "key_directories": {},
+            "architecture": "",
+        }
+
+        content_without = _format_blueprint_as_memory(blueprint)
+        content_with_none = _format_blueprint_as_memory(blueprint, symbol_data=None)
+
+        assert "Key Symbols" not in content_without
+        assert content_without == content_with_none
+
+    def test_format_blueprint_with_empty_symbol_data(self):
+        """Blueprint formatter omits section for empty symbol_data dict."""
+        from anamnesis.mcp_server.server import _format_blueprint_as_memory
+
+        blueprint = {"tech_stack": ["Go"]}
+        content = _format_blueprint_as_memory(blueprint, symbol_data={})
+        assert "Key Symbols" not in content
+
+    def test_collect_key_symbols_from_real_files(self, tmp_path):
+        """_collect_key_symbols extracts classes and functions from Python files."""
+        from anamnesis.mcp_server._shared import _collect_key_symbols
+
+        # Create a minimal Python file
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        (src_dir / "app.py").write_text(
+            "class Application:\n    pass\n\ndef run():\n    pass\n\nx = 42\n"
+        )
+
+        blueprint = {
+            "entry_points": {"main": "src/app.py"},
+            "feature_map": {},
+        }
+
+        result = _collect_key_symbols(blueprint, str(tmp_path))
+        assert result is not None
+        assert "src/app.py" in result
+        symbols = result["src/app.py"]
+        names = [s["name"] for s in symbols]
+        assert "Application" in names
+        assert "run" in names
+        # x = 42 is a variable, not a class/function — should be excluded
+        assert "x" not in names
+
+    def test_collect_key_symbols_missing_files(self, tmp_path):
+        """_collect_key_symbols handles missing files gracefully."""
+        from anamnesis.mcp_server._shared import _collect_key_symbols
+
+        blueprint = {
+            "entry_points": {"main": "nonexistent.py"},
+            "feature_map": {},
+        }
+
+        result = _collect_key_symbols(blueprint, str(tmp_path))
+        assert result is None
+
+    def test_collect_key_symbols_empty_blueprint(self, tmp_path):
+        """_collect_key_symbols returns None for empty blueprint."""
+        from anamnesis.mcp_server._shared import _collect_key_symbols
+
+        result = _collect_key_symbols({}, str(tmp_path))
+        assert result is None
+
+    def test_collect_key_symbols_non_code_files(self, tmp_path):
+        """_collect_key_symbols skips non-code files."""
+        from anamnesis.mcp_server._shared import _collect_key_symbols
+
+        (tmp_path / "readme.txt").write_text("Hello world")
+        blueprint = {
+            "entry_points": {"docs": "readme.txt"},
+            "feature_map": {},
+        }
+
+        result = _collect_key_symbols(blueprint, str(tmp_path))
+        assert result is None
+
+    def test_collect_key_symbols_respects_max_files(self, tmp_path):
+        """_collect_key_symbols limits number of files scanned."""
+        from anamnesis.mcp_server._shared import _collect_key_symbols
+
+        for i in range(5):
+            (tmp_path / f"mod{i}.py").write_text(f"class C{i}:\n    pass\n")
+
+        blueprint = {
+            "entry_points": {},
+            "feature_map": {"all": [f"mod{i}.py" for i in range(5)]},
+        }
+
+        result = _collect_key_symbols(blueprint, str(tmp_path), max_files=2)
+        assert result is not None
+        assert len(result) <= 2
+
+
 class TestMemorySearch:
     """Tests for semantic memory search."""
 
