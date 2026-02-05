@@ -200,6 +200,26 @@ def _analyze_file_complexity_impl(
     return svc.analyze_file_complexity(relative_path)
 
 
+@_with_error_handling("investigate_symbol")
+def _investigate_symbol_impl(
+    symbol_name: str,
+    relative_path: str,
+) -> dict:
+    """Implementation for investigate_symbol tool."""
+    svc = _get_symbol_service()
+    return svc.investigate_symbol(symbol_name, relative_path)
+
+
+@_with_error_handling("suggest_refactorings")
+def _suggest_refactorings_impl(
+    relative_path: str,
+    max_suggestions: int = 10,
+) -> dict:
+    """Implementation for suggest_refactorings tool."""
+    svc = _get_symbol_service()
+    return svc.suggest_refactorings(relative_path, max_suggestions=max_suggestions)
+
+
 @_with_error_handling("get_complexity_hotspots")
 def _get_complexity_hotspots_impl(
     relative_path: str,
@@ -546,3 +566,47 @@ def get_complexity_hotspots(
         List of hotspot symbols with complexity metrics
     """
     return _get_complexity_hotspots_impl(relative_path, min_level)
+
+
+@mcp.tool
+def suggest_refactorings(
+    relative_path: str,
+    max_suggestions: int = 10,
+) -> dict:
+    """Suggest refactorings by combining complexity and convention analysis.
+
+    Analyzes a file for high-complexity functions, naming convention deviations,
+    and maintainability issues. Returns ranked suggestions with evidence.
+
+    This does NOT generate code — it identifies what to refactor and why,
+    leaving implementation decisions to the caller.
+
+    Args:
+        relative_path: File to analyze (relative to project root)
+        max_suggestions: Maximum suggestions to return (default 10)
+
+    Returns:
+        Ranked suggestions with type, priority, symbol name, and evidence
+    """
+    return _suggest_refactorings_impl(relative_path, max_suggestions)
+
+
+@mcp.tool
+def investigate_symbol(
+    symbol_name: str,
+    relative_path: str,
+) -> dict:
+    """Deep investigation of a single symbol combining all analysis layers.
+
+    One-stop tool that returns complexity metrics, convention compliance,
+    and refactoring suggestions for a specific function, method, or class.
+    Combines S1 (refactoring), S2 (complexity), and S3 (conventions) data.
+
+    Args:
+        symbol_name: Name of the symbol to investigate
+        relative_path: File containing the symbol (relative to project root)
+
+    Returns:
+        Combined complexity, convention, and suggestion data for the symbol
+    """
+    return _investigate_symbol_impl(symbol_name, relative_path)

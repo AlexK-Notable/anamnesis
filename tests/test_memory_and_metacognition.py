@@ -559,5 +559,6 @@ class TestToolRegistration:
 
         tool_count = len(mcp._tool_manager._tools)
         # Phase 2 consolidation: 42→35, +1 activate_project, +1 suggest_code_pattern (S3),
-        # +2 analyze_file_complexity + get_complexity_hotspots (S2)
-        assert tool_count == 39
+        # +2 analyze_file_complexity + get_complexity_hotspots (S2),
+        # +1 suggest_refactorings (S1), +1 investigate_symbol (S4)
+        assert tool_count == 41

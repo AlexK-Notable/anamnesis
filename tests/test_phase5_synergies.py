@@ -689,3 +689,276 @@ class MyService:
             assert "cyclomatic" in func
             assert "cognitive" in func
             assert "level" in func
+
+
+class TestIntelligentRefactoringSuggestions:
+    """Tests for S1: Intelligent refactoring suggestions."""
+
+    COMPLEX_SOURCE = """\
+def simple_add(a, b):
+    return a + b
+
+def very_complex_handler(request, data, config, options, logger):
+    if request.method == "POST":
+        if data.get("validate"):
+            for item in data["items"]:
+                if item.get("type") == "a":
+                    if item.get("sub"):
+                        for sub in item["sub"]:
+                            if sub.get("active"):
+                                if sub.get("verified"):
+                                    process(sub, config)
+                                elif sub.get("pending"):
+                                    queue(sub)
+                                else:
+                                    skip(sub)
+                elif item.get("type") == "b":
+                    if item.get("flag"):
+                        handle_b_flag(item)
+                    else:
+                        handle_b(item)
+                elif item.get("type") == "c":
+                    handle_c(item)
+                else:
+                    handle_other(item)
+        elif data.get("skip"):
+            pass
+        elif data.get("retry"):
+            for attempt in range(3):
+                if try_operation(data):
+                    break
+        else:
+            raise ValueError("bad")
+    elif request.method == "GET":
+        if config.get("cache"):
+            return cached_fetch(config)
+        else:
+            return fetch(config)
+    elif request.method == "DELETE":
+        return delete(config)
+    else:
+        return error()
+
+def getData(x):
+    return x
+
+class MyService:
+    def get_name(self):
+        return self.name
+"""
+
+    def test_suggest_refactorings_returns_suggestions(self):
+        """suggest_refactorings returns structured suggestions for complex code."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.suggest_refactorings(
+            "src/handler.py", source=self.COMPLEX_SOURCE,
+        )
+
+        assert result["success"] is True
+        assert result["file"] == "src/handler.py"
+        assert isinstance(result["suggestions"], list)
+        assert len(result["suggestions"]) > 0
+        assert "summary" in result
+
+    def test_suggest_refactorings_suggestion_structure(self):
+        """Each suggestion has required fields."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.suggest_refactorings(
+            "src/handler.py", source=self.COMPLEX_SOURCE,
+        )
+
+        for suggestion in result["suggestions"]:
+            assert "type" in suggestion
+            assert "title" in suggestion
+            assert "priority" in suggestion
+            assert "symbol" in suggestion
+            assert suggestion["priority"] in ("critical", "high", "medium", "low")
+
+    def test_suggest_refactorings_detects_high_complexity(self):
+        """suggest_refactorings flags high-complexity functions."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.suggest_refactorings(
+            "src/handler.py", source=self.COMPLEX_SOURCE,
+        )
+
+        types = [s["type"] for s in result["suggestions"]]
+        # Should suggest extract_method or reduce_complexity for the complex handler
+        assert any(t in ("extract_method", "reduce_complexity") for t in types)
+
+    def test_suggest_refactorings_detects_naming_violations(self):
+        """suggest_refactorings detects naming convention deviations."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.suggest_refactorings(
+            "src/handler.py", source=self.COMPLEX_SOURCE,
+        )
+
+        rename_suggestions = [s for s in result["suggestions"] if s["type"] == "rename_to_convention"]
+        # getData should be flagged (camelCase in snake_case codebase)
+        flagged_names = [s["symbol"] for s in rename_suggestions]
+        assert "getData" in flagged_names
+
+    def test_suggest_refactorings_clean_file(self):
+        """suggest_refactorings returns empty for simple, clean code."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        simple = "def add(a, b):\n    return a + b\n\ndef sub(a, b):\n    return a - b\n"
+        result = svc.suggest_refactorings("src/simple.py", source=simple)
+
+        assert result["success"] is True
+        assert len(result["suggestions"]) == 0
+
+    def test_suggest_refactorings_respects_max(self):
+        """suggest_refactorings respects max_suggestions."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.suggest_refactorings(
+            "src/handler.py", source=self.COMPLEX_SOURCE, max_suggestions=2,
+        )
+
+        assert result["success"] is True
+        assert len(result["suggestions"]) <= 2
+
+    def test_suggest_refactorings_summary(self):
+        """suggest_refactorings includes a useful summary."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.suggest_refactorings(
+            "src/handler.py", source=self.COMPLEX_SOURCE,
+        )
+
+        summary = result["summary"]
+        assert "total_suggestions" in summary
+        assert "functions_analyzed" in summary
+        assert summary["total_suggestions"] == len(result["suggestions"])
+
+
+class TestSymbolInvestigation:
+    """Tests for S4: LSP-backed symbol investigation."""
+
+    SAMPLE_SOURCE = """\
+def simple_add(a, b):
+    return a + b
+
+def complex_processor(data, config, options):
+    if data.get("type") == "a":
+        if config.get("validate"):
+            for item in data["items"]:
+                if item.get("active"):
+                    process(item)
+                elif item.get("pending"):
+                    queue(item)
+        else:
+            skip(data)
+    elif data.get("type") == "b":
+        handle_b(data)
+    else:
+        handle_other(data)
+
+class MyService:
+    def get_name(self):
+        return self.name
+
+    def set_name(self, value):
+        self.name = value
+"""
+
+    def test_investigate_symbol_returns_combined_data(self):
+        """investigate_symbol returns complexity + convention data for a function."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.investigate_symbol(
+            "complex_processor", "src/handler.py", source=self.SAMPLE_SOURCE,
+        )
+
+        assert result["success"] is True
+        assert result["symbol"] == "complex_processor"
+        assert "complexity" in result
+        assert result["complexity"]["cyclomatic"] > 1
+        assert "level" in result["complexity"]
+
+    def test_investigate_symbol_not_found(self):
+        """investigate_symbol returns error for unknown symbol."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.investigate_symbol(
+            "nonexistent_func", "src/handler.py", source=self.SAMPLE_SOURCE,
+        )
+
+        assert result["success"] is False
+
+    def test_investigate_symbol_includes_suggestions(self):
+        """investigate_symbol includes refactoring suggestions when applicable."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.investigate_symbol(
+            "complex_processor", "src/handler.py", source=self.SAMPLE_SOURCE,
+        )
+
+        assert result["success"] is True
+        assert "suggestions" in result
+        # Complex function should have at least one suggestion
+        assert isinstance(result["suggestions"], list)
+
+    def test_investigate_symbol_simple_function_no_issues(self):
+        """investigate_symbol reports clean for simple functions."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.investigate_symbol(
+            "simple_add", "src/handler.py", source=self.SAMPLE_SOURCE,
+        )
+
+        assert result["success"] is True
+        assert result["complexity"]["level"] == "low"
+        assert len(result["suggestions"]) == 0
+
+    def test_investigate_symbol_includes_location(self):
+        """investigate_symbol includes line location."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.investigate_symbol(
+            "simple_add", "src/handler.py", source=self.SAMPLE_SOURCE,
+        )
+
+        assert result["success"] is True
+        assert "line" in result
+        assert result["line"] == 1

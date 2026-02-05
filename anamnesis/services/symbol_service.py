@@ -668,3 +668,248 @@ class SymbolService:
             "total_functions": file_result["function_count"],
             "hotspot_count": len(hotspots),
         }
+
+    # -----------------------------------------------------------------
+    # Intelligent Refactoring Suggestions (S1)
+    # -----------------------------------------------------------------
+
+    def suggest_refactorings(
+        self,
+        relative_path: str,
+        source: Optional[str] = None,
+        max_suggestions: int = 10,
+    ) -> dict:
+        """Suggest refactorings by combining complexity, convention, and pattern data.
+
+        Analyzes a file using S2 (complexity) and S3 (conventions) data to
+        generate ranked refactoring suggestions. Pure heuristic — no LLM calls.
+
+        Args:
+            relative_path: File to analyze.
+            source: Optional source code. If None, reads from disk.
+            max_suggestions: Maximum suggestions to return.
+
+        Returns:
+            Dict with ranked suggestions, each with type, priority, and evidence.
+        """
+        # Get complexity data (S2)
+        file_analysis = self.analyze_file_complexity(relative_path, source=source)
+        if not file_analysis.get("success"):
+            return file_analysis
+
+        functions = file_analysis.get("functions", [])
+        suggestions: list[dict] = []
+
+        # Collect all function names for convention checking
+        func_names = [f["name"] for f in functions]
+        dominant_convention = self._detect_dominant_convention(func_names)
+
+        for func in functions:
+            cyc = func["cyclomatic"]
+            cog = func["cognitive"]
+            level = func["level"]
+            maint = func["maintainability"]
+            name = func["name"]
+
+            # Rule 1: Very high complexity → extract method
+            if cyc > 20 or cog > 25:
+                suggestions.append({
+                    "type": "extract_method",
+                    "title": f"Extract method: '{name}' is very complex",
+                    "symbol": name,
+                    "priority": "critical" if cyc > 30 else "high",
+                    "evidence": {
+                        "cyclomatic": cyc,
+                        "cognitive": cog,
+                        "level": level,
+                    },
+                })
+            # Rule 2: Moderate-high complexity → reduce complexity
+            elif cyc > 10 or cog > 15:
+                suggestions.append({
+                    "type": "reduce_complexity",
+                    "title": f"Simplify '{name}': complexity is {level}",
+                    "symbol": name,
+                    "priority": "high" if level == "high" else "medium",
+                    "evidence": {
+                        "cyclomatic": cyc,
+                        "cognitive": cog,
+                        "level": level,
+                    },
+                })
+
+            # Rule 3: Low maintainability
+            if maint < 40:
+                suggestions.append({
+                    "type": "improve_maintainability",
+                    "title": f"Improve maintainability of '{name}' (score: {maint})",
+                    "symbol": name,
+                    "priority": "high" if maint < 25 else "medium",
+                    "evidence": {"maintainability": maint},
+                })
+
+        # Rule 4: Naming convention violations
+        if dominant_convention and dominant_convention != "unknown":
+            violations = self.check_names_against_convention(
+                func_names, expected=dominant_convention, symbol_kind="function",
+            )
+            for v in violations:
+                suggestions.append({
+                    "type": "rename_to_convention",
+                    "title": f"Rename '{v['name']}': {v['actual']} → {dominant_convention}",
+                    "symbol": v["name"],
+                    "priority": "medium",
+                    "evidence": {
+                        "expected": v["expected"],
+                        "actual": v["actual"],
+                    },
+                })
+
+        # Sort by priority: critical > high > medium > low
+        priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        suggestions.sort(key=lambda s: priority_order.get(s["priority"], 4))
+
+        truncated = suggestions[:max_suggestions]
+
+        return {
+            "success": True,
+            "file": relative_path,
+            "suggestions": truncated,
+            "summary": {
+                "total_suggestions": len(truncated),
+                "functions_analyzed": len(functions),
+                "dominant_convention": dominant_convention,
+            },
+        }
+
+    # -----------------------------------------------------------------
+    # Symbol Investigation (S4)
+    # -----------------------------------------------------------------
+
+    def investigate_symbol(
+        self,
+        symbol_name: str,
+        relative_path: str,
+        source: Optional[str] = None,
+    ) -> dict:
+        """Investigate a single symbol with combined synergy data.
+
+        One-stop analysis that combines complexity (S2), convention check (S3),
+        and refactoring suggestions (S1) for a specific named symbol.
+
+        Args:
+            symbol_name: Name of the function/method/class to investigate.
+            relative_path: File containing the symbol.
+            source: Optional source code. If None, reads from disk.
+
+        Returns:
+            Dict with complexity metrics, convention status, suggestions,
+            and location data for the symbol.
+        """
+        if source is None:
+            source = self._read_source(relative_path)
+            if source is None:
+                return {"success": False, "error": f"Cannot read file: {relative_path}"}
+
+        from anamnesis.analysis.complexity_analyzer import ComplexityAnalyzer
+        from anamnesis.extraction.backends import get_shared_tree_sitter
+        from pathlib import Path
+
+        language = self._detect_language(relative_path)
+        analyzer = ComplexityAnalyzer(language=language)
+
+        abs_path = str(Path(self._project_root) / relative_path)
+        backend = get_shared_tree_sitter()
+        extraction = backend.extract_all(source, abs_path, language)
+
+        # Find the target symbol
+        target = None
+        for sym in extraction.symbols:
+            if sym.name == symbol_name:
+                target = sym
+                break
+
+        if target is None:
+            return {
+                "success": False,
+                "error": f"Symbol '{symbol_name}' not found in {relative_path}",
+            }
+
+        # Complexity analysis
+        lines = source.split("\n")
+        start = target.start_line - 1
+        end = target.end_line
+        sym_source = "\n".join(lines[start:end])
+        cr = analyzer.analyze_source(
+            sym_source, file_path=relative_path, name=target.name,
+        )
+
+        complexity = {
+            "cyclomatic": cr.cyclomatic.value,
+            "cognitive": cr.cognitive.value,
+            "level": cr.cyclomatic.level.value,
+            "maintainability": round(cr.maintainability.value, 1),
+        }
+
+        # Convention check
+        naming_style = self.detect_naming_style(symbol_name)
+
+        # Collect peer names to detect dominant convention
+        kind_str = target.kind if isinstance(target.kind, str) else target.kind.value
+        peer_names = [
+            s.name for s in extraction.symbols
+            if (s.kind if isinstance(s.kind, str) else s.kind.value) == kind_str
+        ]
+        dominant = self._detect_dominant_convention(peer_names)
+        convention_ok = (
+            naming_style == dominant
+            or dominant == "unknown"
+            or naming_style == "flat_case" and dominant == "snake_case"
+        )
+
+        # Refactoring suggestions for this symbol
+        suggestions: list[dict] = []
+        cyc = cr.cyclomatic.value
+        cog = cr.cognitive.value
+        maint = cr.maintainability.value
+        level = cr.cyclomatic.level.value
+
+        if cyc > 20 or cog > 25:
+            suggestions.append({
+                "type": "extract_method",
+                "title": f"Extract method: '{symbol_name}' is very complex",
+                "priority": "critical" if cyc > 30 else "high",
+            })
+        elif cyc > 10 or cog > 15:
+            suggestions.append({
+                "type": "reduce_complexity",
+                "title": f"Simplify '{symbol_name}': complexity is {level}",
+                "priority": "high" if level == "high" else "medium",
+            })
+
+        if maint < 40:
+            suggestions.append({
+                "type": "improve_maintainability",
+                "title": f"Improve maintainability (score: {round(maint, 1)})",
+                "priority": "high" if maint < 25 else "medium",
+            })
+
+        if not convention_ok:
+            suggestions.append({
+                "type": "rename_to_convention",
+                "title": f"Rename: {naming_style} → {dominant}",
+                "priority": "medium",
+            })
+
+        return {
+            "success": True,
+            "symbol": symbol_name,
+            "file": relative_path,
+            "kind": kind_str,
+            "line": target.start_line,
+            "end_line": target.end_line,
+            "complexity": complexity,
+            "naming_style": naming_style,
+            "convention_match": convention_ok,
+            "suggestions": suggestions,
+        }
