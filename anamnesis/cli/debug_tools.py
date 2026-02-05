@@ -7,6 +7,8 @@ from typing import Any
 
 import click
 
+from anamnesis.utils.language_registry import get_code_extensions
+
 
 @dataclass
 class DiagnosticResult:
@@ -238,7 +240,7 @@ class DebugTools:
     def _check_code_files(self, path: Path) -> DiagnosticResult:
         """Check for code files in project."""
         start = time.time()
-        extensions = [".py", ".ts", ".tsx", ".js", ".jsx", ".rs", ".go", ".java"]
+        extensions = sorted(get_code_extensions())
         file_counts: dict[str, int] = {}
 
         for ext in extensions:

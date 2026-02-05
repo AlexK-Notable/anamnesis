@@ -269,77 +269,23 @@ def _format_blueprint_as_memory(blueprint: dict) -> str:
 
 
 def _categorize_references(references: list[dict]) -> dict[str, list[dict]]:
-    """Categorize symbol references by file type for intelligent filtering.
+    """Categorize symbol references by file type.
 
-    Groups references into source, test, config, and other categories
-    based on file path heuristics. Each reference retains its original
-    data and gains a 'category' field.
-
-    Args:
-        references: List of reference dicts with at least a 'file' key.
-
-    Returns:
-        Dict mapping category names to lists of references.
+    Thin wrapper — delegates to SymbolService.categorize_references().
     """
-    if not references:
-        return {}
+    from anamnesis.services.symbol_service import SymbolService
 
-    categories: dict[str, list[dict]] = {}
-
-    for ref in references:
-        file_path = ref.get("file", ref.get("relative_path", "")).lower()
-
-        if any(t in file_path for t in ("test", "spec", "fixture", "conftest")):
-            cat = "test"
-        elif any(c in file_path for c in ("config", "settings", "env", ".cfg", ".ini", ".toml", ".yaml", ".yml")):
-            cat = "config"
-        elif any(s in file_path for s in ("src/", "lib/", "app/", "anamnesis/", "pkg/")):
-            cat = "source"
-        elif file_path.endswith(".py") or file_path.endswith(".ts") or file_path.endswith(".rs"):
-            cat = "source"
-        else:
-            cat = "other"
-
-        ref_with_cat = {**ref, "category": cat}
-        categories.setdefault(cat, []).append(ref_with_cat)
-
-    return categories
-
-
-_RE_UPPER_CASE = re.compile(r"^[A-Z][A-Z0-9_]*$")
-_RE_PASCAL_CASE = re.compile(r"^[A-Z][a-zA-Z0-9]*$")
-_RE_SNAKE_CASE = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)+$")
-_RE_CAMEL_CASE = re.compile(r"^[a-z][a-zA-Z0-9]*$")
-_RE_FLAT_CASE = re.compile(r"^[a-z][a-z0-9]*$")
+    return SymbolService.categorize_references(references)
 
 
 def _detect_naming_style(name: str) -> str:
     """Detect the naming convention of a single identifier.
 
-    Args:
-        name: The identifier name to analyze.
-
-    Returns:
-        One of: snake_case, PascalCase, camelCase, UPPER_CASE, flat_case, kebab-case, mixed
+    Thin wrapper — delegates to SymbolService.detect_naming_style().
     """
-    if not name or name.startswith("_"):
-        name = name.lstrip("_")
-    if not name:
-        return "unknown"
+    from anamnesis.services.symbol_service import SymbolService
 
-    if _RE_UPPER_CASE.match(name) and "_" in name:
-        return "UPPER_CASE"
-    if _RE_PASCAL_CASE.match(name):
-        return "PascalCase"
-    if _RE_SNAKE_CASE.match(name):
-        return "snake_case"
-    if _RE_CAMEL_CASE.match(name) and any(c.isupper() for c in name):
-        return "camelCase"
-    if _RE_FLAT_CASE.match(name):
-        return "flat_case"
-    if "-" in name:
-        return "kebab-case"
-    return "mixed"
+    return SymbolService.detect_naming_style(name)
 
 
 def _check_names_against_convention(
@@ -347,34 +293,13 @@ def _check_names_against_convention(
     expected: str,
     symbol_kind: str,
 ) -> list[dict]:
-    """Check a list of symbol names against an expected naming convention.
+    """Check symbol names against an expected naming convention.
 
-    Args:
-        names: List of identifier names to check.
-        expected: Expected convention (snake_case, PascalCase, etc.).
-        symbol_kind: Kind of symbol for context (function, class, etc.).
-
-    Returns:
-        List of violation dicts with name, expected, actual, symbol_kind.
+    Thin wrapper — delegates to SymbolService.check_names_against_convention().
     """
-    violations = []
-    for name in names:
-        # Skip private/dunder names
-        clean = name.lstrip("_")
-        if not clean or clean.startswith("__"):
-            continue
-        actual = _detect_naming_style(name)
-        if actual != expected and actual != "unknown":
-            # flat_case is compatible with snake_case for single-word names
-            if expected == "snake_case" and actual == "flat_case":
-                continue
-            violations.append({
-                "name": name,
-                "expected": expected,
-                "actual": actual,
-                "symbol_kind": symbol_kind,
-            })
-    return violations
+    from anamnesis.services.symbol_service import SymbolService
+
+    return SymbolService.check_names_against_convention(names, expected, symbol_kind)
 
 
 # =============================================================================

@@ -12,6 +12,11 @@ import signal
 from dataclasses import dataclass
 from typing import Iterator, Optional
 
+from anamnesis.utils.language_registry import (
+    detect_language_from_extension,
+    get_language_info,
+)
+
 from .matcher import PatternMatcher, PatternMatch
 
 
@@ -188,20 +193,6 @@ class RegexPatternMatcher(PatternMatcher):
         ],
     }
 
-    # Extension to language mapping
-    EXTENSION_MAP = {
-        "py": "python",
-        "pyi": "python",
-        "js": "javascript",
-        "mjs": "javascript",
-        "cjs": "javascript",
-        "jsx": "javascript",
-        "ts": "typescript",
-        "tsx": "typescript",
-        "mts": "typescript",
-        "go": "go",
-    }
-
     def __init__(self, patterns: Optional[list[RegexPattern]] = None):
         """Initialize with custom patterns.
 
@@ -266,7 +257,8 @@ class RegexPatternMatcher(PatternMatcher):
             Language name or None.
         """
         ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else ""
-        return self.EXTENSION_MAP.get(ext)
+        lang = detect_language_from_extension(ext)
+        return None if lang == "unknown" else lang
 
     def _extract_context(
         self,
@@ -468,7 +460,7 @@ class RegexPatternMatcher(PatternMatcher):
             True if we have patterns for this language.
         """
         # Regex works on all text, but language-specific patterns exist
-        return language in self.BUILTIN_PATTERNS or language in self.EXTENSION_MAP.values()
+        return language in self.BUILTIN_PATTERNS or get_language_info(language) is not None
 
     def get_patterns_for_language(self, language: str) -> list[RegexPattern]:
         """Get all patterns applicable to a language.

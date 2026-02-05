@@ -70,13 +70,23 @@ class ExtractionOrchestrator:
     ) -> None:
         if backends is not None:
             self._backends = sorted(backends, key=lambda b: b.priority, reverse=True)
-        else:
-            # Default: tree-sitter + regex
+        elif parse_cache is not None:
+            # Explicit cache: create a dedicated TreeSitterBackend with it
             from anamnesis.extraction.backends import RegexBackend, TreeSitterBackend
 
-            cache = parse_cache or ParseCache()
             self._backends = [
-                TreeSitterBackend(parse_cache=cache),  # priority=50
+                TreeSitterBackend(parse_cache=parse_cache),
+                RegexBackend(),
+            ]
+        else:
+            # Default: use the shared tree-sitter singleton
+            from anamnesis.extraction.backends import (
+                RegexBackend,
+                get_shared_tree_sitter,
+            )
+
+            self._backends = [
+                get_shared_tree_sitter(),  # priority=50
                 RegexBackend(),  # priority=10
             ]
 

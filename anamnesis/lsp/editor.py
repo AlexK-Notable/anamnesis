@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import difflib
 import logging
-import os
-import pathlib
 from typing import Any
 
 from anamnesis.lsp.symbols import LspSymbol, NamePathMatcher, SymbolRetriever
+from anamnesis.lsp.utils import safe_join, uri_to_relative
 
 log = logging.getLogger(__name__)
 
@@ -75,13 +74,7 @@ class CodeEditor:
 
     def _resolve_safe_path(self, relative_path: str) -> str:
         """Resolve a relative path safely within the project root."""
-        abs_path = os.path.realpath(os.path.join(self._project_root, relative_path))
-        root_real = os.path.realpath(self._project_root)
-        if not (abs_path == root_real or abs_path.startswith(root_real + os.sep)):
-            raise ValueError(
-                f"Path traversal denied: '{relative_path}' resolves outside project root"
-            )
-        return abs_path
+        return safe_join(self._project_root, relative_path)
 
     def _read_file(self, relative_path: str) -> str:
         abs_path = self._resolve_safe_path(relative_path)
@@ -358,10 +351,4 @@ class CodeEditor:
 
     def _uri_to_relative(self, uri: str) -> str:
         """Convert file:// URI to project-relative path."""
-        if uri.startswith("file://"):
-            abs_path = uri[7:]
-            try:
-                return str(pathlib.Path(abs_path).relative_to(self._project_root))
-            except ValueError:
-                return abs_path
-        return uri
+        return uri_to_relative(uri, self._project_root)

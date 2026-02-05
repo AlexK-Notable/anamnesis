@@ -653,6 +653,32 @@ def get_all_extensions() -> list[str]:
     return sorted(extensions)
 
 
+def get_code_extensions(*, with_dot: bool = True) -> frozenset[str]:
+    """Get extensions for programming languages (not markup/config/query).
+
+    Returns extensions for languages in categories: SYSTEMS, WEB_FRONTEND,
+    WEB_BACKEND, GENERAL, FUNCTIONAL, MOBILE, DATA_SCIENCE, SCRIPTING.
+    Excludes MARKUP, QUERY, and OTHER.
+
+    Args:
+        with_dot: If True (default), return extensions with leading dot.
+
+    Returns:
+        Frozen set of extensions, e.g. {".py", ".ts", ...} or {"py", "ts", ...}.
+    """
+    _NON_CODE_CATEGORIES = {
+        LanguageCategory.MARKUP,
+        LanguageCategory.QUERY,
+        LanguageCategory.OTHER,
+    }
+    exts: set[str] = set()
+    for info in LANGUAGES.values():
+        if info.category not in _NON_CODE_CATEGORIES:
+            for ext in info.extensions:
+                exts.add(f".{ext}" if with_dot else ext)
+    return frozenset(exts)
+
+
 def is_code_file(file_path: str) -> bool:
     """
     Check if a file is a recognized code file.

@@ -234,9 +234,8 @@ class LspExtractionBackend:
             return []
 
     def _get_tree_sitter(self) -> Any:
-        """Lazy-load the TreeSitterBackend."""
+        """Get the shared TreeSitterBackend (with shared ParseCache)."""
         if self._tree_sitter is None:
-            from anamnesis.extraction.backends.tree_sitter_backend import TreeSitterBackend
-            from anamnesis.extraction.cache import ParseCache
-            self._tree_sitter = TreeSitterBackend(parse_cache=ParseCache())
+            from anamnesis.extraction.backends import get_shared_tree_sitter
+            self._tree_sitter = get_shared_tree_sitter()
         return self._tree_sitter

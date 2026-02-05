@@ -9,6 +9,7 @@ from anamnesis.analysis.complexity_analyzer import ComplexityAnalyzer, FileCompl
 from anamnesis.analysis.dependency_graph import DependencyGraph
 from anamnesis.intelligence.semantic_engine import CodebaseAnalysis, SemanticEngine
 from anamnesis.utils.error_classifier import classify_error
+from anamnesis.utils.language_registry import get_code_extensions
 from anamnesis.utils.logger import logger
 
 
@@ -290,7 +291,7 @@ class CodebaseService:
         file_count = 0
         hotspots: list[str] = []
 
-        extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs"}
+        extensions = get_code_extensions()
 
         for ext in extensions:
             for file_path in list(path.rglob(f"*{ext}"))[:max_files]:

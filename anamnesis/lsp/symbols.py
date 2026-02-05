@@ -14,17 +14,10 @@ from typing import Any, Sequence
 
 from anamnesis.lsp.solidlsp.compat import ToStringMixin
 from anamnesis.lsp.solidlsp.lsp_protocol_handler import lsp_types
+from anamnesis.lsp.utils import safe_join, uri_to_relative
+from anamnesis.utils.language_registry import detect_language_from_extension, get_code_extensions
 
 log = logging.getLogger(__name__)
-
-
-def _safe_join(root: str, relative_path: str) -> str:
-    """Join root and relative path, ensuring result stays within root."""
-    abs_path = os.path.realpath(os.path.join(root, relative_path))
-    root_real = os.path.realpath(root)
-    if not (abs_path == root_real or abs_path.startswith(root_real + os.sep)):
-        raise ValueError(f"Path traversal denied: '{relative_path}' resolves outside '{root_real}'")
-    return abs_path
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +90,7 @@ class LspSymbol:
     def get_body(self, project_root: str, encoding: str = "utf-8") -> str | None:
         """Read the symbol's body from disk."""
         try:
-            abs_path = _safe_join(project_root, self.location.relative_path)
+            abs_path = safe_join(project_root, self.location.relative_path)
         except ValueError:
             return None
         if not os.path.exists(abs_path):
@@ -447,11 +440,10 @@ class SymbolRetriever:
     def _tree_sitter_symbols(self, relative_path: str) -> list[LspSymbol]:
         """Fall back to tree-sitter for symbol extraction."""
         try:
-            from anamnesis.extraction.backends.tree_sitter_backend import TreeSitterBackend
-            from anamnesis.extraction.cache import ParseCache
+            from anamnesis.extraction.backends import get_shared_tree_sitter
 
             try:
-                abs_path = _safe_join(self._project_root, relative_path)
+                abs_path = safe_join(self._project_root, relative_path)
             except ValueError:
                 return []
             if not os.path.exists(abs_path):
@@ -465,7 +457,7 @@ class SymbolRetriever:
             if not language:
                 return []
 
-            backend = TreeSitterBackend(parse_cache=ParseCache())
+            backend = get_shared_tree_sitter()
             if not backend.supports_language(language):
                 return []
 
@@ -515,19 +507,26 @@ class SymbolRetriever:
         kind_str = str(kind).lower() if kind else ""
         return _map.get(kind_str, 13)  # Default to Variable
 
+    # Extensions where the tree-sitter grammar name differs from the
+    # canonical language name returned by the language registry.
+    _TS_EXT_OVERRIDES: dict[str, str] = {
+        "tsx": "tsx",  # registry returns "typescript", tree-sitter needs "tsx"
+        "jsx": "jsx",  # registry returns "javascript", tree-sitter needs "jsx"
+    }
+
     @staticmethod
     def _ext_to_language(ext: str) -> str:
-        """Map file extension to tree-sitter language name."""
-        _map = {
-            "py": "python", "pyi": "python",
-            "go": "go",
-            "rs": "rust",
-            "ts": "typescript", "tsx": "tsx", "js": "javascript", "jsx": "jsx",
-            "java": "java", "kt": "kotlin",
-            "rb": "ruby", "c": "c", "cpp": "cpp", "h": "c",
-            "cs": "c_sharp", "lua": "lua", "zig": "zig",
-        }
-        return _map.get(ext, "")
+        """Map file extension to tree-sitter language name.
+
+        Delegates to the centralised language registry for the 40+ language
+        mapping, with overrides for extensions that need a distinct
+        tree-sitter grammar (tsx, jsx).
+        """
+        override = SymbolRetriever._TS_EXT_OVERRIDES.get(ext)
+        if override is not None:
+            return override
+        lang = detect_language_from_extension(ext)
+        return "" if lang == "unknown" else lang
 
     # -----------------------------------------------------------------------
     # LSP symbol conversion
@@ -655,21 +654,14 @@ class SymbolRetriever:
 
     def _uri_to_relative(self, uri: str) -> str:
         """Convert a file:// URI to a project-relative path."""
-        import pathlib
-        if uri.startswith("file://"):
-            abs_path = uri[7:]
-            try:
-                return str(pathlib.Path(abs_path).relative_to(self._project_root))
-            except ValueError:
-                return abs_path
-        return uri
+        return uri_to_relative(uri, self._project_root)
 
     def _read_context(
         self, relative_path: str, line: int, context: int = 2
     ) -> str:
         """Read a few lines around a position for context display."""
         try:
-            abs_path = _safe_join(self._project_root, relative_path)
+            abs_path = safe_join(self._project_root, relative_path)
         except ValueError:
             return ""
         if not os.path.exists(abs_path):
@@ -689,10 +681,7 @@ class SymbolRetriever:
 
     def _get_source_files(self) -> list[str]:
         """Get all source files in the project (limited scan)."""
-        source_extensions = {
-            ".py", ".go", ".rs", ".ts", ".tsx", ".js", ".jsx",
-            ".java", ".kt", ".rb", ".c", ".cpp", ".h", ".cs",
-        }
+        source_extensions = get_code_extensions()
         files = []
         for root, dirs, filenames in os.walk(self._project_root):
             # Skip hidden dirs and common non-source dirs

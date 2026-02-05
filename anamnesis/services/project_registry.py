@@ -141,7 +141,9 @@ class ProjectContext:
             from anamnesis.services.symbol_service import SymbolService
 
             self._symbol_service = SymbolService(
-                self.path, lsp_manager=self.get_lsp_manager(),
+                self.path,
+                lsp_manager=self.get_lsp_manager(),
+                intelligence_service=self._intelligence_service,
             )
         return self._symbol_service
 

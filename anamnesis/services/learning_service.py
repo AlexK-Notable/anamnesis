@@ -11,6 +11,7 @@ from anamnesis.constants import DEFAULT_IGNORE_DIRS
 from anamnesis.intelligence.pattern_engine import PatternEngine
 from anamnesis.intelligence.semantic_engine import SemanticEngine
 from anamnesis.utils.error_classifier import classify_error
+from anamnesis.utils.language_registry import get_code_extensions
 from anamnesis.utils.security import is_sensitive_file
 from anamnesis.utils.logger import logger
 
@@ -362,7 +363,7 @@ class LearningService:
         path_obj = Path(path)
 
         # Get all source files
-        extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h"}
+        extensions = get_code_extensions()
         files = []
         for ext in extensions:
             files.extend(path_obj.rglob(f"*{ext}"))
@@ -409,7 +410,7 @@ class LearningService:
         orchestrator = self._get_orchestrator()
         concepts = []
 
-        extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h"}
+        extensions = get_code_extensions()
         files = []
         for ext in extensions:
             files.extend(path.rglob(f"*{ext}"))
@@ -453,7 +454,7 @@ class LearningService:
         orchestrator = self._get_orchestrator()
         patterns = []
 
-        extensions = {".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs", ".java", ".c", ".cpp", ".h"}
+        extensions = get_code_extensions()
         files = []
         for ext in extensions:
             files.extend(path.rglob(f"*{ext}"))

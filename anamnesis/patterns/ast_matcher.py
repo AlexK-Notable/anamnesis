@@ -8,10 +8,14 @@ language-aware pattern matching.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Iterator, Optional
 
 from loguru import logger
+
+from anamnesis.utils.language_registry import (
+    detect_language,
+    normalize_language_name,
+)
 
 from .matcher import PatternMatcher, PatternMatch
 
@@ -19,33 +23,22 @@ if TYPE_CHECKING:
     from tree_sitter import Language, Parser
 
 
-# Language name normalization
-LANGUAGE_MAP = {
-    "python": "python",
-    "py": "python",
-    "javascript": "javascript",
-    "js": "javascript",
-    "jsx": "javascript",
-    "typescript": "typescript",
-    "ts": "typescript",
+# Language name normalization — extends the registry with tree-sitter-specific
+# aliases (tsx/jsx → parent language) that the registry doesn't handle because
+# it treats them as extensions rather than standalone language names.
+_EXTRA_ALIASES: dict[str, str] = {
     "tsx": "typescript",
-    "go": "go",
-    "golang": "go",
+    "jsx": "javascript",
 }
 
-# File extension to language
-EXTENSION_MAP = {
-    ".py": "python",
-    ".pyi": "python",
-    ".js": "javascript",
-    ".mjs": "javascript",
-    ".cjs": "javascript",
-    ".jsx": "javascript",
-    ".ts": "typescript",
-    ".tsx": "typescript",
-    ".mts": "typescript",
-    ".go": "go",
-}
+
+def _normalize_language(name: str) -> str:
+    """Normalize a language name using the registry + local overrides."""
+    lower = name.lower()
+    if lower in _EXTRA_ALIASES:
+        return _EXTRA_ALIASES[lower]
+    result = normalize_language_name(lower)
+    return result
 
 
 @dataclass
@@ -332,8 +325,8 @@ class ASTPatternMatcher(PatternMatcher):
         Returns:
             Normalized language name or None.
         """
-        ext = Path(file_path).suffix.lower()
-        return EXTENSION_MAP.get(ext)
+        lang = detect_language(file_path)
+        return None if lang == "unknown" else lang
 
     def _extract_context(
         self,
@@ -374,7 +367,7 @@ class ASTPatternMatcher(PatternMatcher):
         Returns:
             True if AST matching is available for this language.
         """
-        normalized = LANGUAGE_MAP.get(language.lower(), language.lower())
+        normalized = _normalize_language(language)
         return self._ensure_parser(normalized)
 
     def match(self, content: str, file_path: str) -> Iterator[PatternMatch]:
@@ -413,7 +406,7 @@ class ASTPatternMatcher(PatternMatcher):
         Yields:
             PatternMatch for each match found.
         """
-        language = LANGUAGE_MAP.get(query.language.lower(), query.language.lower())
+        language = _normalize_language(query.language)
 
         if not self._ensure_parser(language):
             return
@@ -518,5 +511,5 @@ class ASTPatternMatcher(PatternMatcher):
         Returns:
             List of ASTQuery objects.
         """
-        normalized = LANGUAGE_MAP.get(language.lower(), language.lower())
+        normalized = _normalize_language(language)
         return self.BUILTIN_QUERIES.get(normalized, [])
