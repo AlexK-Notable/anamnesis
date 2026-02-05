@@ -485,3 +485,186 @@ class SymbolService:
 
         # Return types used in at least 2 symbols
         return [t for t, count in type_counts.items() if count >= 2]
+
+    # -----------------------------------------------------------------
+    # Complexity-Aware Navigation (S2)
+    # -----------------------------------------------------------------
+
+    def _detect_language(self, relative_path: str) -> str:
+        """Detect language from file extension for complexity analysis."""
+        from anamnesis.utils.language_registry import detect_language_from_extension
+        from pathlib import Path
+
+        ext = Path(relative_path).suffix
+        lang = detect_language_from_extension(ext)
+        return lang if lang != "unknown" else "python"
+
+    def _read_source(self, relative_path: str) -> Optional[str]:
+        """Read source code from a file relative to project root."""
+        from pathlib import Path
+
+        full_path = Path(self._project_root) / relative_path
+        try:
+            return full_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return None
+
+    def analyze_file_complexity(
+        self,
+        relative_path: str,
+        source: Optional[str] = None,
+    ) -> dict:
+        """Analyze complexity metrics for all symbols in a file.
+
+        Uses ComplexityAnalyzer for metric computation and the extraction
+        layer for symbol discovery. Returns aggregated file metrics plus
+        per-function breakdown with complexity levels.
+
+        Args:
+            relative_path: File to analyze (relative to project root).
+            source: Optional source code. If None, reads from disk.
+
+        Returns:
+            Dict with file-level metrics, per-function breakdown, and hotspots.
+        """
+        if source is None:
+            source = self._read_source(relative_path)
+            if source is None:
+                return {
+                    "success": False,
+                    "error": f"Cannot read file: {relative_path}",
+                }
+
+        from anamnesis.analysis.complexity_analyzer import (
+            ComplexityAnalyzer,
+            ComplexityLevel,
+        )
+        from anamnesis.extraction.backends import get_shared_tree_sitter
+        from anamnesis.extraction.types import SymbolKind
+        from pathlib import Path
+
+        language = self._detect_language(relative_path)
+        analyzer = ComplexityAnalyzer(language=language)
+
+        # Extract symbols via shared tree-sitter backend
+        abs_path = str(Path(self._project_root) / relative_path)
+        backend = get_shared_tree_sitter()
+        extraction = backend.extract_all(source, abs_path, language)
+        symbols = extraction.symbols
+
+        # Analyze each function/method individually
+        lines = source.split("\n")
+        functions: list[dict] = []
+        class_count = 0
+
+        for sym in symbols:
+            kind_str = sym.kind if isinstance(sym.kind, str) else sym.kind.value
+            if kind_str == SymbolKind.CLASS:
+                class_count += 1
+            if kind_str not in (SymbolKind.FUNCTION, SymbolKind.METHOD):
+                continue
+            start = sym.start_line - 1
+            end = sym.end_line
+            sym_source = "\n".join(lines[start:end])
+            cr = analyzer.analyze_source(
+                sym_source, file_path=relative_path, name=sym.name,
+            )
+            cr.start_line = sym.start_line
+            cr.end_line = sym.end_line
+            functions.append({
+                "name": cr.name,
+                "line": cr.start_line,
+                "cyclomatic": cr.cyclomatic.value,
+                "cognitive": cr.cognitive.value,
+                "level": cr.cyclomatic.level.value,
+                "maintainability": round(cr.maintainability.value, 1),
+            })
+
+        # Aggregate metrics
+        cyc_vals = [f["cyclomatic"] for f in functions]
+        cog_vals = [f["cognitive"] for f in functions]
+        n = len(functions)
+
+        hotspots = [
+            f["name"] for f in functions
+            if f["level"] in (ComplexityLevel.HIGH.value, ComplexityLevel.VERY_HIGH.value)
+        ]
+
+        # File-level maintainability from full source
+        file_cr = analyzer.analyze_source(source, file_path=relative_path)
+
+        return {
+            "success": True,
+            "file": relative_path,
+            "function_count": n,
+            "class_count": class_count,
+            "total_cyclomatic": sum(cyc_vals) if cyc_vals else 0,
+            "total_cognitive": sum(cog_vals) if cog_vals else 0,
+            "avg_cyclomatic": round(sum(cyc_vals) / n, 2) if n else 0,
+            "avg_cognitive": round(sum(cog_vals) / n, 2) if n else 0,
+            "max_cyclomatic": max(cyc_vals) if cyc_vals else 0,
+            "max_cognitive": max(cog_vals) if cog_vals else 0,
+            "maintainability": file_cr.maintainability.to_dict(),
+            "hotspots": hotspots,
+            "functions": functions,
+        }
+
+    def get_complexity_hotspots(
+        self,
+        relative_path: str,
+        source: Optional[str] = None,
+        min_level: str = "high",
+    ) -> dict:
+        """Find high-complexity symbols that are candidates for refactoring.
+
+        Filters file analysis results to only include symbols at or above
+        the specified complexity level.
+
+        Args:
+            relative_path: File to analyze.
+            source: Optional source code. If None, reads from disk.
+            min_level: Minimum complexity level to include (default: "high").
+
+        Returns:
+            Dict with list of hotspot symbols and their metrics.
+        """
+        from anamnesis.analysis.complexity_analyzer import ComplexityLevel
+
+        level_order = {
+            ComplexityLevel.LOW: 0,
+            ComplexityLevel.MODERATE: 1,
+            ComplexityLevel.HIGH: 2,
+            ComplexityLevel.VERY_HIGH: 3,
+        }
+        threshold_level = {
+            "low": 0, "moderate": 1, "high": 2, "very_high": 3,
+        }.get(min_level.lower(), 2)
+
+        file_result = self.analyze_file_complexity(relative_path, source=source)
+        if not file_result.get("success"):
+            return file_result
+
+        hotspots = []
+        for func in file_result.get("functions", []):
+            func_level_str = func.get("level", "low")
+            try:
+                func_level = ComplexityLevel(func_level_str)
+            except ValueError:
+                continue
+            if level_order.get(func_level, 0) >= threshold_level:
+                hotspots.append({
+                    "name": func["name"],
+                    "line": func.get("line", 0),
+                    "cyclomatic": func["cyclomatic"],
+                    "cognitive": func["cognitive"],
+                    "level": func_level_str,
+                    "maintainability": func.get("maintainability", 0),
+                })
+
+        return {
+            "success": True,
+            "file": relative_path,
+            "hotspots": hotspots,
+            "total_functions": file_result["function_count"],
+            "hotspot_count": len(hotspots),
+        }

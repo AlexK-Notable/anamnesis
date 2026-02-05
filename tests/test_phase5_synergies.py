@@ -524,3 +524,168 @@ class TestPatternGuidedCodeGeneration:
         )
         assert return_type_pattern is not None
         assert "dict" in return_type_pattern["values"]
+
+
+class TestComplexityAwareNavigation:
+    """Tests for S2: Complexity-aware symbol navigation."""
+
+    SAMPLE_SOURCE = """\
+def simple_add(a, b):
+    return a + b
+
+def complex_handler(request, data, config):
+    if request.method == "POST":
+        if data.get("validate"):
+            for item in data["items"]:
+                if item.get("type") == "a":
+                    if item.get("sub"):
+                        for sub in item["sub"]:
+                            if sub.get("active"):
+                                process(sub)
+                elif item.get("type") == "b":
+                    handle_b(item)
+                else:
+                    handle_other(item)
+        elif data.get("skip"):
+            pass
+        else:
+            raise ValueError("bad")
+    elif request.method == "GET":
+        return fetch(config)
+    else:
+        return error()
+
+class MyService:
+    def get_name(self):
+        return self.name
+"""
+
+    def test_analyze_file_complexity_returns_metrics(self):
+        """analyze_file_complexity returns aggregated file metrics."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.analyze_file_complexity(
+            "src/handler.py", source=self.SAMPLE_SOURCE,
+        )
+
+        assert result["success"] is True
+        assert result["file"] == "src/handler.py"
+        assert result["function_count"] >= 2
+        assert "avg_cyclomatic" in result
+        assert "maintainability" in result
+        assert isinstance(result["hotspots"], list)
+
+    def test_analyze_file_complexity_detects_hotspots(self):
+        """analyze_file_complexity identifies high-complexity functions."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.analyze_file_complexity(
+            "src/handler.py", source=self.SAMPLE_SOURCE,
+        )
+
+        # complex_handler should be flagged
+        assert result["success"] is True
+        # At minimum, max_cyclomatic should be higher than avg
+        assert result["max_cyclomatic"] >= result["avg_cyclomatic"]
+
+    def test_analyze_file_complexity_empty_source(self):
+        """analyze_file_complexity handles empty source gracefully."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.analyze_file_complexity("src/empty.py", source="")
+
+        assert result["success"] is True
+        assert result["function_count"] == 0
+        assert result["avg_cyclomatic"] == 0
+
+    def test_analyze_file_complexity_reads_from_disk(self, tmp_path):
+        """analyze_file_complexity reads source from disk when not provided."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        # Write a real file
+        src_dir = tmp_path / "src"
+        src_dir.mkdir()
+        test_file = src_dir / "example.py"
+        test_file.write_text(self.SAMPLE_SOURCE)
+
+        svc = SymbolService(str(tmp_path), lsp_manager=MagicMock())
+
+        result = svc.analyze_file_complexity("src/example.py")
+
+        assert result["success"] is True
+        assert result["function_count"] >= 2
+
+    def test_analyze_file_complexity_file_not_found(self):
+        """analyze_file_complexity returns error for missing files."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.analyze_file_complexity("nonexistent.py")
+
+        assert result["success"] is False
+
+    def test_get_complexity_hotspots(self):
+        """get_complexity_hotspots returns only high-complexity symbols."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.get_complexity_hotspots(
+            "src/handler.py", source=self.SAMPLE_SOURCE,
+        )
+
+        assert result["success"] is True
+        assert isinstance(result["hotspots"], list)
+        # Each hotspot has name and complexity info
+        for hotspot in result["hotspots"]:
+            assert "name" in hotspot
+            assert "cyclomatic" in hotspot
+            assert "level" in hotspot
+
+    def test_get_complexity_hotspots_clean_file(self):
+        """get_complexity_hotspots returns empty list for simple code."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        simple_source = "def add(a, b):\n    return a + b\n"
+        result = svc.get_complexity_hotspots(
+            "src/simple.py", source=simple_source,
+        )
+
+        assert result["success"] is True
+        assert len(result["hotspots"]) == 0
+
+    def test_analyze_file_complexity_per_function_breakdown(self):
+        """analyze_file_complexity includes per-function breakdown."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        result = svc.analyze_file_complexity(
+            "src/handler.py", source=self.SAMPLE_SOURCE,
+        )
+
+        assert result["success"] is True
+        assert "functions" in result
+        assert len(result["functions"]) >= 2
+        for func in result["functions"]:
+            assert "name" in func
+            assert "cyclomatic" in func
+            assert "cognitive" in func
+            assert "level" in func

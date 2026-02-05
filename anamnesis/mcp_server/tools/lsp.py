@@ -191,6 +191,25 @@ def _suggest_code_pattern_impl(
     )
 
 
+@_with_error_handling("analyze_file_complexity")
+def _analyze_file_complexity_impl(
+    relative_path: str,
+) -> dict:
+    """Implementation for analyze_file_complexity tool."""
+    svc = _get_symbol_service()
+    return svc.analyze_file_complexity(relative_path)
+
+
+@_with_error_handling("get_complexity_hotspots")
+def _get_complexity_hotspots_impl(
+    relative_path: str,
+    min_level: str = "high",
+) -> dict:
+    """Implementation for get_complexity_hotspots tool."""
+    svc = _get_symbol_service()
+    return svc.get_complexity_hotspots(relative_path, min_level=min_level)
+
+
 @_with_error_handling("check_conventions")
 def _check_conventions_impl(
     relative_path: str,
@@ -487,3 +506,43 @@ def check_conventions(
         Violations with expected vs actual naming style per symbol
     """
     return _check_conventions_impl(relative_path)
+
+
+@mcp.tool
+def analyze_file_complexity(
+    relative_path: str,
+) -> dict:
+    """Analyze complexity metrics for all symbols in a file.
+
+    Returns cyclomatic and cognitive complexity, maintainability index,
+    and a per-function breakdown with complexity levels. Identifies
+    hotspots (high-complexity functions) that are refactoring candidates.
+
+    Args:
+        relative_path: File to analyze (relative to project root)
+
+    Returns:
+        File-level metrics, per-function breakdown, and hotspot list
+    """
+    return _analyze_file_complexity_impl(relative_path)
+
+
+@mcp.tool
+def get_complexity_hotspots(
+    relative_path: str,
+    min_level: str = "high",
+) -> dict:
+    """Find high-complexity symbols that need refactoring attention.
+
+    Filters file analysis to only include symbols at or above the
+    specified complexity level. Use this to quickly identify the
+    most problematic areas in a file.
+
+    Args:
+        relative_path: File to analyze (relative to project root)
+        min_level: Minimum complexity level: low, moderate, high, very_high (default: high)
+
+    Returns:
+        List of hotspot symbols with complexity metrics
+    """
+    return _get_complexity_hotspots_impl(relative_path, min_level)
