@@ -558,5 +558,5 @@ class TestToolRegistration:
         from anamnesis.mcp_server.server import mcp
 
         tool_count = len(mcp._tool_manager._tools)
-        # Phase 2 consolidation: 42→35, then +1 activate_project (CQS split from get_project_config)
-        assert tool_count == 36
+        # Phase 2 consolidation: 42→35, +1 activate_project, +1 suggest_code_pattern (S3)
+        assert tool_count == 37

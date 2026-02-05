@@ -174,6 +174,23 @@ def _get_lsp_status_impl() -> dict:
     return result
 
 
+@_with_error_handling("suggest_code_pattern")
+def _suggest_code_pattern_impl(
+    relative_path: str,
+    symbol_kind: str,
+    context_symbol: str = "",
+    max_examples: int = 3,
+) -> dict:
+    """Implementation for suggest_code_pattern tool."""
+    svc = _get_symbol_service()
+    return svc.suggest_code_pattern(
+        relative_path,
+        symbol_kind,
+        context_symbol=context_symbol or None,
+        max_examples=max_examples,
+    )
+
+
 @_with_error_handling("check_conventions")
 def _check_conventions_impl(
     relative_path: str,
@@ -424,6 +441,34 @@ def get_lsp_status() -> dict:
         Status dict with supported languages and running servers
     """
     return _get_lsp_status_impl()
+
+
+@mcp.tool
+def suggest_code_pattern(
+    relative_path: str,
+    symbol_kind: str,
+    context_symbol: str = "",
+    max_examples: int = 3,
+) -> dict:
+    """Suggest code patterns based on sibling symbols in the same file/class.
+
+    Analyzes existing symbols to extract naming conventions, common prefixes,
+    decorator patterns, and return type hints. Use this before writing new
+    code to follow project conventions.
+
+    This does NOT generate code — it provides template insights that guide
+    the LLM to write convention-compliant code.
+
+    Args:
+        relative_path: File to analyze for patterns
+        symbol_kind: Kind of symbol to suggest (function, method, class)
+        context_symbol: Parent symbol for methods (e.g., class name)
+        max_examples: Maximum example signatures to include (default 3)
+
+    Returns:
+        Naming convention, common patterns, example signatures, and confidence
+    """
+    return _suggest_code_pattern_impl(relative_path, symbol_kind, context_symbol, max_examples)
 
 
 @mcp.tool

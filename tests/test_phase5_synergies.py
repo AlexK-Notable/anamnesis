@@ -311,3 +311,216 @@ class TestConventionChecking:
 
         violations = _check_names_against_convention([], expected="snake_case", symbol_kind="function")
         assert violations == []
+
+
+class TestPatternGuidedCodeGeneration:
+    """Tests for S3: Pattern-guided code generation."""
+
+    def test_suggest_code_pattern_detects_snake_case_functions(self):
+        """suggest_code_pattern detects snake_case convention from sibling functions."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        # Mock get_overview to return snake_case functions
+        svc.get_overview = MagicMock(return_value={
+            "Function": [
+                {"name": "get_user", "kind": "Function"},
+                {"name": "fetch_data", "kind": "Function"},
+                {"name": "save_record", "kind": "Function"},
+            ],
+        })
+
+        result = svc.suggest_code_pattern("src/service.py", "function")
+
+        assert result["success"] is True
+        assert result["naming_convention"] == "snake_case"
+        assert result["siblings_analyzed"] == 3
+        assert result["confidence"] >= 0.5
+
+    def test_suggest_code_pattern_detects_pascal_case_classes(self):
+        """suggest_code_pattern detects PascalCase convention from sibling classes."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        svc.get_overview = MagicMock(return_value={
+            "Class": [
+                {"name": "UserService", "kind": "Class"},
+                {"name": "DataRepository", "kind": "Class"},
+                {"name": "ApiController", "kind": "Class"},
+            ],
+        })
+
+        result = svc.suggest_code_pattern("src/models.py", "class")
+
+        assert result["success"] is True
+        assert result["naming_convention"] == "PascalCase"
+        assert result["siblings_analyzed"] == 3
+
+    def test_suggest_code_pattern_methods_in_class_context(self):
+        """suggest_code_pattern analyzes methods within a specific class."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        svc.get_overview = MagicMock(return_value={
+            "Class": [
+                {
+                    "name": "UserService",
+                    "kind": "Class",
+                    "children": {
+                        "Method": [
+                            {"name": "get_by_id", "kind": "Method"},
+                            {"name": "create_user", "kind": "Method"},
+                            {"name": "delete_user", "kind": "Method"},
+                        ],
+                    },
+                },
+            ],
+        })
+
+        result = svc.suggest_code_pattern(
+            "src/service.py", "method", context_symbol="UserService",
+        )
+
+        assert result["success"] is True
+        assert result["naming_convention"] == "snake_case"
+        assert result["siblings_analyzed"] == 3
+        assert result["context"] == "UserService"
+
+    def test_suggest_code_pattern_empty_file_returns_graceful_response(self):
+        """suggest_code_pattern returns empty suggestion for file with no symbols."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        svc.get_overview = MagicMock(return_value={})
+
+        result = svc.suggest_code_pattern("src/empty.py", "function")
+
+        assert result["success"] is True
+        assert result["naming_convention"] == "unknown"
+        assert result["siblings_analyzed"] == 0
+        assert result["confidence"] == 0.0
+        assert "message" in result
+
+    def test_suggest_code_pattern_extracts_common_prefixes(self):
+        """suggest_code_pattern detects common name prefixes like get_, is_, etc."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        svc.get_overview = MagicMock(return_value={
+            "Function": [
+                {"name": "get_user", "kind": "Function"},
+                {"name": "get_order", "kind": "Function"},
+                {"name": "get_product", "kind": "Function"},
+                {"name": "is_valid", "kind": "Function"},
+                {"name": "is_active", "kind": "Function"},
+            ],
+        })
+
+        result = svc.suggest_code_pattern("src/service.py", "function")
+
+        assert result["success"] is True
+        # Should detect get_ and is_ as common prefixes
+        prefix_pattern = next(
+            (p for p in result["common_patterns"] if p["type"] == "naming_prefix"),
+            None,
+        )
+        assert prefix_pattern is not None
+        assert "get_" in prefix_pattern["values"]
+        assert "is_" in prefix_pattern["values"]
+
+    def test_suggest_code_pattern_includes_example_signatures(self):
+        """suggest_code_pattern includes example signatures from siblings."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        svc.get_overview = MagicMock(return_value={
+            "Function": [
+                {"name": "process_data", "kind": "Function", "signature": "def process_data(data: dict) -> bool"},
+                {"name": "validate_input", "kind": "Function", "signature": "def validate_input(value: str) -> bool"},
+            ],
+        })
+
+        result = svc.suggest_code_pattern("src/utils.py", "function", max_examples=2)
+
+        assert result["success"] is True
+        assert len(result["examples"]) == 2
+        assert result["examples"][0]["name"] == "process_data"
+        assert "signature" in result["examples"][0]
+
+    def test_suggest_code_pattern_lsp_failure_returns_empty(self):
+        """suggest_code_pattern handles LSP/overview failure gracefully."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        # Simulate LSP failure
+        svc.get_overview = MagicMock(side_effect=Exception("LSP not available"))
+
+        result = svc.suggest_code_pattern("src/broken.py", "function")
+
+        assert result["success"] is True  # Graceful degradation
+        assert result["confidence"] == 0.0
+        assert result["naming_convention"] == "unknown"
+
+    def test_suggest_code_pattern_extracts_decorators(self):
+        """suggest_code_pattern detects commonly used decorators."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        svc.get_overview = MagicMock(return_value={
+            "Function": [
+                {"name": "endpoint_a", "kind": "Function", "signature": "@route('/a') def endpoint_a()"},
+                {"name": "endpoint_b", "kind": "Function", "signature": "@route('/b') def endpoint_b()"},
+                {"name": "endpoint_c", "kind": "Function", "signature": "@route('/c') def endpoint_c()"},
+            ],
+        })
+
+        result = svc.suggest_code_pattern("src/routes.py", "function")
+
+        assert result["success"] is True
+        decorator_pattern = next(
+            (p for p in result["common_patterns"] if p["type"] == "decorator"),
+            None,
+        )
+        assert decorator_pattern is not None
+        assert "@route" in decorator_pattern["values"]
+
+    def test_suggest_code_pattern_extracts_return_types(self):
+        """suggest_code_pattern detects common return type patterns."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        svc = SymbolService("/fake/path", lsp_manager=MagicMock())
+
+        svc.get_overview = MagicMock(return_value={
+            "Function": [
+                {"name": "get_user", "kind": "Function", "signature": "def get_user(id: int) -> dict"},
+                {"name": "get_order", "kind": "Function", "signature": "def get_order(id: int) -> dict"},
+                {"name": "get_product", "kind": "Function", "signature": "def get_product(id: int) -> dict"},
+            ],
+        })
+
+        result = svc.suggest_code_pattern("src/repository.py", "function")
+
+        assert result["success"] is True
+        return_type_pattern = next(
+            (p for p in result["common_patterns"] if p["type"] == "return_type"),
+            None,
+        )
+        assert return_type_pattern is not None
+        assert "dict" in return_type_pattern["values"]
