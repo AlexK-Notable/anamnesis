@@ -8,7 +8,10 @@ from __future__ import annotations
 
 import pytest
 
-from anamnesis.mcp_server._shared import _sanitize_error_message
+from anamnesis.mcp_server._shared import (
+    _sanitize_error_message,
+    _with_error_handling,
+)
 
 
 # ============================================================================
@@ -245,3 +248,95 @@ class TestSanitizePreservesNonPaths:
     def test_slash_separated_identifiers_preserved(self):
         msg = "Error code: auth/invalid-token"
         assert _sanitize_error_message(msg) == msg
+
+
+# ============================================================================
+# Category 8: Integration — decorator actually sanitizes errors
+# ============================================================================
+
+
+class TestSanitizeIntegrationWithDecorator:
+    """Verify _with_error_handling decorator calls _sanitize_error_message.
+
+    These tests prove the full chain: exception raised inside a decorated
+    function -> caught by decorator -> error str(e) sanitized -> returned
+    in failure response. No mocks on _sanitize_error_message itself.
+    """
+
+    def test_sync_decorator_sanitizes_path_in_exception(self):
+        """Sync decorated function: path in exception is sanitized."""
+
+        @_with_error_handling("test_op", toon_auto=False)
+        def failing_func():
+            raise FileNotFoundError("/home/komi/repos/secret/config.yaml")
+
+        result = failing_func()
+        assert result["success"] is False
+        assert "/home/komi" not in result["error"]
+        assert ".../config.yaml" in result["error"]
+
+    def test_async_decorator_sanitizes_path_in_exception(self):
+        """Async decorated function: path in exception is sanitized."""
+        import asyncio
+
+        @_with_error_handling("test_op_async", toon_auto=False)
+        async def failing_async():
+            raise PermissionError(
+                "Cannot read /etc/anamnesis/secrets.json: permission denied"
+            )
+
+        result = asyncio.get_event_loop().run_until_complete(failing_async())
+        assert result["success"] is False
+        assert "/etc/" not in result["error"]
+        assert ".../secrets.json" in result["error"]
+        assert "permission denied" in result["error"]
+
+    def test_decorator_sanitizes_file_uri_in_exception(self):
+        """file:// URIs in exceptions are sanitized by the decorator."""
+
+        @_with_error_handling("test_uri", toon_auto=False)
+        def failing_func():
+            raise ValueError(
+                "Invalid source: file:///home/user/project/main.py"
+            )
+
+        result = failing_func()
+        assert result["success"] is False
+        assert "file://" not in result["error"]
+        assert "<file-uri>" in result["error"]
+
+    def test_decorator_sanitizes_traversal_in_exception(self):
+        """Traversal sequences in exceptions are sanitized by the decorator."""
+
+        @_with_error_handling("test_traversal", toon_auto=False)
+        def failing_func():
+            raise OSError("Blocked access to ../../secret/keys.pem")
+
+        result = failing_func()
+        assert result["success"] is False
+        assert "../../" not in result["error"]
+        assert "<redacted-path>" in result["error"]
+
+    def test_decorator_preserves_non_path_error_message(self):
+        """Errors without paths pass through the decorator unchanged."""
+
+        @_with_error_handling("test_clean", toon_auto=False)
+        def failing_func():
+            raise RuntimeError("Connection timeout after 30s")
+
+        result = failing_func()
+        assert result["success"] is False
+        assert result["error"] == "Connection timeout after 30s"
+
+    def test_decorator_returns_standard_failure_shape(self):
+        """Decorated error responses include success, error, and error_code."""
+
+        @_with_error_handling("test_shape", toon_auto=False)
+        def failing_func():
+            raise ValueError("/var/log/anamnesis/debug.log not writable")
+
+        result = failing_func()
+        assert "success" in result
+        assert "error" in result
+        assert "error_code" in result
+        assert result["success"] is False
