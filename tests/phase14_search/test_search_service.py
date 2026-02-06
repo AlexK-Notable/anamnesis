@@ -72,7 +72,7 @@ class TestSearchServiceSync:
         results = await service.search(query)
 
         # Should fall back to text search
-        assert len(results) >= 0  # May find results or may not, but shouldn't crash
+        assert isinstance(results, list)  # May find results or may not, but shouldn't crash
 
 
 class TestSearchServiceAsync:

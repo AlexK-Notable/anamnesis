@@ -1,10 +1,14 @@
 """Synchronous wrapper for SQLiteBackend.
 
 Bridges async storage layer to synchronous service layer.
-Uses a persistent event loop for all operations.
+Uses a dedicated background thread with its own event loop so that
+sync calls work even when invoked from within a running async loop
+(e.g. FastMCP's tool dispatch).
 """
 
 import asyncio
+import logging
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Generator, Optional
@@ -24,6 +28,8 @@ from .schema import (
     WorkSession,
 )
 from .sqlite_backend import SQLiteBackend
+
+logger = logging.getLogger(__name__)
 
 
 class SyncSQLiteBackend:
@@ -48,15 +54,33 @@ class SyncSQLiteBackend:
     def __init__(self, db_path: str | Path = ":memory:"):
         """Initialize sync backend.
 
+        Creates a dedicated background thread running its own event loop.
+        This allows sync calls to work even when the caller is already
+        inside a running async event loop (e.g. FastMCP tool dispatch).
+
         Args:
             db_path: Path to SQLite database file or ":memory:"
         """
         self._async_backend = SQLiteBackend(db_path)
+        self._closed = False
         self._loop: asyncio.AbstractEventLoop = asyncio.new_event_loop()
+        self._thread = threading.Thread(
+            target=self._loop.run_forever,
+            daemon=True,
+            name="sync-sqlite-backend",
+        )
+        self._thread.start()
 
     def _run(self, coro):
-        """Run coroutine synchronously using the persistent event loop."""
-        return self._loop.run_until_complete(coro)
+        """Run coroutine synchronously via the background event loop thread.
+
+        Submits the coroutine to the background thread's event loop using
+        ``run_coroutine_threadsafe`` and blocks until the result is ready.
+        This is safe to call from a thread that already has a running event
+        loop because the actual execution happens on the background thread.
+        """
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return future.result()
 
     @contextmanager
     def batch_context(self) -> Generator[None, None, None]:
@@ -81,9 +105,30 @@ class SyncSQLiteBackend:
         self._run(self._async_backend.connect())
 
     def close(self) -> None:
-        """Close database connection and event loop."""
-        self._run(self._async_backend.close())
+        """Close database connection, stop the background loop, and join the thread.
+
+        This method is idempotent -- calling it multiple times is safe.
+        """
+        if self._closed:
+            return
+        self._closed = True
+
+        try:
+            self._run(self._async_backend.close())
+        except Exception:
+            logger.warning("Error closing async backend", exc_info=True)
+
+        self._loop.call_soon_threadsafe(self._loop.stop)
+        self._thread.join(timeout=5.0)
         self._loop.close()
+
+    def __del__(self) -> None:
+        """Best-effort cleanup if close() was not called explicitly."""
+        if not self._closed:
+            try:
+                self.close()
+            except Exception:
+                pass
 
     def get_migration_status(self) -> dict:
         """Get migration status."""

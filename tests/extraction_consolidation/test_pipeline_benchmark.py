@@ -519,7 +519,7 @@ class TestExtractionBenchmark:
 
         result = benchmark(extract)
         assert len(result.symbols) > 0
-        assert len(result.patterns) >= 0
+        assert isinstance(result.patterns, list)
 
     def test_regex_extraction(self, benchmark, large_python_source):
         """Benchmark regex extraction on a large file."""

@@ -197,7 +197,7 @@ class TestPatternSearchBackend:
         results = await backend.search(query)
 
         # Should find AuthenticationService - check results or matched content
-        assert len(results) >= 0  # May find 0 if pattern doesn't match exact format
+        assert isinstance(results, list)  # May find 0 if pattern doesn't match exact format
         if len(results) > 0:
             # If we found results, verify they're meaningful
             file_paths = [r.file_path for r in results]

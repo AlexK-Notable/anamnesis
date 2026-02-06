@@ -443,7 +443,7 @@ class TestDependencyGraph:
         # Node 'a' should have dependencies on 'b' and 'c'
         if "a" in graph.nodes:
             node = graph.nodes["a"]
-            assert len(node.imports) >= 0  # May include b and c
+            assert isinstance(node.imports, list)  # May include b and c
 
     def test_calculate_metrics(self):
         """Test calculating graph metrics."""

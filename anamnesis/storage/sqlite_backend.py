@@ -38,6 +38,19 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
+def _safe_json_loads(raw: str, *, default: Any, field: str = "", row_id: str = "") -> Any:
+    """Parse JSON with graceful fallback for corrupted data."""
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning(
+            "Corrupted JSON in field '%s' for row '%s', using default",
+            field,
+            row_id,
+        )
+        return default
+
+
 class ConnectionWrapper:
     """Wrapper around aiosqlite connection for migration protocol."""
 
@@ -248,6 +261,7 @@ class SQLiteBackend:
 
     def _row_to_concept(self, row: aiosqlite.Row) -> SemanticConcept:
         """Convert a database row to a SemanticConcept."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return SemanticConcept.from_dict({
             "id": row["id"],
             "name": row["name"],
@@ -255,8 +269,8 @@ class SQLiteBackend:
             "file_path": row["file_path"],
             "description": row["description"],
             "signature": row["signature"],
-            "relationships": json.loads(row["relationships"]),
-            "metadata": json.loads(row["metadata"]),
+            "relationships": _safe_json_loads(row["relationships"], default=[], field="relationships", row_id=row_id),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "confidence": row["confidence"],
@@ -346,15 +360,16 @@ class SQLiteBackend:
 
     def _row_to_pattern(self, row: aiosqlite.Row) -> DeveloperPattern:
         """Convert a database row to a DeveloperPattern."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return DeveloperPattern.from_dict({
             "id": row["id"],
             "pattern_type": row["pattern_type"],
             "name": row["name"],
             "frequency": row["frequency"],
-            "examples": json.loads(row["examples"]),
-            "file_paths": json.loads(row["file_paths"]),
+            "examples": _safe_json_loads(row["examples"], default=[], field="examples", row_id=row_id),
+            "file_paths": _safe_json_loads(row["file_paths"], default=[], field="file_paths", row_id=row_id),
             "confidence": row["confidence"],
-            "metadata": json.loads(row["metadata"]),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         })
@@ -422,16 +437,17 @@ class SQLiteBackend:
 
     def _row_to_arch_decision(self, row: aiosqlite.Row) -> ArchitecturalDecision:
         """Convert a database row to an ArchitecturalDecision."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return ArchitecturalDecision.from_dict({
             "id": row["id"],
             "title": row["title"],
             "context": row["context"],
             "decision": row["decision"],
-            "consequences": json.loads(row["consequences"]),
+            "consequences": _safe_json_loads(row["consequences"], default=[], field="consequences", row_id=row_id),
             "status": row["status"],
-            "related_files": json.loads(row["related_files"]),
-            "tags": json.loads(row["tags"]),
-            "metadata": json.loads(row["metadata"]),
+            "related_files": _safe_json_loads(row["related_files"], default=[], field="related_files", row_id=row_id),
+            "tags": _safe_json_loads(row["tags"], default=[], field="tags", row_id=row_id),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         })
@@ -516,19 +532,20 @@ class SQLiteBackend:
 
     def _row_to_file_intel(self, row: aiosqlite.Row) -> FileIntelligence:
         """Convert a database row to FileIntelligence."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return FileIntelligence.from_dict({
             "id": row["id"],
             "file_path": row["file_path"],
             "language": row["language"],
             "summary": row["summary"],
-            "concepts": json.loads(row["concepts"]),
-            "imports": json.loads(row["imports"]),
-            "exports": json.loads(row["exports"]),
-            "dependencies": json.loads(row["dependencies"]),
-            "dependents": json.loads(row["dependents"]),
+            "concepts": _safe_json_loads(row["concepts"], default=[], field="concepts", row_id=row_id),
+            "imports": _safe_json_loads(row["imports"], default=[], field="imports", row_id=row_id),
+            "exports": _safe_json_loads(row["exports"], default=[], field="exports", row_id=row_id),
+            "dependencies": _safe_json_loads(row["dependencies"], default=[], field="dependencies", row_id=row_id),
+            "dependents": _safe_json_loads(row["dependents"], default=[], field="dependents", row_id=row_id),
             "complexity_score": row["complexity_score"],
-            "metrics": json.loads(row["metrics"]),
-            "metadata": json.loads(row["metadata"]),
+            "metrics": _safe_json_loads(row["metrics"], default={}, field="metrics", row_id=row_id),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "last_analyzed": row["last_analyzed"],
             "content_hash": row["content_hash"],
         })
@@ -597,16 +614,17 @@ class SQLiteBackend:
 
     def _row_to_shared_pattern(self, row: aiosqlite.Row) -> SharedPattern:
         """Convert a database row to SharedPattern."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return SharedPattern.from_dict({
             "id": row["id"],
             "name": row["name"],
             "description": row["description"],
             "pattern_code": row["pattern_code"],
-            "occurrences": json.loads(row["occurrences"]),
+            "occurrences": _safe_json_loads(row["occurrences"], default=[], field="occurrences", row_id=row_id),
             "frequency": row["frequency"],
             "category": row["category"],
             "confidence": row["confidence"],
-            "metadata": json.loads(row["metadata"]),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         })
@@ -707,17 +725,18 @@ class SQLiteBackend:
 
     def _row_to_insight(self, row: aiosqlite.Row) -> AIInsight:
         """Convert a database row to AIInsight."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return AIInsight.from_dict({
             "id": row["id"],
             "insight_type": row["insight_type"],
             "title": row["title"],
             "description": row["description"],
-            "affected_files": json.loads(row["affected_files"]),
+            "affected_files": _safe_json_loads(row["affected_files"], default=[], field="affected_files", row_id=row_id),
             "severity": row["severity"],
             "confidence": row["confidence"],
             "suggested_action": row["suggested_action"],
             "code_snippet": row["code_snippet"],
-            "metadata": json.loads(row["metadata"]),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "created_at": row["created_at"],
             "acknowledged": bool(row["acknowledged"]),
             "resolved": bool(row["resolved"]),
@@ -793,18 +812,19 @@ class SQLiteBackend:
 
     def _row_to_project_metadata(self, row: aiosqlite.Row) -> ProjectMetadata:
         """Convert a database row to ProjectMetadata."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return ProjectMetadata.from_dict({
             "id": row["id"],
             "name": row["name"],
             "path": row["path"],
-            "tech_stack": json.loads(row["tech_stack"]),
-            "build_tools": json.loads(row["build_tools"]),
+            "tech_stack": _safe_json_loads(row["tech_stack"], default=[], field="tech_stack", row_id=row_id),
+            "build_tools": _safe_json_loads(row["build_tools"], default=[], field="build_tools", row_id=row_id),
             "vcs_type": row["vcs_type"],
             "default_branch": row["default_branch"],
             "file_count": row["file_count"],
             "total_lines": row["total_lines"],
-            "languages": json.loads(row["languages"]),
-            "metadata": json.loads(row["metadata"]),
+            "languages": _safe_json_loads(row["languages"], default=[], field="languages", row_id=row_id),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "last_analyzed": row["last_analyzed"],
@@ -887,14 +907,15 @@ class SQLiteBackend:
 
     def _row_to_feature_map(self, row: aiosqlite.Row) -> FeatureMap:
         """Convert a database row to FeatureMap."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return FeatureMap.from_dict({
             "id": row["id"],
             "feature_name": row["feature_name"],
             "description": row["description"],
-            "files": json.loads(row["files"]),
-            "entry_points": json.loads(row["entry_points"]),
-            "keywords": json.loads(row["keywords"]),
-            "metadata": json.loads(row["metadata"]),
+            "files": _safe_json_loads(row["files"], default=[], field="files", row_id=row_id),
+            "entry_points": _safe_json_loads(row["entry_points"], default=[], field="entry_points", row_id=row_id),
+            "keywords": _safe_json_loads(row["keywords"], default=[], field="keywords", row_id=row_id),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "confidence": row["confidence"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -967,14 +988,15 @@ class SQLiteBackend:
 
     def _row_to_entry_point(self, row: aiosqlite.Row) -> EntryPoint:
         """Convert a database row to EntryPoint."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return EntryPoint.from_dict({
             "id": row["id"],
             "name": row["name"],
             "file_path": row["file_path"],
             "entry_type": row["entry_type"],
             "description": row["description"],
-            "exports": json.loads(row["exports"]),
-            "metadata": json.loads(row["metadata"]),
+            "exports": _safe_json_loads(row["exports"], default=[], field="exports", row_id=row_id),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "created_at": row["created_at"],
         })
 
@@ -1048,15 +1070,16 @@ class SQLiteBackend:
 
     def _row_to_key_directory(self, row: aiosqlite.Row) -> KeyDirectory:
         """Convert a database row to KeyDirectory."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return KeyDirectory.from_dict({
             "id": row["id"],
             "path": row["path"],
             "name": row["name"],
             "purpose": row["purpose"],
             "file_count": row["file_count"],
-            "languages": json.loads(row["languages"]),
-            "patterns": json.loads(row["patterns"]),
-            "metadata": json.loads(row["metadata"]),
+            "languages": _safe_json_loads(row["languages"], default=[], field="languages", row_id=row_id),
+            "patterns": _safe_json_loads(row["patterns"], default=[], field="patterns", row_id=row_id),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "created_at": row["created_at"],
         })
 
@@ -1142,14 +1165,15 @@ class SQLiteBackend:
 
     def _row_to_work_session(self, row: aiosqlite.Row) -> WorkSession:
         """Convert a database row to WorkSession."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return WorkSession.from_dict({
             "id": row["id"],
             "name": row["name"],
             "feature": row["feature"],
-            "files": json.loads(row["files"]),
-            "tasks": json.loads(row["tasks"]),
+            "files": _safe_json_loads(row["files"], default=[], field="files", row_id=row_id),
+            "tasks": _safe_json_loads(row["tasks"], default=[], field="tasks", row_id=row_id),
             "notes": row["notes"],
-            "metadata": json.loads(row["metadata"]),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "started_at": row["started_at"],
             "updated_at": row["updated_at"],
             "ended_at": row["ended_at"],
@@ -1227,15 +1251,16 @@ class SQLiteBackend:
 
     def _row_to_project_decision(self, row: aiosqlite.Row) -> ProjectDecision:
         """Convert a database row to ProjectDecision."""
+        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
         return ProjectDecision.from_dict({
             "id": row["id"],
             "decision": row["decision"],
             "context": row["context"],
             "rationale": row["rationale"],
             "session_id": row["session_id"],
-            "related_files": json.loads(row["related_files"]),
-            "tags": json.loads(row["tags"]),
-            "metadata": json.loads(row["metadata"]),
+            "related_files": _safe_json_loads(row["related_files"], default=[], field="related_files", row_id=row_id),
+            "tags": _safe_json_loads(row["tags"], default=[], field="tags", row_id=row_id),
+            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "created_at": row["created_at"],
         })
 

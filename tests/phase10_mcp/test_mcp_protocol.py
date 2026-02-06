@@ -495,3 +495,142 @@ class TestMCPProtocolCompliance:
             assert "message" in error
             assert isinstance(error["code"], int)
             assert isinstance(error["message"], str)
+
+
+class TestLearnQueryRecommendE2E:
+    """End-to-end test: learn codebase -> query insights -> get recommendations.
+
+    Uses _impl functions directly (not subprocess) for a multi-step workflow
+    that exercises the intelligence pipeline from learning through querying.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _setup_project(self, temp_project):
+        """Reset server state and activate temp_project."""
+        import anamnesis.mcp_server._shared as shared_module
+
+        orig_persist = shared_module._registry._persist_path
+        shared_module._registry._persist_path = None
+        shared_module._registry.reset()
+        shared_module._registry.activate(temp_project)
+
+        self._project_path = temp_project
+
+        yield
+
+        shared_module._registry.reset()
+        shared_module._registry._persist_path = orig_persist
+
+    def test_learn_query_recommend_e2e(self):
+        """Full pipeline: auto_learn -> get_semantic_insights -> get_pattern_recommendations."""
+        from anamnesis.mcp_server.tools.intelligence import (
+            _get_pattern_recommendations_impl,
+            _get_semantic_insights_impl,
+        )
+        from anamnesis.mcp_server.tools.learning import _auto_learn_if_needed_impl
+        from anamnesis.utils.toon_encoder import ToonEncoder
+
+        _toon = ToonEncoder()
+
+        def as_dict(result):
+            if isinstance(result, str):
+                return _toon.decode(result)
+            return result
+
+        # Step 1: Learn from the sample project
+        learn_result = as_dict(
+            _auto_learn_if_needed_impl(path=self._project_path, force=True)
+        )
+        assert learn_result["success"] is True
+        assert learn_result["status"] == "learned"
+        assert "concepts_learned" in learn_result
+
+        # Step 2: Query semantic insights (should find symbols from learned project)
+        insights_result = as_dict(_get_semantic_insights_impl())
+        assert insights_result["success"] is True
+        assert isinstance(insights_result["insights"], list)
+        assert isinstance(insights_result["total"], int)
+
+        # Step 3: Get pattern recommendations for a task
+        rec_result = as_dict(
+            _get_pattern_recommendations_impl(
+                problem_description="add a utility function"
+            )
+        )
+        assert rec_result["success"] is True
+        assert "recommendations" in rec_result
+        assert isinstance(rec_result["recommendations"], list)
+        assert rec_result["problem_description"] == "add a utility function"
+
+
+class TestMemoryCrudLifecycleE2E:
+    """End-to-end test: write -> read -> list -> search -> delete memory.
+
+    Exercises the full memory CRUD pipeline through _impl functions
+    to verify the MemoryService integration end-to-end.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _setup_project(self, temp_project):
+        """Reset server state and activate temp_project."""
+        import anamnesis.mcp_server._shared as shared_module
+
+        orig_persist = shared_module._registry._persist_path
+        shared_module._registry._persist_path = None
+        shared_module._registry.reset()
+        shared_module._registry.activate(temp_project)
+
+        yield
+
+        shared_module._registry.reset()
+        shared_module._registry._persist_path = orig_persist
+
+    def test_memory_crud_lifecycle(self):
+        """Full pipeline: write -> read -> list -> search -> delete -> verify gone."""
+        from anamnesis.mcp_server.tools.memory import (
+            _delete_memory_impl,
+            _list_memories_impl,
+            _read_memory_impl,
+            _search_memories_impl,
+            _write_memory_impl,
+        )
+        from anamnesis.utils.toon_encoder import ToonEncoder
+
+        _toon = ToonEncoder()
+
+        def as_dict(result):
+            if isinstance(result, str):
+                return _toon.decode(result)
+            return result
+
+        # Step 1: Write a memory
+        write_result = as_dict(
+            _write_memory_impl("test-decisions", "# Architecture Decisions\n\nUse SQLite for storage.")
+        )
+        assert write_result["success"] is True
+        assert write_result["memory"]["name"] == "test-decisions"
+
+        # Step 2: Read it back
+        read_result = as_dict(_read_memory_impl("test-decisions"))
+        assert read_result["success"] is True
+        assert "Architecture Decisions" in read_result["memory"]["content"]
+
+        # Step 3: List all memories — should include the new one
+        list_result = as_dict(_list_memories_impl())
+        assert list_result["success"] is True
+        names = [m["name"] for m in list_result["memories"]]
+        assert "test-decisions" in names
+
+        # Step 4: Search for the memory
+        search_result = as_dict(_search_memories_impl("architecture"))
+        assert search_result["success"] is True
+        assert len(search_result["results"]) > 0
+
+        # Step 5: Delete the memory
+        delete_result = as_dict(_delete_memory_impl("test-decisions"))
+        assert delete_result["success"] is True
+
+        # Step 6: Verify it's gone
+        list_after = as_dict(_list_memories_impl())
+        names_after = [m["name"] for m in list_after["memories"]]
+        assert "test-decisions" not in names_after

@@ -310,6 +310,24 @@ class TestEnsureCollection:
         with pytest.raises(RuntimeError, match="Client not initialized"):
             await store._ensure_collection()
 
+    async def test_concurrent_ensure_collection(self, store_connected, mock_qdrant_client):
+        """Concurrent _ensure_collection calls both succeed without error."""
+        import asyncio
+
+        mock_qdrant_client.get_collections.return_value = SimpleNamespace(collections=[])
+
+        mock_models = MagicMock()
+        with patch.dict("sys.modules", {"qdrant_client": MagicMock(models=mock_models)}):
+            results = await asyncio.gather(
+                store_connected._ensure_collection(),
+                store_connected._ensure_collection(),
+                return_exceptions=True,
+            )
+
+        # Both calls should succeed (return None) — no exceptions
+        for r in results:
+            assert not isinstance(r, Exception), f"_ensure_collection raised: {r}"
+
 
 # ===========================================================================
 # 5. Upsert

@@ -13,9 +13,24 @@ import pathlib
 def safe_join(root: str, relative_path: str) -> str:
     """Join root and relative path, ensuring result stays within root.
 
+    Uses ``os.path.realpath`` to resolve symlinks and normalize the path
+    before checking containment. Note that this involves a TOCTOU window:
+    the filesystem state may change between the realpath check and any
+    subsequent file operation. Callers that need atomic guarantees should
+    use ``O_NOFOLLOW`` or equivalent at the open-file level.
+
+    Symlink resolution: symlinks in *relative_path* are fully resolved,
+    so a symlink pointing outside the root will be correctly rejected.
+
     Raises:
-        ValueError: If the resolved path escapes the project root.
+        ValueError: If *relative_path* is empty, contains null bytes,
+            or resolves outside the project root.
     """
+    if not relative_path:
+        raise ValueError("relative_path must not be empty")
+    if "\x00" in relative_path:
+        raise ValueError("relative_path must not contain null bytes")
+
     abs_path = os.path.realpath(os.path.join(root, relative_path))
     root_real = os.path.realpath(root)
     if not (abs_path == root_real or abs_path.startswith(root_real + os.sep)):

@@ -287,7 +287,10 @@ class TestIntelligenceServiceOperations:
             problem_description="create a service",
             include_related_files=True,
         )
-        # May or may not have related files depending on matches
+        assert isinstance(recs, list)
+        assert isinstance(reasoning, str)
+        assert len(reasoning) > 0
+        assert files is None or isinstance(files, list)
 
     def test_predict_coding_approach(self, service_with_data):
         """Test predicting coding approach."""
@@ -376,15 +379,19 @@ class TestIntelligenceServiceOperations:
         bug_insights = service_with_data.get_insights("bug_pattern")
         assert len(bug_insights) == 1
 
-    def test_get_project_blueprint(self, service_with_data):
+    def test_get_project_blueprint(self, service_with_data, tmp_path):
         """Test getting project blueprint."""
-        blueprint = service_with_data.get_project_blueprint()
+        # Use tmp_path to avoid scanning the entire repo (takes ~2 min)
+        (tmp_path / "main.py").write_text("print('hello')\n")
+        blueprint = service_with_data.get_project_blueprint(path=str(tmp_path))
         assert "tech_stack" in blueprint
         assert "learning_status" in blueprint
 
-    def test_get_project_blueprint_learning_status(self, service_with_data):
+    def test_get_project_blueprint_learning_status(self, service_with_data, tmp_path):
         """Test blueprint includes learning status."""
-        blueprint = service_with_data.get_project_blueprint()
+        # Use tmp_path to avoid scanning the entire repo (takes ~2 min)
+        (tmp_path / "main.py").write_text("print('hello')\n")
+        blueprint = service_with_data.get_project_blueprint(path=str(tmp_path))
         status = blueprint["learning_status"]
 
         assert "has_intelligence" in status

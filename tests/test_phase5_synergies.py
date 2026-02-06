@@ -525,6 +525,30 @@ class TestPatternGuidedCodeGeneration:
         assert return_type_pattern is not None
         assert "dict" in return_type_pattern["values"]
 
+    def test_suggest_code_pattern_real_tree_sitter(self, tmp_path):
+        """suggest_code_pattern with real tree-sitter (no mocked get_overview)."""
+        from anamnesis.services.symbol_service import SymbolService
+        from unittest.mock import MagicMock
+
+        src = tmp_path / "src"
+        src.mkdir()
+        (src / "handlers.py").write_text(
+            "def get_user():\n    pass\n\n"
+            "def fetch_data():\n    pass\n\n"
+            "def save_record():\n    pass\n"
+        )
+
+        # lsp_manager must return None for get_language_server to force
+        # tree-sitter fallback (a plain MagicMock returns a truthy mock).
+        lsp_mgr = MagicMock()
+        lsp_mgr.get_language_server.return_value = None
+        svc = SymbolService(str(tmp_path), lsp_manager=lsp_mgr)
+        result = svc.suggest_code_pattern("src/handlers.py", "function")
+
+        assert result["success"] is True
+        assert result["naming_convention"] == "snake_case"
+        assert len(result["examples"]) > 0
+
 
 class TestComplexityAwareNavigation:
     """Tests for S2: Complexity-aware symbol navigation."""

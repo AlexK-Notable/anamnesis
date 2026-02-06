@@ -5,10 +5,12 @@ error handling decorator, metacognition prompts, and utility helpers shared
 across all tool modules. Extracted from server.py for better modularity.
 """
 
+import atexit
 import functools
 import inspect
 import re
 import time
+from contextlib import asynccontextmanager
 
 from fastmcp import FastMCP
 
@@ -27,11 +29,53 @@ from anamnesis.utils.logger import logger
 from anamnesis.utils.toon_encoder import ToonEncoder, is_structurally_toon_eligible
 
 # =============================================================================
+# Server Lifecycle
+# =============================================================================
+
+
+def _cleanup_all_projects() -> None:
+    """Clean up resources for all registered projects.
+
+    Called during server shutdown and registered as an atexit fallback.
+    Each project's cleanup is independent — a failure in one does not
+    prevent cleanup of others.
+    """
+    for ctx in _registry.list_projects():
+        try:
+            ctx.cleanup()
+        except Exception:
+            logger.warning(
+                "Error cleaning up project %s", ctx.path, exc_info=True
+            )
+    try:
+        _registry._save()
+    except Exception:
+        logger.warning("Error saving registry on shutdown", exc_info=True)
+
+
+@asynccontextmanager
+async def _server_lifespan(app):
+    """FastMCP lifespan context manager for startup/shutdown.
+
+    Runs cleanup logic when the server shuts down, while the event
+    loop is still alive. An atexit handler provides a fallback for
+    cases where the lifespan exit is not reached (e.g. SIGKILL).
+    """
+    yield {}
+    _cleanup_all_projects()
+
+
+# Register atexit fallback (runs after event loop shutdown, sync only)
+atexit.register(_cleanup_all_projects)
+
+
+# =============================================================================
 # FastMCP Server Instance
 # =============================================================================
 
 mcp = FastMCP(
     "anamnesis",
+    lifespan=_server_lifespan,
     instructions="""Anamnesis - Codebase Intelligence Server
 
 This server provides tools for understanding and navigating codebases through
@@ -411,8 +455,13 @@ def _check_names_against_convention(
 # =============================================================================
 
 
-_RE_UNIX_PATH = re.compile(r"(?:/(?:home|tmp|var|etc|usr|opt|root|Users|Windows)[^\s'\",:;)\}\]]*)")
+_RE_UNIX_PATH = re.compile(
+    r"(?:/(?:home|tmp|var|etc|usr|opt|root|Users|Windows"
+    r"|srv|mnt|media|run|data|proc|sys|snap|nix)[^\s'\",:;)\}\]]*)"
+)
 _RE_WIN_PATH = re.compile(r"(?:[A-Z]:\\[^\s'\",:;)\}\]]+)")
+_RE_FILE_URI = re.compile(r"file://[^\s\"']+")
+_RE_DOTDOT = re.compile(r"(?:\.\./){2,}[^\s\"']*")
 
 
 def _sanitize_error_message(error_msg: str) -> str:
@@ -425,6 +474,8 @@ def _sanitize_error_message(error_msg: str) -> str:
         lambda m: '...\\' + m.group(0).rsplit('\\', 1)[-1] if '\\' in m.group(0) else m.group(0),
         sanitized,
     )
+    sanitized = _RE_FILE_URI.sub("<file-uri>", sanitized)
+    sanitized = _RE_DOTDOT.sub("<redacted-path>", sanitized)
     return sanitized
 
 

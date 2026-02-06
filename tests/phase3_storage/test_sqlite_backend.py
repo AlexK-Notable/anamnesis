@@ -852,3 +852,132 @@ class TestEdgeCases:
 
         assert len(retrieved.description) == 10000
         assert len(retrieved.relationships) == 100
+
+
+class TestCorruptedJsonResilience:
+    """Tests for F7: _safe_json_loads resilience to corrupted JSON in DB rows.
+
+    Inserts rows with invalid JSON directly via SQL, then verifies
+    that get_all_* methods return valid rows (skipping corrupted ones)
+    rather than crashing.
+    """
+
+    @pytest.mark.asyncio
+    async def test_corrupted_metadata_in_concept(self, memory_backend):
+        """A concept with corrupted JSON in metadata still loads with default."""
+        # Insert a valid concept first
+        valid = SemanticConcept(
+            id="valid-1",
+            name="ValidClass",
+            concept_type=ConceptType.CLASS,
+            file_path="/test.py",
+            description="A valid concept",
+        )
+        await memory_backend.save_concept(valid)
+
+        # Corrupt the metadata column via raw SQL
+        await memory_backend._conn.execute(
+            "UPDATE semantic_concepts SET metadata = '{not valid json' WHERE id = 'valid-1'"
+        )
+        await memory_backend._conn.commit()
+
+        # Should still load — metadata falls back to {}
+        retrieved = await memory_backend.get_concept("valid-1")
+        assert retrieved is not None
+        assert retrieved.name == "ValidClass"
+        assert retrieved.metadata == {}
+
+    @pytest.mark.asyncio
+    async def test_corrupted_relationships_in_concept(self, memory_backend):
+        """A concept with corrupted JSON in relationships returns [] default."""
+        valid = SemanticConcept(
+            id="rel-corrupt",
+            name="RelCorrupt",
+            concept_type=ConceptType.FUNCTION,
+            file_path="/test.py",
+        )
+        await memory_backend.save_concept(valid)
+
+        await memory_backend._conn.execute(
+            "UPDATE semantic_concepts SET relationships = 'BADJSON' WHERE id = 'rel-corrupt'"
+        )
+        await memory_backend._conn.commit()
+
+        retrieved = await memory_backend.get_concept("rel-corrupt")
+        assert retrieved is not None
+        assert retrieved.relationships == []
+
+    @pytest.mark.asyncio
+    async def test_corrupted_row_among_valid_rows(self, memory_backend):
+        """search_concepts returns valid rows even when one row has bad JSON."""
+        for i in range(3):
+            c = SemanticConcept(
+                id=f"batch-{i}",
+                name=f"BatchConcept{i}",
+                concept_type=ConceptType.CLASS,
+                file_path="/test.py",
+            )
+            await memory_backend.save_concept(c)
+
+        # Corrupt one row's metadata
+        await memory_backend._conn.execute(
+            "UPDATE semantic_concepts SET metadata = '<<<CORRUPT>>>' WHERE id = 'batch-1'"
+        )
+        await memory_backend._conn.commit()
+
+        # All 3 rows should still be returned — corrupted field gets default
+        concepts = await memory_backend.search_concepts("BatchConcept", limit=10)
+        assert len(concepts) == 3
+        names = {c.name for c in concepts}
+        assert names == {"BatchConcept0", "BatchConcept1", "BatchConcept2"}
+
+        # The corrupted row should have default metadata
+        corrupted = [c for c in concepts if c.id == "batch-1"][0]
+        assert corrupted.metadata == {}
+
+    @pytest.mark.asyncio
+    async def test_null_json_column_uses_default(self, memory_backend):
+        """NULL in a JSON column (e.g. metadata) uses the default value."""
+        valid = SemanticConcept(
+            id="null-meta",
+            name="NullMeta",
+            concept_type=ConceptType.CLASS,
+            file_path="/test.py",
+        )
+        await memory_backend.save_concept(valid)
+
+        await memory_backend._conn.execute(
+            "UPDATE semantic_concepts SET metadata = NULL WHERE id = 'null-meta'"
+        )
+        await memory_backend._conn.commit()
+
+        retrieved = await memory_backend.get_concept("null-meta")
+        assert retrieved is not None
+        assert retrieved.metadata == {}
+
+    @pytest.mark.asyncio
+    async def test_corrupted_pattern_fields(self, memory_backend):
+        """A pattern with corrupted examples/file_paths still loads."""
+        pattern = DeveloperPattern(
+            id="pat-corrupt",
+            name="FactoryPattern",
+            pattern_type=PatternType.FACTORY,
+            examples=["example1"],
+            file_paths=["/a.py"],
+            confidence=0.9,
+        )
+        await memory_backend.save_pattern(pattern)
+
+        # Corrupt multiple JSON columns
+        await memory_backend._conn.execute(
+            "UPDATE developer_patterns SET examples = 'NOT_JSON', file_paths = '{bad}' "
+            "WHERE id = 'pat-corrupt'"
+        )
+        await memory_backend._conn.commit()
+
+        patterns = await memory_backend.get_all_patterns()
+        assert len(patterns) >= 1
+        corrupted = [p for p in patterns if p.id == "pat-corrupt"][0]
+        assert corrupted.examples == []
+        assert corrupted.file_paths == []
+        assert corrupted.name == "FactoryPattern"

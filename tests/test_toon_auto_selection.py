@@ -385,3 +385,35 @@ class TestAsyncErrorHandling:
         result = await async_tool()
         # Should be TOON-encoded (string), not a dict
         assert isinstance(result, str)
+
+
+class TestSyncCircuitBreakerErrorPath:
+    """Tests for sync CircuitBreakerError path in _with_error_handling."""
+
+    def test_sync_circuit_breaker_error_returns_failure(self):
+        """Sync function raising CircuitBreakerError returns structured error dict."""
+        stats = CircuitBreakerStats(
+            state=CircuitState.OPEN,
+            failures=5,
+            successes=0,
+            total_requests=5,
+        )
+        details = ErrorDetails(
+            message="circuit open",
+            state=CircuitState.OPEN,
+            failures=5,
+            success_rate=0.0,
+            stats=stats,
+        )
+        options = CircuitBreakerOptions()
+
+        @_with_error_handling("test_op")
+        def sync_breaker_tool():
+            raise CircuitBreakerError("circuit open", details, options)
+
+        result = sync_breaker_tool()
+
+        assert isinstance(result, dict)
+        assert result["success"] is False
+        assert result["error_code"] == "circuit_breaker"
+        assert result["is_retryable"] is True

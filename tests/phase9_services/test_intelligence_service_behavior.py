@@ -184,29 +184,28 @@ class TestSemanticInsights:
 
         # Load concepts into intelligence service
         learned_data = learning_service.get_learned_data(project_path)
-        if learned_data:
-            concepts = learned_data.get("concepts", [])
-            intelligence_service.load_concepts(concepts)
+        assert learned_data is not None, "Learning succeeded but get_learned_data returned None"
+        concepts = learned_data.get("concepts", [])
+        intelligence_service.load_concepts(concepts)
 
         # Get semantic insights
         insights, total = intelligence_service.get_semantic_insights(limit=20)
 
-        # Should return actual data
-        assert total >= 0
+        # Should return actual data from the learned codebase
+        assert total > 0, "Intelligence service returned zero insights after loading concepts"
 
-        if len(insights) > 0:
-            # Verify insight structure
-            insight = insights[0]
-            assert hasattr(insight, "concept") or isinstance(insight, dict)
+        # Verify insight structure
+        insight = insights[0]
+        assert hasattr(insight, "concept") or isinstance(insight, dict)
 
     def test_query_filters_insights(self, learned_project, intelligence_service):
         """Verify query parameter filters results."""
         project_path, learning_service = learned_project
 
         learned_data = learning_service.get_learned_data(project_path)
-        if learned_data:
-            concepts = learned_data.get("concepts", [])
-            intelligence_service.load_concepts(concepts)
+        assert learned_data is not None, "Learning succeeded but get_learned_data returned None"
+        concepts = learned_data.get("concepts", [])
+        intelligence_service.load_concepts(concepts)
 
         # Query for auth-related concepts
         auth_insights, auth_total = intelligence_service.get_semantic_insights(
@@ -237,22 +236,22 @@ class TestSemanticInsights:
             "from the learned codebase with auth/database modules"
         )
 
-        # If both returned results, verify they are not identical
-        # (proving the query parameter actually filters)
-        if auth_names and db_names:
-            assert auth_names != db_names, (
-                "Queries for 'auth' and 'repository' returned identical results -- "
-                "query parameter may not be filtering"
-            )
+        # Both queries should return results, proving the query parameter filters
+        assert auth_names, "Query for 'auth' returned no results from learned codebase"
+        assert db_names, "Query for 'repository' returned no results from learned codebase"
+        assert auth_names != db_names, (
+            "Queries for 'auth' and 'repository' returned identical results -- "
+            "query parameter may not be filtering"
+        )
 
     def test_concept_type_filter(self, learned_project, intelligence_service):
         """Verify concept_type parameter filters by type."""
         project_path, learning_service = learned_project
 
         learned_data = learning_service.get_learned_data(project_path)
-        if learned_data:
-            concepts = learned_data.get("concepts", [])
-            intelligence_service.load_concepts(concepts)
+        assert learned_data is not None, "Learning succeeded but get_learned_data returned None"
+        concepts = learned_data.get("concepts", [])
+        intelligence_service.load_concepts(concepts)
 
         # Query for classes
         class_insights, _ = intelligence_service.get_semantic_insights(
@@ -271,13 +270,13 @@ class TestSemanticInsights:
         class_names = {i.concept if hasattr(i, "concept") else i.get("concept", "") for i in class_insights}
         func_names = {i.concept if hasattr(i, "concept") else i.get("concept", "") for i in func_insights}
 
-        # If type filtering works, class results and function results
-        # should not be identical sets
-        if class_names and func_names:
-            assert class_names != func_names, (
-                "Class filter and function filter returned identical results -- "
-                "concept_type parameter may not be filtering"
-            )
+        # Type filtering must produce different results
+        assert class_names, "Class filter returned no results from learned codebase"
+        assert func_names, "Function filter returned no results from learned codebase"
+        assert class_names != func_names, (
+            "Class filter and function filter returned identical results -- "
+            "concept_type parameter may not be filtering"
+        )
 
 
 class TestPatternRecommendations:
@@ -288,9 +287,9 @@ class TestPatternRecommendations:
         project_path, learning_service = learned_project
 
         learned_data = learning_service.get_learned_data(project_path)
-        if learned_data:
-            patterns = learned_data.get("patterns", [])
-            intelligence_service.load_patterns(patterns)
+        assert learned_data is not None, "Learning succeeded but get_learned_data returned None"
+        patterns = learned_data.get("patterns", [])
+        intelligence_service.load_patterns(patterns)
 
         # Get recommendations for a problem
         recommendations, reasoning, related_files = intelligence_service.get_pattern_recommendations(
@@ -309,9 +308,9 @@ class TestPatternRecommendations:
         project_path, learning_service = learned_project
 
         learned_data = learning_service.get_learned_data(project_path)
-        if learned_data:
-            patterns = learned_data.get("patterns", [])
-            intelligence_service.load_patterns(patterns)
+        assert learned_data is not None, "Learning succeeded but get_learned_data returned None"
+        patterns = learned_data.get("patterns", [])
+        intelligence_service.load_patterns(patterns)
 
         # Get auth-related recommendations
         auth_recs, auth_reason, _ = intelligence_service.get_pattern_recommendations(
@@ -331,12 +330,11 @@ class TestPatternRecommendations:
             "DB recommendations should include non-empty reasoning"
         )
 
-        # Different problem descriptions should produce different reasoning
-        if len(auth_reason) > 10 and len(db_reason) > 10:
-            assert auth_reason != db_reason, (
-                "Different problem descriptions produced identical reasoning -- "
-                "recommendations may not be context-aware"
-            )
+        # Different problem descriptions must produce different reasoning
+        assert auth_reason != db_reason, (
+            "Different problem descriptions produced identical reasoning -- "
+            "recommendations may not be context-aware"
+        )
 
 
 class TestCodingApproachPrediction:
@@ -348,9 +346,9 @@ class TestCodingApproachPrediction:
 
         # Load data
         learned_data = learning_service.get_learned_data(project_path)
-        if learned_data:
-            intelligence_service.load_concepts(learned_data.get("concepts", []))
-            intelligence_service.load_patterns(learned_data.get("patterns", []))
+        assert learned_data is not None, "Learning succeeded but get_learned_data returned None"
+        intelligence_service.load_concepts(learned_data.get("concepts", []))
+        intelligence_service.load_patterns(learned_data.get("patterns", []))
 
         # Predict approach for a task
         prediction = intelligence_service.predict_coding_approach(
@@ -358,24 +356,20 @@ class TestCodingApproachPrediction:
             context={"project_path": project_path},
         )
 
-        # Should return a prediction object
+        # Should return a prediction object with expected attributes
         assert prediction is not None
-
-        # Check for expected attributes
-        if hasattr(prediction, "target_files"):
-            assert isinstance(prediction.target_files, list)
-
-        if hasattr(prediction, "suggested_approach"):
-            assert prediction.suggested_approach is not None
+        assert isinstance(prediction.suggested_patterns, list)
+        assert prediction.approach != ""
+        assert 0 <= prediction.confidence <= 1
 
     def test_prediction_uses_existing_patterns(self, learned_project, intelligence_service):
         """Verify predictions leverage learned patterns."""
         project_path, learning_service = learned_project
 
         learned_data = learning_service.get_learned_data(project_path)
-        if learned_data:
-            intelligence_service.load_concepts(learned_data.get("concepts", []))
-            intelligence_service.load_patterns(learned_data.get("patterns", []))
+        assert learned_data is not None, "Learning succeeded but get_learned_data returned None"
+        intelligence_service.load_concepts(learned_data.get("concepts", []))
+        intelligence_service.load_patterns(learned_data.get("patterns", []))
 
         # Predict for auth-related task
         prediction = intelligence_service.predict_coding_approach(
@@ -383,20 +377,13 @@ class TestCodingApproachPrediction:
             context={"project_path": project_path},
         )
 
-        # The prediction should exist
+        # The prediction should exist with valid reasoning
         assert prediction is not None
-
-        # If there's reasoning, verify it's a non-empty string
-        if hasattr(prediction, "reasoning"):
-            assert prediction.reasoning is not None, (
-                "Prediction reasoning should not be None"
-            )
-            assert isinstance(prediction.reasoning, str), (
-                f"Reasoning should be a string, got {type(prediction.reasoning)}"
-            )
-            assert len(prediction.reasoning) > 0, (
-                "Reasoning should be non-empty"
-            )
+        assert prediction.reasoning is not None, "Prediction reasoning should not be None"
+        assert isinstance(prediction.reasoning, str), (
+            f"Reasoning should be a string, got {type(prediction.reasoning)}"
+        )
+        assert len(prediction.reasoning) > 0, "Reasoning should be non-empty"
 
 
 class TestProjectBlueprint:
@@ -453,8 +440,8 @@ class TestDeveloperProfile:
         project_path, learning_service = learned_project
 
         learned_data = learning_service.get_learned_data(project_path)
-        if learned_data:
-            intelligence_service.load_patterns(learned_data.get("patterns", []))
+        assert learned_data is not None, "Learning succeeded but get_learned_data returned None"
+        intelligence_service.load_patterns(learned_data.get("patterns", []))
 
         # Get developer profile (this is about codebase patterns, not individuals)
         profile = intelligence_service.get_developer_profile(

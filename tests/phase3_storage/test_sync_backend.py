@@ -7,6 +7,7 @@ Tests the synchronous wrapper for SQLiteBackend including:
 - Round-trip data integrity
 """
 
+import asyncio
 import tempfile
 from pathlib import Path
 
@@ -89,6 +90,47 @@ class TestSyncBackendConnection:
         # Check that tables exist by attempting operations
         concepts = memory_backend.get_concepts_by_file("/test.py")
         assert concepts == []
+
+    def test_sync_backend_works_from_async_context(self):
+        """SyncSQLiteBackend works when called from within a running async loop.
+
+        This is the critical scenario for FastMCP: the MCP server's tool
+        dispatch runs inside an async event loop, so SyncSQLiteBackend must
+        not call run_until_complete() on the caller's loop. Instead it uses
+        a dedicated background thread with its own event loop.
+        """
+
+        async def _use_sync_backend_from_async():
+            backend = SyncSQLiteBackend(":memory:")
+            backend.connect()
+
+            concept = SemanticConcept(
+                id="async-ctx-test",
+                name="AsyncContextTest",
+                concept_type=ConceptType.CLASS,
+                file_path="/test.py",
+            )
+            backend.save_concept(concept)
+
+            retrieved = backend.get_concept("async-ctx-test")
+            assert retrieved is not None
+            assert retrieved.name == "AsyncContextTest"
+
+            backend.close()
+
+        # asyncio.run() creates and runs an event loop on the current thread.
+        # If SyncSQLiteBackend tried to use run_until_complete() on *this*
+        # thread's loop, it would raise RuntimeError. The thread-based bridge
+        # avoids this by executing coroutines on a separate background thread.
+        asyncio.run(_use_sync_backend_from_async())
+
+    def test_close_is_idempotent(self):
+        """Calling close() multiple times does not raise."""
+        backend = SyncSQLiteBackend(":memory:")
+        backend.connect()
+        backend.close()
+        # Second close should be a no-op, not an error
+        backend.close()
 
 
 class TestSyncSemanticConceptCRUD:

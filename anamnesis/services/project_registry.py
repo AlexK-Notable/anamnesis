@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -55,6 +56,9 @@ class ProjectContext:
     _semantic_initialized: bool = field(default=False, repr=False)
     _lsp_manager: Optional["LspManager"] = field(default=None, repr=False)
     _symbol_service: Optional["SymbolService"] = field(default=None, repr=False)
+    _init_lock: threading.RLock = field(
+        default_factory=threading.RLock, repr=False, compare=False
+    )
 
     @property
     def name(self) -> str:
@@ -63,27 +67,36 @@ class ProjectContext:
 
     def get_learning_service(self) -> "LearningService":
         """Get or create the learning service for this project."""
-        if self._learning_service is None:
-            from anamnesis.services.learning_service import LearningService
+        if self._learning_service is not None:
+            return self._learning_service
+        with self._init_lock:
+            if self._learning_service is None:
+                from anamnesis.services.learning_service import LearningService
 
-            self._learning_service = LearningService()
-        return self._learning_service
+                self._learning_service = LearningService()
+            return self._learning_service
 
     def get_intelligence_service(self) -> "IntelligenceService":
         """Get or create the intelligence service for this project."""
-        if self._intelligence_service is None:
-            from anamnesis.services.intelligence_service import IntelligenceService
+        if self._intelligence_service is not None:
+            return self._intelligence_service
+        with self._init_lock:
+            if self._intelligence_service is None:
+                from anamnesis.services.intelligence_service import IntelligenceService
 
-            self._intelligence_service = IntelligenceService()
-        return self._intelligence_service
+                self._intelligence_service = IntelligenceService()
+            return self._intelligence_service
 
     def get_codebase_service(self) -> "CodebaseService":
         """Get or create the codebase service for this project."""
-        if self._codebase_service is None:
-            from anamnesis.services.codebase_service import CodebaseService
+        if self._codebase_service is not None:
+            return self._codebase_service
+        with self._init_lock:
+            if self._codebase_service is None:
+                from anamnesis.services.codebase_service import CodebaseService
 
-            self._codebase_service = CodebaseService()
-        return self._codebase_service
+                self._codebase_service = CodebaseService()
+            return self._codebase_service
 
     def get_session_manager(self) -> "SessionManager":
         """Get or create the session manager for this project.
@@ -91,20 +104,26 @@ class ProjectContext:
         Each project gets its own in-memory SQLite backend,
         isolating sessions per project.
         """
-        if self._session_manager is None:
-            from anamnesis.services.session_manager import SessionManager
-            from anamnesis.storage.sync_backend import SyncSQLiteBackend
+        if self._session_manager is not None:
+            return self._session_manager
+        with self._init_lock:
+            if self._session_manager is None:
+                from anamnesis.services.session_manager import SessionManager
+                from anamnesis.storage.sync_backend import SyncSQLiteBackend
 
-            backend = SyncSQLiteBackend(":memory:")
-            backend.connect()
-            self._session_manager = SessionManager(backend)
-        return self._session_manager
+                backend = SyncSQLiteBackend(":memory:")
+                backend.connect()
+                self._session_manager = SessionManager(backend)
+            return self._session_manager
 
     def get_memory_service(self) -> MemoryService:
         """Get or create the memory service for this project."""
-        if self._memory_service is None:
-            self._memory_service = MemoryService(self.path)
-        return self._memory_service
+        if self._memory_service is not None:
+            return self._memory_service
+        with self._init_lock:
+            if self._memory_service is None:
+                self._memory_service = MemoryService(self.path)
+            return self._memory_service
 
     def get_search_service(self) -> "SearchService":
         """Get or create the search service for this project.
@@ -112,11 +131,14 @@ class ProjectContext:
         Creates a synchronous search service (text + pattern backends).
         For semantic search, use ensure_semantic_search().
         """
-        if self._search_service is None:
-            from anamnesis.search.service import SearchService
+        if self._search_service is not None:
+            return self._search_service
+        with self._init_lock:
+            if self._search_service is None:
+                from anamnesis.search.service import SearchService
 
-            self._search_service = SearchService.create_sync(self.path)
-        return self._search_service
+                self._search_service = SearchService.create_sync(self.path)
+            return self._search_service
 
     def get_lsp_manager(self) -> "LspManager":
         """Get or create the LSP manager for this project.
@@ -124,11 +146,14 @@ class ProjectContext:
         Lazily creates an LspManager that handles language server
         lifecycle for this project.
         """
-        if self._lsp_manager is None:
-            from anamnesis.lsp.manager import LspManager
+        if self._lsp_manager is not None:
+            return self._lsp_manager
+        with self._init_lock:
+            if self._lsp_manager is None:
+                from anamnesis.lsp.manager import LspManager
 
-            self._lsp_manager = LspManager(self.path)
-        return self._lsp_manager
+                self._lsp_manager = LspManager(self.path)
+            return self._lsp_manager
 
     def get_symbol_service(self) -> "SymbolService":
         """Get or create the symbol service for this project.
@@ -137,15 +162,18 @@ class ProjectContext:
         and CodeEditor (mutations), both backed by the project's LSP
         manager.
         """
-        if self._symbol_service is None:
-            from anamnesis.services.symbol_service import SymbolService
+        if self._symbol_service is not None:
+            return self._symbol_service
+        with self._init_lock:
+            if self._symbol_service is None:
+                from anamnesis.services.symbol_service import SymbolService
 
-            self._symbol_service = SymbolService(
-                self.path,
-                lsp_manager=self.get_lsp_manager(),
-                intelligence_service=self._intelligence_service,
-            )
-        return self._symbol_service
+                self._symbol_service = SymbolService(
+                    self.path,
+                    lsp_manager=self.get_lsp_manager(),
+                    intelligence_service=self._intelligence_service,
+                )
+            return self._symbol_service
 
     def shutdown_lsp(self) -> None:
         """Shut down all LSP servers for this project.
@@ -156,6 +184,38 @@ class ProjectContext:
             self._lsp_manager.stop_all()
             self._lsp_manager = None
         self._symbol_service = None
+
+    def cleanup(self) -> None:
+        """Release all resources held by this project context.
+
+        Shuts down LSP servers, closes session backends, and clears
+        service references. Called during server shutdown or project
+        deactivation. Each step is wrapped individually so a failure
+        in one does not prevent cleanup of others.
+        """
+        # LSP servers (sends shutdown request, kills processes)
+        try:
+            self.shutdown_lsp()
+        except Exception:
+            logger.warning("Error shutting down LSP for %s", self.path, exc_info=True)
+
+        # Session backend (stops background thread, closes DB)
+        try:
+            if self._session_manager is not None:
+                self._session_manager._backend.close()
+        except Exception:
+            logger.warning(
+                "Error closing session backend for %s", self.path, exc_info=True
+            )
+
+        # Clear all service references
+        self._learning_service = None
+        self._intelligence_service = None
+        self._codebase_service = None
+        self._session_manager = None
+        self._memory_service = None
+        self._search_service = None
+        self._semantic_initialized = False
 
     async def ensure_semantic_search(self) -> bool:
         """Initialize semantic search backend lazily.
@@ -252,6 +312,7 @@ class ProjectRegistry:
     ) -> None:
         self._projects: dict[str, ProjectContext] = {}
         self._active_path: Optional[str] = None
+        self._lock = threading.Lock()
         self._persist_path: Optional[Path] = (
             Path(persist_path) if persist_path is not None else None
         )
@@ -355,7 +416,7 @@ class ProjectRegistry:
 
         Creates a new ProjectContext if this is the first activation.
         If already known, returns the existing context (preserving
-        all cached service state).
+        all cached service state). Thread-safe.
 
         Args:
             path: Project root directory path.
@@ -374,31 +435,38 @@ class ProjectRegistry:
         if not resolved_path.is_dir():
             raise ValueError(f"Project path is not a directory: {resolved}")
 
-        if resolved not in self._projects:
-            self._projects[resolved] = ProjectContext(path=resolved)
-            logger.info(f"New project registered: {resolved}")
+        with self._lock:
+            if resolved not in self._projects:
+                self._projects[resolved] = ProjectContext(path=resolved)
+                logger.info(f"New project registered: {resolved}")
 
-        ctx = self._projects[resolved]
-        ctx.activated_at = utcnow()
-        self._active_path = resolved
+            ctx = self._projects[resolved]
+            ctx.activated_at = utcnow()
+            self._active_path = resolved
 
-        logger.info(f"Project activated: {ctx.name} ({resolved})")
-        self._save()
-        return ctx
+            logger.info(f"Project activated: {ctx.name} ({resolved})")
+            self._save()
+            return ctx
 
     def get_active(self) -> ProjectContext:
         """Get the active project context.
 
         If no project has been explicitly activated, auto-activates
         the current working directory for backward compatibility.
+        Thread-safe.
 
         Returns:
             The active ProjectContext.
         """
-        if self._active_path is None:
-            cwd = os.getcwd()
-            return self.activate(cwd)
-        return self._projects[self._active_path]
+        with self._lock:
+            if self._active_path is None:
+                # Release lock before calling activate (which re-acquires it)
+                pass
+            else:
+                return self._projects[self._active_path]
+        # Outside the lock — activate will acquire it
+        cwd = os.getcwd()
+        return self.activate(cwd)
 
     def get_project(self, path: str) -> Optional[ProjectContext]:
         """Get a specific project context by path.
@@ -428,7 +496,7 @@ class ProjectRegistry:
     def deactivate(self, path: str) -> bool:
         """Remove a project from the registry.
 
-        This discards all cached services for the project.
+        This discards all cached services for the project. Thread-safe.
 
         Args:
             path: Project root directory path.
@@ -437,20 +505,30 @@ class ProjectRegistry:
             True if removed, False if not found.
         """
         resolved = str(Path(path).resolve())
-        if resolved not in self._projects:
-            return False
+        with self._lock:
+            if resolved not in self._projects:
+                return False
 
-        # Shut down LSP servers to prevent zombie processes
-        self._projects[resolved].shutdown_lsp()
-        del self._projects[resolved]
-        if self._active_path == resolved:
-            self._active_path = None
-        logger.info(f"Project deactivated: {resolved}")
-        self._save()
-        return True
+            # Clean up all project resources
+            self._projects[resolved].cleanup()
+            del self._projects[resolved]
+            if self._active_path == resolved:
+                self._active_path = None
+            logger.info(f"Project deactivated: {resolved}")
+            self._save()
+            return True
 
     def reset(self) -> None:
-        """Clear all projects and state. Used for testing."""
+        """Clear all projects and state. Used for testing.
+
+        Cleans up each project's resources (LSP servers, background
+        threads) before dropping references to prevent resource leaks.
+        """
+        for ctx in self._projects.values():
+            try:
+                ctx.cleanup()
+            except Exception:
+                pass
         self._projects.clear()
         self._active_path = None
 

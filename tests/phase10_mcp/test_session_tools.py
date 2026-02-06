@@ -16,17 +16,10 @@ from anamnesis.mcp_server.server import (
 )
 
 
-# Reset global state between tests
+# Use the shared reset_server_state fixture from conftest.py
 @pytest.fixture(autouse=True)
-def reset_server_state():
-    """Reset server global state between tests."""
-    import anamnesis.mcp_server.server as server_module
-
-    # Reset project registry (replaces old per-service globals)
-    server_module._registry.reset()
-    yield
-    # Clean up after test
-    server_module._registry.reset()
+def _activate_project(reset_server_state):
+    """Every test gets a fresh project context via the conftest fixture."""
 
 
 class TestStartSession:

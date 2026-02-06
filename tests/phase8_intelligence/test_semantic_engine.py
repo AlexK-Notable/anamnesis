@@ -560,7 +560,7 @@ class TestPredictCodingApproach:
 
         # Should identify model directory
         targets = result["target_files"]
-        assert len(targets) >= 0  # May or may not find model dir
+        assert isinstance(targets, list)  # May or may not find model dir
 
     def test_predict_without_directory(self):
         """Test prediction without project directory."""
