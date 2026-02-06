@@ -2,154 +2,197 @@
 
 > **Anamnesis** (Greek: ἀνάμνησις) — Plato's concept of recollection, the idea that learning is really remembering knowledge the soul already possesses.
 
-Semantic code analysis and intelligence library — a Python port of [In-Memoria](https://github.com/In-Memoria/In-Memoria)'s Rust core.
+Codebase Intelligence MCP Server — learns your codebase's structure, patterns, and conventions, then exposes that knowledge through 41 tools for AI agents.
 
-## Overview
+## What It Does
 
-Anamnesis provides intelligent code analysis through:
-
-- **Tree-sitter based AST parsing** for 11 languages (TypeScript, JavaScript, Python, Rust, Go, Java, C, C++, C#, SQL, Ruby)
-- **Semantic concept extraction** — understands what code *means*, not just its syntax
-- **Pattern learning** — learns naming conventions, structural patterns, and implementation idioms from your codebase
-- **Approach prediction** — suggests relevant files and patterns for implementing new features
-- **Codebase blueprinting** — generates high-level architectural overviews
-
-## Installation
-
-```bash
-pip install anamnesis
-```
-
-Or with development dependencies:
-
-```bash
-pip install anamnesis[dev]
-```
-
-## Requirements
-
-- Python 3.11+
-- tree-sitter >= 0.23.0
-- tree-sitter-language-pack >= 0.23.4
-- pydantic >= 2.0
+- **Learn** codebase structure, patterns, and naming conventions automatically
+- **Search** code by text, regex/AST patterns, or semantic similarity (vector embeddings)
+- **Navigate** symbols with LSP-backed precision — find definitions, references, overviews
+- **Edit** code through LSP — rename symbols, replace bodies, insert before/after
+- **Analyze** complexity — cyclomatic, cognitive, Halstead, maintainability index
+- **Remember** project knowledge across sessions with persistent memories
+- **Suggest** refactorings based on complexity metrics and naming conventions
+- **Investigate** symbols with combined complexity + pattern + refactoring analysis
 
 ## Quick Start
 
-```python
-from anamnesis import SemanticAnalyzer
+### Prerequisites
 
-# Analyze a codebase
-analyzer = SemanticAnalyzer()
-result = await analyzer.analyze_directory("/path/to/project")
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
-# Get codebase blueprint
-blueprint = result.get_blueprint()
-print(blueprint.tech_stack)
-print(blueprint.entry_points)
+### Installation
 
-# Predict approach for a task
-prediction = await analyzer.predict_approach(
-    "Add user authentication",
-    context=result
-)
-print(prediction.target_files)
-print(prediction.suggested_patterns)
+```bash
+git clone https://github.com/AlexK-Notable/anamnesis.git
+cd anamnesis
+uv sync --all-extras
 ```
 
-## Development Status
+Or with pip:
 
-This is an active port of the In-Memoria Rust core. Implementation follows a phased approach:
+```bash
+pip install -e ".[dev,lsp]"
+```
 
-| Phase | Component | Status |
-|-------|-----------|--------|
-| 1 | Core Types & Models | 🟡 In Progress |
-| 2 | Tree-sitter Parsing | ⚪ Planned |
-| 3 | Language Extractors | ⚪ Planned |
-| 4 | Semantic Analysis | ⚪ Planned |
-| 5 | Pattern Learning | ⚪ Planned |
-| 6-11 | Advanced Features | ⚪ Planned |
+### MCP Configuration
 
-See [COMPREHENSIVE_RALPH_LOOP.md](../In-Memoria/COMPREHENSIVE_RALPH_LOOP.md) for detailed implementation plan.
+Add to your Claude Desktop or Claude Code MCP config:
+
+```json
+{
+  "mcpServers": {
+    "anamnesis": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/anamnesis", "python", "-m", "anamnesis.mcp_server"]
+    }
+  }
+}
+```
+
+### First Use
+
+After connecting, the typical workflow is:
+
+1. **Activate a project**: `activate_project("/path/to/your/codebase")`
+2. **Bootstrap intelligence**: `auto_learn_if_needed()` — builds the intelligence database
+3. **Search**: `search_codebase(query="authentication", search_type="text")`
+4. **Get the big picture**: `get_project_blueprint()` — architectural overview
+
+## Tools
+
+41 tools across 8 modules:
+
+| Module | Tools | What They Do |
+|--------|-------|--------------|
+| **lsp** (15) | `find_symbol`, `get_symbols_overview`, `find_referencing_symbols`, `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `rename_symbol`, `enable_lsp`, `get_lsp_status`, `suggest_code_pattern`, `check_conventions`, `analyze_file_complexity`, `get_complexity_hotspots`, `suggest_refactorings`, `investigate_symbol` | Symbol navigation, code editing, complexity analysis, refactoring suggestions |
+| **memory** (7) | `write_memory`, `read_memory`, `list_memories`, `delete_memory`, `edit_memory`, `search_memories`, `reflect` | Persistent project knowledge and metacognition |
+| **intelligence** (6) | `get_semantic_insights`, `get_pattern_recommendations`, `predict_coding_approach`, `get_developer_profile`, `contribute_insights`, `get_project_blueprint` | Pattern analysis, approach prediction, blueprinting |
+| **session** (6) | `start_session`, `end_session`, `record_decision`, `get_session`, `list_sessions`, `get_decisions` | Session lifecycle and decision tracking |
+| **project** (3) | `get_project_config`, `activate_project`, `list_projects` | Multi-project management with isolation |
+| **search** (2) | `search_codebase`, `analyze_codebase` | Text, pattern, and semantic code search |
+| **learning** (1) | `auto_learn_if_needed` | Codebase learning orchestration |
+| **monitoring** (1) | `get_system_status` | Server health and diagnostics |
+
+## Architecture
+
+```
+MCP Client (Claude Desktop / Claude Code)
+    │
+    ▼
+FastMCP Server (mcp_server/_shared.py)
+    │
+    ▼
+Tool Modules (mcp_server/tools/*.py — @mcp.tool wrappers)
+    │
+    ▼
+_impl Functions (business logic + @_with_error_handling)
+    │
+    ▼
+Service Layer (services/ — one instance per project)
+    │  ProjectRegistry → ProjectContext → lazy service init
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ Engines & Storage                                           │
+│  ├─ SemanticEngine, PatternEngine, EmbeddingEngine          │
+│  ├─ ComplexityAnalyzer                                      │
+│  ├─ ExtractionOrchestrator → TreeSitter + Regex backends    │
+│  ├─ SymbolRetriever, CodeEditor → LspManager → LSP servers  │
+│  ├─ SQLiteBackend, QdrantVectorStore                        │
+│  └─ SearchService → Text / Pattern / Semantic backends      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key design principles:**
+
+- **Project isolation** — each project gets its own service instances via `ProjectContext`, preventing cross-project data contamination
+- **Lazy initialization** — services, LSP servers, and embedding models start on first use, not at server startup
+
+## Supported Languages
+
+Tree-sitter grammar support for 10 languages: TypeScript, JavaScript, Python, Rust, Go, Java, C, C++, C#, SQL. Ruby is in the language registry but not in the grammar validation suite.
+
+LSP integration supports Python (Pyright), Go (gopls), Rust (rust-analyzer), and TypeScript (typescript-language-server).
 
 ## Development
 
 ### Setup
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/anamnesis
+git clone https://github.com/AlexK-Notable/anamnesis.git
 cd anamnesis
-
-# Install with uv (recommended)
 uv sync --all-extras
-
-# Or with pip
-pip install -e ".[dev]"
-```
-
-### Validate Grammar Support
-
-Before developing parsing features, validate tree-sitter grammar availability:
-
-```bash
-python scripts/validate_grammars.py
 ```
 
 ### Run Tests
 
 ```bash
-pytest
+python -m pytest -n 6 -x -q tests/ --ignore=tests/test_lsp_pyright.py
 ```
 
-### Type Checking
-
-```bash
-mypy anamnesis
-```
-
-### Linting
+### Lint
 
 ```bash
 ruff check anamnesis
 ```
 
-## Architecture
+### Type Check
 
+```bash
+pyright anamnesis
 ```
-anamnesis/
-├── types/          # Core data models (Pydantic)
-├── parsing/        # Tree-sitter integration
-│   ├── parser_manager.py
-│   ├── tree_walker.py
-│   └── fallback_extractor.py
-├── extractors/     # Language-specific extractors
-│   ├── typescript.py
-│   ├── python.py
-│   └── ...
-├── analysis/       # Semantic analysis engines
-│   ├── semantic_analyzer.py
-│   ├── complexity_analyzer.py
-│   └── blueprint_analyzer.py
-└── patterns/       # Pattern learning & prediction
-    ├── pattern_engine.py
-    └── approach_predictor.py
+
+### CLI
+
+Anamnesis also provides a CLI for standalone use:
+
+```bash
+anamnesis server .          # Start MCP server
+anamnesis learn .           # Learn from codebase
+anamnesis analyze .         # Show analysis insights
+anamnesis search "query"    # Search code (text/pattern/semantic)
+anamnesis init .            # Initialize project config
+anamnesis watch .           # File watcher for real-time updates
+anamnesis check .           # Run diagnostics
 ```
+
+## Project Status
+
+| Component | Status |
+|-----------|--------|
+| Core types, tree-sitter parsing, language extractors | Complete |
+| Semantic analysis and pattern learning | Complete |
+| Storage (SQLite + Qdrant vector search) | Complete |
+| Search pipeline (text, pattern, semantic) | Complete |
+| LSP integration (navigation + editing) | Complete |
+| Synergy features S1-S5 (complexity, refactoring, investigation) | Complete |
+| MCP server with 41 tools | Complete |
+
+2023 tests passing across the full suite.
+
+## Dependencies
+
+| Category | Packages |
+|----------|----------|
+| **Core** | pydantic, tree-sitter, tree-sitter-language-pack |
+| **Storage** | aiosqlite, numpy |
+| **Vector Search** | qdrant-client, sentence-transformers |
+| **MCP** | mcp, fastmcp |
+| **CLI** | click |
+| **Utils** | loguru, tenacity, watchdog, anyio, toon-format |
+| **LSP** (optional) | overrides, pathspec, psutil |
+
+See [pyproject.toml](pyproject.toml) for version constraints.
 
 ## Relationship to In-Memoria
 
-Anamnesis is a Python implementation of the core analysis engine from [In-Memoria](https://github.com/pi22by7/In-Memoria), originally created by [Piyush Airani](https://github.com/pi22by7). While In-Memoria is a full MCP server providing codebase intelligence to AI assistants, Anamnesis focuses purely on the analysis capabilities, making it usable as a standalone library.
-
-**In-Memoria** (Rust/TypeScript) → Full MCP server with CLI
-**Anamnesis** (Python) → Portable analysis library
-
-## Acknowledgments
-
-- [Piyush Airani](https://github.com/pi22by7) - Creator of [In-Memoria](https://github.com/pi22by7/In-Memoria), the original Rust implementation this project is based on
-
-## License
-
-MIT - see the [LICENSE](LICENSE) file for details.
+Anamnesis originated as a Python port of [In-Memoria](https://github.com/In-Memoria/In-Memoria)'s Rust core. It has since evolved into a full MCP server with capabilities beyond the original — LSP integration, unified search pipeline, session management, multi-project isolation, and complexity analysis.
 
 ## Etymology
 
 The name "Anamnesis" comes from Plato's theory of recollection, which holds that all learning is actually a process of remembering what the soul knew before birth. This concept is particularly apt for a code intelligence tool that helps developers "remember" patterns, conventions, and structures across their codebase — turning implicit knowledge into explicit understanding.
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details.

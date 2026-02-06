@@ -10,7 +10,6 @@ from .search import (
     SearchQuery,
     SearchBackend,
     ISearchService,
-    IVectorStore,
 )
 from .engines import (
     # Callback type
@@ -34,12 +33,6 @@ from .engines import (
     RustBridgeHealth,
     SemanticSearchResult,
     VectorSearchResult,
-    # Interfaces (Protocols)
-    IPatternEngine,
-    IRustBridgeService,
-    ISemanticEngine,
-    IStorageProvider,
-    IVectorDatabase,
 )
 
 __all__ = [
@@ -49,7 +42,6 @@ __all__ = [
     "SearchQuery",
     "SearchBackend",
     "ISearchService",
-    "IVectorStore",
     # Callback type
     "ProgressCallback",
     # Supporting types
@@ -71,10 +63,4 @@ __all__ = [
     "EngineCacheStats",
     "CodeMetadata",
     "VectorSearchResult",
-    # Interfaces (Protocols)
-    "IStorageProvider",
-    "ISemanticEngine",
-    "IPatternEngine",
-    "IRustBridgeService",
-    "IVectorDatabase",
 ]

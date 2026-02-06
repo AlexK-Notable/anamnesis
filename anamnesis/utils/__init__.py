@@ -108,13 +108,6 @@ from .serialization import (
     serialize_to_primitives,
 )
 
-# Response Formatter (Phase 13)
-from .response_formatter import (
-    ResponseFormatter,
-    format_response,
-    get_default_formatter,
-)
-
 __all__ = [
     # Logger
     "Logger",
@@ -194,8 +187,4 @@ __all__ = [
     # Serialization (Phase 13)
     "is_serialized",
     "serialize_to_primitives",
-    # Response Formatter (Phase 13)
-    "ResponseFormatter",
-    "format_response",
-    "get_default_formatter",
 ]

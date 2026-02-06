@@ -1,24 +1,88 @@
 """TOON-specific test fixtures.
 
-Provides fixtures for generating sample MCP response data matching
-the types in anamnesis.types.mcp_responses.
+Provides fixtures for generating sample MCP response data for TOON
+encoding tests. Uses inline dataclasses matching the shapes that
+the TOON encoder processes.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 import pytest
 
-from anamnesis.types.mcp_responses import (
-    SemanticInsight,
-    SemanticInsightsResponse,
-    PatternRecommendation,
-    PatternRecommendationsResponse,
-    SearchResult,
-    SearchCodebaseResponse,
-    IntelligenceMetrics,
-    IntelligenceMetricsResponse,
-)
+
+# ============================================================================
+# Inline response types (test-only, matching shapes the TOON encoder handles)
+# ============================================================================
+
+
+@dataclass
+class SemanticInsight:
+    concept: str
+    type: str
+    confidence: float
+    relationships: list[str] = field(default_factory=list)
+    context: str = ""
+
+
+@dataclass
+class SemanticInsightsResponse:
+    query: str
+    insights: list[SemanticInsight] = field(default_factory=list)
+    total_concepts: int = 0
+    message: str = ""
+
+
+@dataclass
+class PatternRecommendation:
+    pattern: str
+    description: str
+    confidence: float
+    examples: list[str] = field(default_factory=list)
+    reasoning: str = ""
+
+
+@dataclass
+class PatternRecommendationsResponse:
+    context: str
+    recommendations: list[PatternRecommendation] = field(default_factory=list)
+    message: str = ""
+
+
+@dataclass
+class SearchResult:
+    file_path: str
+    relevance: float
+    match_type: str
+    context: str = ""
+    line_number: int = 0
+
+
+@dataclass
+class SearchCodebaseResponse:
+    query: str
+    search_type: str
+    results: list[SearchResult] = field(default_factory=list)
+    total_results: int = 0
+    message: str = ""
+
+
+@dataclass
+class IntelligenceMetrics:
+    total_concepts: int
+    total_patterns: int
+    total_features: int
+    coverage_percentage: float
+    is_stale: bool
+    last_learned: datetime | None = None
+
+
+@dataclass
+class IntelligenceMetricsResponse:
+    project_path: str
+    metrics: IntelligenceMetrics | None = None
+    message: str = ""
 
 
 # ============================================================================
@@ -137,7 +201,6 @@ def sample_search_response(sample_search_results):
 def sample_metrics_response():
     """Factory fixture for generating IntelligenceMetricsResponse."""
     def _make() -> IntelligenceMetricsResponse:
-        from datetime import datetime
         metrics = IntelligenceMetrics(
             total_concepts=145,
             total_patterns=43,

@@ -7,28 +7,10 @@ This module provides extractors that analyze parsed ASTs to extract:
 - Patterns: Common code patterns (Factory, Singleton, Observer, etc.)
 
 These extractors build on the parsing layer to provide semantic understanding
-of the codebase for the intelligence engines.
+of the codebase for the intelligence engines. They are used internally by the
+unified extraction pipeline's TreeSitterBackend.
 
-.. deprecated::
-    The types in this package (SymbolKind, PatternKind, ImportKind,
-    ExtractedSymbol, DetectedPattern, ExtractedImport) are superseded
-    by the unified types in ``anamnesis.extraction``.
-
-    For new code, use::
-
-        from anamnesis.extraction import (
-            ExtractionOrchestrator,
-            UnifiedSymbol,
-            UnifiedPattern,
-            UnifiedImport,
-            SymbolKind,
-            PatternKind,
-            ImportKind,
-        )
-
-    The extractors themselves (SymbolExtractor, PatternExtractor,
-    ImportExtractor) continue to be used internally by the unified
-    pipeline's TreeSitterBackend.
+For the unified extraction API, see ``anamnesis.extraction``.
 """
 
 from anamnesis.extractors.symbol_extractor import (
