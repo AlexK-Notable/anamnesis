@@ -17,6 +17,7 @@ from anamnesis.mcp_server.tools.learning import (  # noqa: F401
     _auto_learn_if_needed_impl,
 )
 from anamnesis.mcp_server.tools.lsp import (  # noqa: F401
+    _analyze_code_quality_impl,
     _check_conventions_impl,
     _enable_lsp_impl,
     _find_referencing_symbols_impl,
@@ -47,6 +48,7 @@ from anamnesis.mcp_server.tools.project import (  # noqa: F401
     _activate_project_impl,
     _get_project_config_impl,
     _list_projects_impl,
+    _manage_project_impl,
 )
 from anamnesis.mcp_server.tools.search import (  # noqa: F401
     _analyze_codebase_impl,

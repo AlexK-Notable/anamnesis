@@ -2,7 +2,7 @@
 
 > **Anamnesis** (Greek: ἀνάμνησις) — Plato's concept of recollection, the idea that learning is really remembering knowledge the soul already possesses.
 
-Codebase Intelligence MCP Server — learns your codebase's structure, patterns, and conventions, then exposes that knowledge through 41 tools for AI agents.
+Codebase Intelligence MCP Server — learns your codebase's structure, patterns, and conventions, then exposes that knowledge through 37 tools for AI agents.
 
 ## What It Does
 
@@ -55,23 +55,23 @@ Add to your Claude Desktop or Claude Code MCP config:
 
 After connecting, the typical workflow is:
 
-1. **Activate a project**: `activate_project("/path/to/your/codebase")`
-2. **Bootstrap intelligence**: `auto_learn_if_needed()` — builds the intelligence database
+1. **Bootstrap intelligence**: `auto_learn_if_needed()` — activates the project and builds the intelligence database
+2. **Get the big picture**: `get_project_blueprint()` — architectural overview with feature map
 3. **Search**: `search_codebase(query="authentication", search_type="text")`
-4. **Get the big picture**: `get_project_blueprint()` — architectural overview
+4. **Navigate**: `find_symbol(name_path_pattern="MyClass/method", include_body=True)`
 
 ## Tools
 
-41 tools across 8 modules:
+37 tools across 8 modules:
 
 | Module | Tools | What They Do |
 |--------|-------|--------------|
-| **lsp** (15) | `find_symbol`, `get_symbols_overview`, `find_referencing_symbols`, `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `rename_symbol`, `enable_lsp`, `get_lsp_status`, `suggest_code_pattern`, `check_conventions`, `analyze_file_complexity`, `get_complexity_hotspots`, `suggest_refactorings`, `investigate_symbol` | Symbol navigation, code editing, complexity analysis, refactoring suggestions |
+| **lsp** (13) | `find_symbol`, `get_symbols_overview`, `find_referencing_symbols`, `replace_symbol_body`, `insert_after_symbol`, `insert_before_symbol`, `rename_symbol`, `enable_lsp`, `get_lsp_status`, `match_sibling_style`, `check_conventions`, `analyze_code_quality`, `investigate_symbol` | Symbol navigation, code editing, complexity analysis, refactoring suggestions |
 | **memory** (7) | `write_memory`, `read_memory`, `list_memories`, `delete_memory`, `edit_memory`, `search_memories`, `reflect` | Persistent project knowledge and metacognition |
-| **intelligence** (6) | `get_semantic_insights`, `get_pattern_recommendations`, `predict_coding_approach`, `get_developer_profile`, `contribute_insights`, `get_project_blueprint` | Pattern analysis, approach prediction, blueprinting |
+| **intelligence** (6) | `query_learned_concepts`, `get_pattern_recommendations`, `predict_coding_approach`, `get_developer_profile`, `contribute_insights`, `get_project_blueprint` | Pattern analysis, approach prediction, blueprinting |
 | **session** (6) | `start_session`, `end_session`, `record_decision`, `get_session`, `list_sessions`, `get_decisions` | Session lifecycle and decision tracking |
-| **project** (3) | `get_project_config`, `activate_project`, `list_projects` | Multi-project management with isolation |
 | **search** (2) | `search_codebase`, `analyze_codebase` | Text, pattern, and semantic code search |
+| **project** (1) | `manage_project` | Multi-project management (status, activate) |
 | **learning** (1) | `auto_learn_if_needed` | Codebase learning orchestration |
 | **monitoring** (1) | `get_system_status` | Server health and diagnostics |
 
@@ -108,6 +108,7 @@ Service Layer (services/ — one instance per project)
 
 - **Project isolation** — each project gets its own service instances via `ProjectContext`, preventing cross-project data contamination
 - **Lazy initialization** — services, LSP servers, and embedding models start on first use, not at server startup
+- **Error handling** — the `_with_error_handling` decorator handles exception classification, path sanitization, and optional TOON (Token-Oriented Object Notation) auto-encoding for token-efficient responses
 
 ## Supported Languages
 
@@ -167,9 +168,9 @@ anamnesis check .           # Run diagnostics
 | Search pipeline (text, pattern, semantic) | Complete |
 | LSP integration (navigation + editing) | Complete |
 | Synergy features S1-S5 (complexity, refactoring, investigation) | Complete |
-| MCP server with 41 tools | Complete |
+| MCP server with 37 tools | Complete |
 
-2023 tests passing across the full suite.
+2015 tests passing across the full suite.
 
 ## Dependencies
 

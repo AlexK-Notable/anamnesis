@@ -230,6 +230,37 @@ def _get_complexity_hotspots_impl(
     return svc.get_complexity_hotspots(relative_path, min_level=min_level)
 
 
+@_with_error_handling("analyze_code_quality")
+def _analyze_code_quality_impl(
+    relative_path: str,
+    detail_level: str = "standard",
+    min_complexity_level: str = "high",
+    max_suggestions: int = 10,
+) -> dict:
+    """Implementation for analyze_code_quality tool."""
+    if detail_level == "quick":
+        return _get_complexity_hotspots_impl(relative_path, min_complexity_level)
+    elif detail_level == "standard":
+        return _analyze_file_complexity_impl(relative_path)
+    elif detail_level == "deep":
+        complexity_result = _analyze_file_complexity_impl(relative_path)
+        if isinstance(complexity_result, dict) and not complexity_result.get("success", True):
+            return complexity_result
+        refactoring_result = _suggest_refactorings_impl(relative_path, max_suggestions)
+        if isinstance(refactoring_result, dict):
+            # Merge refactoring data into the complexity result
+            if isinstance(complexity_result, dict):
+                for key in ("suggestions", "suggestion_count"):
+                    if key in refactoring_result:
+                        complexity_result[key] = refactoring_result[key]
+                complexity_result["detail_level"] = "deep"
+        return complexity_result
+    else:
+        return _failure_response(
+            f"Unknown detail_level '{detail_level}'. Choose from: quick, standard, deep"
+        )
+
+
 @_with_error_handling("check_conventions")
 def _check_conventions_impl(
     relative_path: str,
@@ -483,24 +514,24 @@ def get_lsp_status() -> dict:
 
 
 @mcp.tool
-def suggest_code_pattern(
+def match_sibling_style(
     relative_path: str,
     symbol_kind: str,
     context_symbol: str = "",
     max_examples: int = 3,
 ) -> dict:
-    """Suggest code patterns based on sibling symbols in the same file/class.
+    """Analyze sibling symbols to extract local naming and structural conventions.
 
-    Analyzes existing symbols to extract naming conventions, common prefixes,
-    decorator patterns, and return type hints. Use this before writing new
-    code to follow project conventions.
+    Looks at existing symbols in the same file or class to determine naming
+    patterns, common decorators, return type hints, and structural conventions.
+    Use before writing new code to match the surrounding style.
 
-    This does NOT generate code — it provides template insights that guide
-    the LLM to write convention-compliant code.
+    Unlike get_pattern_recommendations which suggests project-wide design
+    patterns, this focuses on the immediate file-local style.
 
     Args:
         relative_path: File to analyze for patterns
-        symbol_kind: Kind of symbol to suggest (function, method, class)
+        symbol_kind: Kind of symbol to suggest for (function, method, class)
         context_symbol: Parent symbol for methods (e.g., class name)
         max_examples: Maximum example signatures to include (default 3)
 
@@ -529,66 +560,33 @@ def check_conventions(
 
 
 @mcp.tool
-def analyze_file_complexity(
+def analyze_code_quality(
     relative_path: str,
-) -> dict:
-    """Analyze complexity metrics for all symbols in a file.
-
-    Returns cyclomatic and cognitive complexity, maintainability index,
-    and a per-function breakdown with complexity levels. Identifies
-    hotspots (high-complexity functions) that are refactoring candidates.
-
-    Args:
-        relative_path: File to analyze (relative to project root)
-
-    Returns:
-        File-level metrics, per-function breakdown, and hotspot list
-    """
-    return _analyze_file_complexity_impl(relative_path)
-
-
-@mcp.tool
-def get_complexity_hotspots(
-    relative_path: str,
-    min_level: str = "high",
-) -> dict:
-    """Find high-complexity symbols that need refactoring attention.
-
-    Filters file analysis to only include symbols at or above the
-    specified complexity level. Use this to quickly identify the
-    most problematic areas in a file.
-
-    Args:
-        relative_path: File to analyze (relative to project root)
-        min_level: Minimum complexity level: low, moderate, high, very_high (default: high)
-
-    Returns:
-        List of hotspot symbols with complexity metrics
-    """
-    return _get_complexity_hotspots_impl(relative_path, min_level)
-
-
-@mcp.tool
-def suggest_refactorings(
-    relative_path: str,
+    detail_level: str = "standard",
+    min_complexity_level: str = "high",
     max_suggestions: int = 10,
 ) -> dict:
-    """Suggest refactorings by combining complexity and convention analysis.
+    """Analyze code quality with complexity metrics, hotspots, and refactoring suggestions.
 
-    Analyzes a file for high-complexity functions, naming convention deviations,
-    and maintainability issues. Returns ranked suggestions with evidence.
-
-    This does NOT generate code — it identifies what to refactor and why,
-    leaving implementation decisions to the caller.
+    Combines complexity analysis, hotspot detection, and refactoring suggestions
+    into a single tool with configurable depth.
 
     Args:
         relative_path: File to analyze (relative to project root)
-        max_suggestions: Maximum suggestions to return (default 10)
+        detail_level: Analysis depth:
+            - "quick": Only high-complexity hotspots (fastest)
+            - "standard": Full per-function complexity metrics and breakdown (default)
+            - "deep": Full metrics plus refactoring suggestions with evidence
+        min_complexity_level: Minimum level for hotspots: low, moderate, high, very_high
+            (default: high)
+        max_suggestions: Maximum refactoring suggestions when detail_level="deep" (default 10)
 
     Returns:
-        Ranked suggestions with type, priority, symbol name, and evidence
+        Complexity metrics, hotspots, and optionally refactoring suggestions
     """
-    return _suggest_refactorings_impl(relative_path, max_suggestions)
+    return _analyze_code_quality_impl(
+        relative_path, detail_level, min_complexity_level, max_suggestions
+    )
 
 
 @mcp.tool

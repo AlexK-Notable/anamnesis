@@ -1,13 +1,13 @@
 # Anamnesis Architecture
 
-> This document describes the actual system design of Anamnesis as of commit
-> `53d51e8` (2026-02-06). Every file path, class name, and relationship
-> described here has been verified against the source code.
+> This document describes the actual system design of Anamnesis as of
+> 2026-02-06. Every file path, class name, and relationship described here
+> has been verified against the source code.
 
 ## System Overview
 
 Anamnesis is a **Model Context Protocol (MCP) server** that provides codebase
-intelligence through 41 tools. It learns from codebases by extracting semantic
+intelligence through 37 tools. It learns from codebases by extracting semantic
 concepts (classes, functions, patterns, frameworks), stores them in SQLite and
 Qdrant, and serves them to LLM-based agents via the MCP protocol.
 
@@ -117,16 +117,16 @@ cross-project data contamination. The primary entry point is either the CLI
 |------|---------------|-------------|
 | `_shared.py` | FastMCP instance, service accessors, `_with_error_handling` decorator, TOON encoding, metacognition prompts | `mcp`, `_registry`, `_with_error_handling` |
 | `server.py` | Coordinator -- imports all tool modules (triggering `@mcp.tool` registration), re-exports `_impl` names for tests | `create_server()` |
-| `tools/lsp.py` | 15 tools: symbol find/overview/references, rename/replace/insert, enable_lsp, check_conventions, S1-S4 synergy tools | LSP + synergy _impl functions |
-| `tools/intelligence.py` | 6 tools: semantic insights, pattern recommendations, approach prediction, developer profile, blueprint, contribute insights | Intelligence _impl functions |
+| `tools/lsp.py` | 13 tools: symbol find/overview/references, rename/replace/insert, enable_lsp, get_lsp_status, match_sibling_style, check_conventions, analyze_code_quality, investigate_symbol | LSP + synergy _impl functions |
+| `tools/intelligence.py` | 6 tools: query_learned_concepts, pattern recommendations, approach prediction, developer profile, blueprint, contribute insights | Intelligence _impl functions |
 | `tools/memory.py` | 7 tools: write/read/list/delete/edit/search memory, reflect (metacognition) | Memory _impl functions |
 | `tools/session.py` | 6 tools: start/end/get/list sessions, record/get decisions | Session _impl functions |
-| `tools/project.py` | 3 tools: activate_project, get_project_config, list_projects | Project _impl functions |
+| `tools/project.py` | 1 tool: manage_project (status + activate) | Project _impl functions |
 | `tools/search.py` | 2 tools: search_codebase, analyze_codebase | Search _impl functions |
 | `tools/learning.py` | 1 tool: auto_learn_if_needed (absorbs former learn_codebase_intelligence) | `_auto_learn_if_needed_impl` |
 | `tools/monitoring.py` | 1 tool: get_system_status | `_get_system_status_impl` |
 
-**Tool implementation pattern** (consistent across all 41 tools):
+**Tool implementation pattern** (consistent across all tools):
 
 ```
 @mcp.tool                          <-- thin wrapper, signature + docstring
@@ -229,8 +229,8 @@ deprecation notice in `extractors/__init__.py`, they are actively used.
 |---------|----------|---------------|
 | `utils/` | `toon_encoder.py`, `error_classifier.py`, `circuit_breaker.py`, `security.py`, `logger.py`, `serialization.py`, `language_registry.py` | TOON encoding, error classification with pattern-based mapping, circuit breakers, path sanitization, language detection |
 | `patterns/` | `matcher.py`, `ast_matcher.py`, `regex_matcher.py` | Pattern matching for search (AST + regex) |
-| `interfaces/` | `search.py`, `engines.py` | ABCs and Protocols (`SearchBackend`, `ISearchService`, `SemanticSearchResult`) |
-| `types/` | `errors.py`, `core.py`, `analysis.py`, `patterns.py`, `mcp_responses.py` | Error types (`MCPErrorCode`, `AnamnesisError`). Note: `core.py`, `analysis.py`, `patterns.py`, `mcp_responses.py` are dead code flagged for removal. |
+| `interfaces/` | `search.py`, `engines.py` | ABCs and Protocols (`SearchBackend`, `ISearchService`, `ProgressCallback`, `SemanticSearchResult`) |
+| `types/` | `errors.py`, `core.py` | Error types (`MCPErrorCode`, `AnamnesisError`), `LineRange` dataclass. |
 | `parsing/` | `tree_sitter_wrapper.py`, `language_parsers.py`, `ast_types.py` | Tree-sitter wrapper layer for parser management |
 | `cli/` | `main.py`, `interactive_setup.py`, `debug_tools.py` | Click-based CLI. Entry point: `anamnesis.cli.main:cli` |
 | `watchers/` | `file_watcher.py`, `change_analyzer.py` | File system watching (via watchdog) |
@@ -476,7 +476,7 @@ If TOON encoding fails for any reason, the original dict is returned silently.
 - Clean docstrings on the `@mcp.tool` function (LLM-facing)
 - Re-export of `_impl` names for backward test compatibility
 
-**Trade-off**: Two functions per tool (82 functions for 41 tools) adds
+**Trade-off**: Two functions per tool (74 functions for 37 tools) adds
 boilerplate, but the pattern is highly consistent and tool authors follow it
 by convention.
 
@@ -662,9 +662,9 @@ All are implemented and tested (54 synergy tests).
 
 | ID | Feature | Tool(s) | Layers Combined |
 |----|---------|---------|----------------|
-| S1 | Refactoring suggestions | `suggest_refactorings` | ComplexityAnalyzer + heuristic rules (no LLM) |
-| S2 | Complexity-aware navigation | `analyze_file_complexity`, `get_complexity_hotspots` | ComplexityAnalyzer + SymbolRetriever |
-| S3 | Pattern-guided code generation | `suggest_code_pattern` | PatternEngine + IntelligenceService |
+| S1 | Refactoring suggestions | `analyze_code_quality(detail_level="deep")` | ComplexityAnalyzer + heuristic rules (no LLM) |
+| S2 | Complexity-aware navigation | `analyze_code_quality(detail_level="standard"/"quick")` | ComplexityAnalyzer + SymbolRetriever |
+| S3 | Pattern-guided code generation | `match_sibling_style` | PatternEngine + IntelligenceService |
 | S4 | Symbol investigation | `investigate_symbol` | S1 + S2 + S3 combined for single symbol |
 | S5 | Onboarding memory enrichment | (within `auto_learn_if_needed`) | IntelligenceService blueprint + TreeSitterBackend symbols -> MemoryService |
 
@@ -682,10 +682,10 @@ All are implemented and tested (54 synergy tests).
    default. The orchestrator is designed to accept it via
    `register_backend()`.
 
-4. **Dead code**: Approximately 2,000 LOC flagged for removal --
-   `types/mcp_responses.py`, `storage/resilient_backend.py`,
-   `storage/adapters.py`, `config/` package, `utils/response_formatter.py`,
-   5 unimplemented Protocol interfaces in `interfaces/engines.py`.
+4. **Dead code (addressed)**: ~2,400 LOC of dead code was removed in the
+   Feb 2026 remediation sprint. Deleted files: `types/patterns.py`,
+   `types/analysis.py`. Trimmed: `types/core.py`, `types/errors.py`,
+   `interfaces/engines.py`, `utils/circuit_breaker.py`.
 
 5. **Unbounded caches**: `_analysis_cache`, `_concept_index`, and
    `_learned_data` in intelligence engines grow without bounds.

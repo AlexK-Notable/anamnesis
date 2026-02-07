@@ -1,6 +1,6 @@
 # CLAUDE.md -- Anamnesis
 
-Codebase intelligence MCP server. 41 tools across 8 modules. Python 3.11+, FastMCP transport, tree-sitter parsing, SQLite + Qdrant storage.
+Codebase intelligence MCP server. 37 tools across 8 modules. Python 3.11+, FastMCP transport, tree-sitter parsing, SQLite + Qdrant storage.
 
 ## Quick Start
 
@@ -60,15 +60,15 @@ MCP Client -> FastMCP (mcp_server/_shared.py)
 | `utils/` | Cross-cutting concerns | `toon_encoder.py`, `error_classifier.py`, `security.py`, `language_registry.py` |
 | `cli/` | Click-based CLI | `main.py` (entry point: `anamnesis.cli.main:cli`) |
 
-### Tool Modules (41 tools)
+### Tool Modules (37 tools)
 
 | Module | Count | Domain |
 |--------|-------|--------|
-| `tools/lsp.py` | 15 | Symbol navigation, editing, synergy features S1-S4 |
-| `tools/intelligence.py` | 6 | Semantic insights, patterns, blueprints, profiles |
+| `tools/lsp.py` | 13 | Symbol navigation, editing, `analyze_code_quality`, `match_sibling_style`, `investigate_symbol` |
+| `tools/intelligence.py` | 6 | `query_learned_concepts`, patterns, blueprints, profiles |
 | `tools/memory.py` | 7 | Persistent project memory (write, read, list, edit, delete, search, reflect) |
 | `tools/session.py` | 6 | Session lifecycle + decision tracking |
-| `tools/project.py` | 3 | Project activation, config, listing |
+| `tools/project.py` | 1 | `manage_project` (status + activate) |
 | `tools/search.py` | 2 | Code search (text, pattern, semantic) |
 | `tools/learning.py` | 1 | `auto_learn_if_needed` |
 | `tools/monitoring.py` | 1 | `get_system_status` |
@@ -77,9 +77,9 @@ MCP Client -> FastMCP (mcp_server/_shared.py)
 
 All implemented and tested (54 synergy tests in `test_phase5_synergies.py`):
 
-- **S1**: `suggest_refactorings` -- heuristic rules based on complexity + naming, no LLM
-- **S2**: `analyze_file_complexity`, `get_complexity_hotspots` -- per-function metrics
-- **S3**: `suggest_code_pattern` -- pattern-guided code generation from sibling analysis
+- **S1**: Refactoring suggestions (merged into `analyze_code_quality` at `detail_level="deep"`) -- heuristic rules based on complexity + naming, no LLM
+- **S2**: Complexity-aware navigation (merged into `analyze_code_quality` at `detail_level="standard"` and `"quick"`) -- per-function metrics
+- **S3**: `match_sibling_style` -- pattern-guided code generation from sibling analysis
 - **S4**: `investigate_symbol` -- combines S1+S2+S3 for a single symbol
 - **S5**: Onboarding memory enrichment with tree-sitter symbols during `auto_learn_if_needed`
 
@@ -161,7 +161,7 @@ Use `detect_language_from_extension()` from `anamnesis.utils.language_registry` 
 When adding or removing MCP tools, update the expected count in:
 `tests/test_memory_and_metacognition.py::TestToolRegistration::test_total_tool_count`
 
-Currently asserts `tool_count == 41` (line 564).
+Currently asserts `tool_count == 37`.
 
 ### Vendored LSP Code
 
@@ -239,7 +239,8 @@ Install all: `uv sync --all-extras`
 ## Current State (2026-02-06)
 
 - Version: 0.1.0
-- 41 MCP tools registered
-- ~2000 tests passing
+- 37 MCP tools registered (consolidated from 41 — see Tool Modules table above)
+- 2015 tests passing
 - All synergy features (S1-S5) complete
-- Phase 14 (search pipeline) complete
+- Search pipeline (text, pattern, semantic) complete
+- ~2,400 LOC dead code removed, all `datetime.now()` calls replaced with UTC-aware `utcnow()`

@@ -1,13 +1,11 @@
 """Project management tools — config, activation, and project listing."""
 
-from typing import Optional
-
 from anamnesis.mcp_server._shared import (
+    _failure_response,
     _registry,
     _with_error_handling,
     mcp,
 )
-
 
 # =============================================================================
 # Implementations
@@ -47,59 +45,57 @@ def _list_projects_impl() -> dict:
 
 
 # =============================================================================
-# MCP Tool Registrations
+# Merged Implementation
+# =============================================================================
+
+
+@_with_error_handling("manage_project")
+def _manage_project_impl(action: str = "status", path: str = "") -> dict:
+    """Implementation for manage_project tool — dispatches by action."""
+    if action == "status":
+        config = _get_project_config_impl()
+        projects = _list_projects_impl()
+        return {
+            "success": True,
+            "registry": config.get("registry"),
+            "projects": projects.get("projects", []),
+            "total": projects.get("total", 0),
+            "active_path": projects.get("active_path"),
+        }
+    elif action == "activate":
+        if not path:
+            return _failure_response(
+                "path is required when action='activate'"
+            )
+        return _activate_project_impl(path)
+    else:
+        return _failure_response(
+            f"Unknown action '{action}'. Choose from: status, activate"
+        )
+
+
+# =============================================================================
+# MCP Tool Registration
 # =============================================================================
 
 
 @mcp.tool
-def get_project_config(
-    activate: Optional[str] = None,
+def manage_project(
+    action: str = "status",
+    path: str = "",
 ) -> dict:
-    """Get the current project configuration and registry state.
-
-    Returns the active project context and all known projects.
-
-    For multi-project workflows, use `activate_project(path)` to switch
-    between projects. Each project gets isolated services, preventing
-    cross-project data contamination.
-
-    Args:
-        activate: Deprecated — use activate_project() instead.
-            If provided, activates the project for backward compatibility.
-
-    Returns:
-        Registry state with project details and active project info
-    """
-    if activate:
-        return _activate_project_impl(activate)
-    return _get_project_config_impl()
-
-
-@mcp.tool
-def activate_project(path: str) -> dict:
-    """Switch the active project context to a different directory.
+    """Manage project context — view status or switch active project.
 
     Each project gets isolated services (database, intelligence, sessions),
-    preventing cross-project data contamination. After activation, all
-    subsequent tool calls operate on the newly activated project.
+    preventing cross-project data contamination.
 
     Args:
-        path: Absolute path to the project directory to activate.
+        action: What to do:
+            - "status": Get current config, active project, and all known projects (default)
+            - "activate": Switch to a different project directory
+        path: Project directory path (required when action="activate")
 
     Returns:
-        Activated project details and updated registry state
+        Project configuration, registry state, and project list
     """
-    return _activate_project_impl(path)
-
-
-@mcp.tool
-def list_projects() -> dict:
-    """List all known projects in the registry.
-
-    Shows projects that have been activated during this or previous
-    server sessions, sorted by most recently activated first.
-
-    Returns:
-        List of projects with their service status
-    """
-    return _list_projects_impl()
+    return _manage_project_impl(action, path)

@@ -159,24 +159,24 @@ def _get_project_blueprint_impl(
 
 
 @mcp.tool
-def get_semantic_insights(
+def query_learned_concepts(
     query: Optional[str] = None,
     concept_type: Optional[str] = None,
     limit: int = 50,
 ) -> dict:
-    """Search for code-level symbols by name and see relationships.
+    """Query the learned concept database for code symbols and relationships.
 
-    Use this to find where a specific function/class is defined, how it's
-    used, or what it depends on. Searches actual code identifiers (e.g.,
-    "DatabaseConnection", "processRequest"), NOT business concepts.
+    Searches concepts (functions, classes, variables) that were extracted
+    during auto_learn_if_needed. Unlike search_codebase which searches raw
+    file contents, this queries the structured concept index.
 
     Args:
         query: Code identifier to search for (matches function/class/variable names)
         concept_type: Filter by concept type (class, function, interface, variable)
-        limit: Maximum number of insights to return (default 50)
+        limit: Maximum number of results to return (default 50)
 
     Returns:
-        List of semantic insights with relationships and usage patterns
+        List of learned concepts with relationships and usage patterns
     """
     return _get_semantic_insights_impl(query, concept_type, limit)
 

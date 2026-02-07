@@ -477,8 +477,7 @@ class TestMCPToolRegistration:
         from anamnesis.mcp_server.server import mcp
 
         tools = mcp._tool_manager._tools
-        assert "get_project_config" in tools
-        assert "list_projects" in tools
+        assert "manage_project" in tools
 
 
 # ---------------------------------------------------------------------------
