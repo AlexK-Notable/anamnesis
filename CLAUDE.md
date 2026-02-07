@@ -178,10 +178,6 @@ Use `-n 6` (user preference), not `-n auto`. Note: `pytest-xdist` is not in `pyp
 python -m pytest -n 6 -x -q tests/ --ignore=tests/test_lsp_pyright.py
 ```
 
-### __init__.py Stale Imports
-
-`anamnesis/__init__.py` has commented-out imports from Phases 1-5 referencing classes that do not exist (e.g., `SemanticAnalyzer`, `PatternLearner`). These are aspirational leftovers. The package exports only `__version__`.
-
 ### Path Sanitization in Error Responses
 
 The `_with_error_handling` decorator strips absolute filesystem paths from error messages before returning them to MCP clients. This is a security measure -- see `_sanitize_error_message()` in `_shared.py`.
