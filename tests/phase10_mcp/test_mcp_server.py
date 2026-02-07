@@ -351,8 +351,8 @@ class TestAutomationTools:
             include_progress=True,
         )
 
-        if result["status"] == "learned":
-            assert "insights" in result
+        assert result["status"] == "learned"
+        assert "insights" in result
 
     def test_auto_learn_if_needed_with_setup_steps(self, temp_codebase):
         """Test with setup steps."""
@@ -362,8 +362,8 @@ class TestAutomationTools:
             include_setup_steps=True,
         )
 
-        if result["status"] == "learned":
-            assert "setup_steps" in result
+        assert result["status"] == "learned"
+        assert "setup_steps" in result
 
 
 class TestMonitoringTools:

@@ -465,7 +465,8 @@ class DatabaseMigrator:
                 "SELECT version FROM _migrations ORDER BY version"
             )
             return [row[0] for row in rows]
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to fetch applied migration versions: {e}")
             return []
 
     async def get_current_version(self, conn: DatabaseConnection) -> int:
@@ -490,7 +491,8 @@ class DatabaseMigrator:
                 "SELECT MAX(version) FROM _migrations"
             )
             return result[0] if result and result[0] else 0
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Failed to get current schema version: {e}")
             return 0
 
     async def get_status(self, conn: DatabaseConnection) -> MigrationStatus:
@@ -511,8 +513,9 @@ class DatabaseMigrator:
                 "SELECT version FROM _migrations ORDER BY version"
             )
             applied = [row[0] for row in rows]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to fetch applied migrations for status: {e}")
+
 
         # Find pending migrations
         pending = [m for m in self.migrations if m.version > current_version]

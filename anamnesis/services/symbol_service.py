@@ -13,6 +13,12 @@ from typing import Any, Optional
 
 from anamnesis.utils.logger import logger
 
+_REFACTORING_THRESHOLDS = {
+    "extract_method": {"cyclomatic": 20, "cognitive": 25},
+    "reduce_complexity": {"cyclomatic": 10, "cognitive": 15},
+    "improve_maintainability": {"maintainability_index": 40},
+}
+
 
 class SymbolService:
     """High-level symbol operations for a single project.
@@ -711,6 +717,10 @@ class SymbolService:
         func_names = [f["name"] for f in functions]
         dominant_convention = self._detect_dominant_convention(func_names)
 
+        em = _REFACTORING_THRESHOLDS["extract_method"]
+        rc = _REFACTORING_THRESHOLDS["reduce_complexity"]
+        im = _REFACTORING_THRESHOLDS["improve_maintainability"]
+
         for func in functions:
             cyc = func["cyclomatic"]
             cog = func["cognitive"]
@@ -719,7 +729,7 @@ class SymbolService:
             name = func["name"]
 
             # Rule 1: Very high complexity → extract method
-            if cyc > 20 or cog > 25:
+            if cyc > em["cyclomatic"] or cog > em["cognitive"]:
                 suggestions.append({
                     "type": "extract_method",
                     "title": f"Extract method: '{name}' is very complex",
@@ -732,7 +742,7 @@ class SymbolService:
                     },
                 })
             # Rule 2: Moderate-high complexity → reduce complexity
-            elif cyc > 10 or cog > 15:
+            elif cyc > rc["cyclomatic"] or cog > rc["cognitive"]:
                 suggestions.append({
                     "type": "reduce_complexity",
                     "title": f"Simplify '{name}': complexity is {level}",
@@ -746,7 +756,7 @@ class SymbolService:
                 })
 
             # Rule 3: Low maintainability
-            if maint < 40:
+            if maint < im["maintainability_index"]:
                 suggestions.append({
                     "type": "improve_maintainability",
                     "title": f"Improve maintainability of '{name}' (score: {maint})",
@@ -881,20 +891,23 @@ class SymbolService:
         maint = cr.maintainability.value
         level = cr.cyclomatic.level.value
 
-        if cyc > 20 or cog > 25:
+        em = _REFACTORING_THRESHOLDS["extract_method"]
+        rc = _REFACTORING_THRESHOLDS["reduce_complexity"]
+        im = _REFACTORING_THRESHOLDS["improve_maintainability"]
+        if cyc > em["cyclomatic"] or cog > em["cognitive"]:
             suggestions.append({
                 "type": "extract_method",
                 "title": f"Extract method: '{symbol_name}' is very complex",
                 "priority": "critical" if cyc > 30 else "high",
             })
-        elif cyc > 10 or cog > 15:
+        elif cyc > rc["cyclomatic"] or cog > rc["cognitive"]:
             suggestions.append({
                 "type": "reduce_complexity",
                 "title": f"Simplify '{symbol_name}': complexity is {level}",
                 "priority": "high" if level == "high" else "medium",
             })
 
-        if maint < 40:
+        if maint < im["maintainability_index"]:
             suggestions.append({
                 "type": "improve_maintainability",
                 "title": f"Improve maintainability (score: {round(maint, 1)})",

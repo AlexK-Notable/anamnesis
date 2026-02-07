@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from anamnesis.constants import utcnow
 from anamnesis.utils.logger import logger
 from anamnesis.watchers.file_watcher import FileChange
 
@@ -46,7 +47,7 @@ class ChangeAnalysis:
     impact: ImpactInfo
     patterns: PatternInfo
     intelligence: IntelligenceInfo
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=utcnow)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""

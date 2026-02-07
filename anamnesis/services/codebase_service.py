@@ -5,6 +5,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from anamnesis.constants import utcnow
+
 from anamnesis.analysis.complexity_analyzer import ComplexityAnalyzer, FileComplexity
 from anamnesis.analysis.dependency_graph import DependencyGraph
 from anamnesis.intelligence.semantic_engine import CodebaseAnalysis, SemanticEngine
@@ -120,7 +122,7 @@ class CodebaseService:
         Returns:
             Analysis result
         """
-        start_time = datetime.now()
+        start_time = utcnow()
         path = Path(path).resolve()
         path_str = str(path)
 
@@ -471,7 +473,7 @@ class CodebaseService:
 
     def _elapsed_ms(self, start_time: datetime) -> int:
         """Calculate elapsed milliseconds."""
-        return int((datetime.now() - start_time).total_seconds() * 1000)
+        return int((utcnow() - start_time).total_seconds() * 1000)
 
     def get_file_stats(self, path: str | Path) -> dict[str, int]:
         """Get file statistics for a codebase.

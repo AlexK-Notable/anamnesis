@@ -12,6 +12,8 @@ from datetime import datetime
 from enum import Enum, IntEnum
 from typing import Any
 
+from anamnesis.constants import utcnow
+
 
 class MCPErrorCode(IntEnum):
     """MCP error codes following JSON-RPC 2.0 specification."""
@@ -106,7 +108,7 @@ class ErrorContext:
     file_path: str | None = None
     language: str | None = None
     component: str | None = None
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=utcnow)
     stack: str | None = None
     additional_info: dict[str, Any] = field(default_factory=dict)
 
@@ -151,7 +153,7 @@ class AnamnesisError(Exception):
         self.original_error = original_error
 
         # Update context with timestamp and stack trace
-        self.context.timestamp = datetime.now()
+        self.context.timestamp = utcnow()
         if original_error:
             self.context.stack = str(original_error.__traceback__)
 
@@ -416,252 +418,4 @@ class AnamnesisSystemError(AnamnesisError):
             context=context,
             recovery_actions=recovery_actions,
             original_error=original_error,
-        )
-
-
-class ErrorFactory:
-    """Factory functions for creating common errors with appropriate context."""
-
-    @staticmethod
-    def platform_unsupported(platform: str, arch: str) -> AnamnesisError:
-        return AnamnesisError(
-            code=ErrorCode.PLATFORM_UNSUPPORTED,
-            message=f"Unsupported platform: {platform}-{arch}",
-            user_message="Your platform is not currently supported.",
-            severity=ErrorSeverity.CRITICAL,
-            context=ErrorContext(
-                component="platform",
-                additional_info={"platform": platform, "arch": arch},
-            ),
-            recovery_actions=[
-                RecoveryAction(description="Check supported platforms in documentation"),
-            ],
-        )
-
-    @staticmethod
-    def file_not_found(file_path: str, operation: str) -> AnamnesisError:
-        return AnamnesisError(
-            code=ErrorCode.FILE_NOT_FOUND,
-            message=f"File not found: {file_path}",
-            user_message="The requested file could not be found.",
-            severity=ErrorSeverity.MEDIUM,
-            context=ErrorContext(file_path=file_path, operation=operation),
-            recovery_actions=[
-                RecoveryAction(description="Check if the file path is correct"),
-                RecoveryAction(description="Ensure the file exists and is accessible"),
-            ],
-        )
-
-    @staticmethod
-    def language_unsupported(language: str, file_path: str | None = None) -> AnamnesisError:
-        return AnamnesisError(
-            code=ErrorCode.LANGUAGE_UNSUPPORTED,
-            message=f"Unsupported language: {language}",
-            user_message="This programming language is not currently supported.",
-            severity=ErrorSeverity.MEDIUM,
-            context=ErrorContext(language=language, file_path=file_path),
-            recovery_actions=[
-                RecoveryAction(description="Check supported languages in documentation"),
-                RecoveryAction(description="Use fallback analysis for basic extraction"),
-            ],
-        )
-
-    @staticmethod
-    def parse_failed(
-        file_path: str, language: str, original_error: Exception | None = None
-    ) -> AnamnesisError:
-        return AnamnesisError(
-            code=ErrorCode.PARSE_FAILED,
-            message=f"Failed to parse {language} file: {file_path}",
-            user_message="Could not parse the source code file.",
-            severity=ErrorSeverity.MEDIUM,
-            context=ErrorContext(file_path=file_path, language=language, operation="parsing"),
-            recovery_actions=[
-                RecoveryAction(description="Check if the file contains valid syntax"),
-                RecoveryAction(description="Ensure the file is properly encoded (UTF-8)"),
-            ],
-            original_error=original_error,
-        )
-
-    @staticmethod
-    def database_init_failed(db_path: str, original_error: Exception) -> AnamnesisError:
-        return AnamnesisError(
-            code=ErrorCode.DATABASE_INIT_FAILED,
-            message=f"Database initialization failed: {original_error}",
-            user_message="Could not initialize the database.",
-            severity=ErrorSeverity.HIGH,
-            context=ErrorContext(
-                operation="database-init",
-                additional_info={"db_path": db_path},
-            ),
-            recovery_actions=[
-                RecoveryAction(description="Check database file permissions"),
-                RecoveryAction(description="Ensure SQLite is available"),
-                RecoveryAction(description="Try removing corrupted database file"),
-            ],
-            original_error=original_error,
-        )
-
-    @staticmethod
-    def invalid_config(config_path: str, validation_errors: list[str]) -> AnamnesisError:
-        return AnamnesisError(
-            code=ErrorCode.INVALID_CONFIG,
-            message=f"Invalid configuration: {', '.join(validation_errors)}",
-            user_message="The configuration file contains invalid settings.",
-            severity=ErrorSeverity.HIGH,
-            context=ErrorContext(
-                file_path=config_path,
-                operation="config-validation",
-                additional_info={"validation_errors": validation_errors},
-            ),
-            recovery_actions=[
-                RecoveryAction(description="Fix configuration file manually"),
-                RecoveryAction(description="Reset to default configuration"),
-            ],
-        )
-
-    @staticmethod
-    def circuit_breaker_open(component: str, last_failure: datetime | None = None) -> AnamnesisError:
-        return AnamnesisError(
-            code=ErrorCode.CIRCUIT_BREAKER_OPEN,
-            message=f"Circuit breaker is open for {component}",
-            user_message="Service temporarily unavailable due to repeated failures.",
-            severity=ErrorSeverity.HIGH,
-            context=ErrorContext(
-                component=component,
-                operation="circuit-breaker",
-                additional_info={"last_failure": last_failure.isoformat() if last_failure else None},
-            ),
-            recovery_actions=[
-                RecoveryAction(description="Wait for circuit breaker to reset"),
-                RecoveryAction(description="Check underlying service health"),
-                RecoveryAction(description="Use fallback functionality if available"),
-            ],
-        )
-
-
-class MCPErrorUtils:
-    """MCP-specific utility functions for error handling."""
-
-    @staticmethod
-    def create_mcp_error(
-        code: MCPErrorCode,
-        message: str,
-        data: dict[str, Any] | None = None,
-    ) -> MCPErrorResponse:
-        """Create a standard MCP error response."""
-        return MCPErrorResponse(
-            code=code,
-            message=message,
-            data={
-                **(data or {}),
-                "timestamp": datetime.now().isoformat(),
-            },
-        )
-
-    @staticmethod
-    def create_jsonrpc_error(
-        code: MCPErrorCode,
-        message: str,
-        request_id: str | int | None,
-        data: dict[str, Any] | None = None,
-    ) -> JSONRPCError:
-        """Create a JSON-RPC error response."""
-        return JSONRPCError(
-            error=MCPErrorUtils.create_mcp_error(code, message, data),
-            id=request_id,
-        )
-
-    @staticmethod
-    def wrap_tool_error(
-        tool_name: str,
-        error: Exception | str,
-        request_id: str | int | None = None,
-    ) -> JSONRPCError:
-        """Wrap tool execution errors for MCP compliance."""
-        error_message = str(error) if isinstance(error, Exception) else error
-        return MCPErrorUtils.create_jsonrpc_error(
-            code=MCPErrorCode.TOOL_EXECUTION_FAILED,
-            message=f"Tool '{tool_name}' execution failed: {error_message}",
-            request_id=request_id,
-            data={"tool_name": tool_name, "original_error": error_message, "type": "ToolExecutionError"},
-        )
-
-    @staticmethod
-    def resource_not_found(
-        resource_type: str,
-        resource_id: str,
-        request_id: str | int | None = None,
-    ) -> JSONRPCError:
-        """Handle resource access errors."""
-        return MCPErrorUtils.create_jsonrpc_error(
-            code=MCPErrorCode.RESOURCE_NOT_FOUND,
-            message=f"{resource_type} not found: {resource_id}",
-            request_id=request_id,
-            data={"resource_type": resource_type, "resource_id": resource_id, "type": "ResourceNotFound"},
-        )
-
-    @staticmethod
-    def invalid_params(
-        param_name: str,
-        expected: str,
-        received: Any,
-        request_id: str | int | None = None,
-    ) -> JSONRPCError:
-        """Handle invalid parameter errors."""
-        return MCPErrorUtils.create_jsonrpc_error(
-            code=MCPErrorCode.INVALID_PARAMS,
-            message=f"Invalid parameter '{param_name}': expected {expected}, received {type(received).__name__}",
-            request_id=request_id,
-            data={"param_name": param_name, "expected": expected, "received": type(received).__name__, "type": "InvalidParams"},
-        )
-
-
-class ErrorUtils:
-    """Utility functions for error handling."""
-
-    @staticmethod
-    def get_error_message(error: Exception | str | Any) -> str:
-        """Safely extract error message from unknown error."""
-        if isinstance(error, Exception):
-            return str(error)
-        if isinstance(error, str):
-            return error
-        return str(error)
-
-    @staticmethod
-    def is_recoverable(error: AnamnesisError) -> bool:
-        """Check if error is recoverable."""
-        return len(error.recovery_actions) > 0 and error.severity != ErrorSeverity.CRITICAL
-
-    @staticmethod
-    def from_error(error: Exception, context: ErrorContext | None = None) -> AnamnesisError:
-        """Convert standard Error to AnamnesisError."""
-        message = str(error).lower()
-        ctx = context or ErrorContext()
-
-        if "unsupported language" in message:
-            return ErrorFactory.language_unsupported("unknown", ctx.file_path)
-
-        if "file not found" in message or "enoent" in message:
-            return ErrorFactory.file_not_found(ctx.file_path or "unknown", ctx.operation or "unknown")
-
-        if "failed to parse" in message:
-            return ErrorFactory.parse_failed(
-                ctx.file_path or "unknown",
-                ctx.language or "unknown",
-                error,
-            )
-
-        # Generic error conversion
-        return AnamnesisError(
-            code=ErrorCode.SEMANTIC_ANALYSIS_FAILED,
-            message=str(error),
-            user_message="An unexpected error occurred during analysis.",
-            severity=ErrorSeverity.MEDIUM,
-            context=ctx,
-            recovery_actions=[
-                RecoveryAction(description="Check the error details above"),
-            ],
-            original_error=error,
         )

@@ -21,9 +21,6 @@ from anamnesis.utils import (
     CircuitBreakerOptions,
     CircuitBreakerStats,
     CircuitState,
-    create_api_circuit_breaker,
-    create_database_circuit_breaker,
-    create_parsing_circuit_breaker,
 )
 
 
@@ -378,34 +375,6 @@ class TestCircuitBreakerError:
         options = CircuitBreakerOptions()
         error = CircuitBreakerError("test message", details, options)
         assert isinstance(error, Exception)
-
-
-class TestPreConfiguredCircuitBreakers:
-    """Tests for pre-configured circuit breaker factories."""
-
-    def test_api_circuit_breaker(self):
-        """API circuit breaker has appropriate settings."""
-        cb = create_api_circuit_breaker()
-
-        # Should be a valid circuit breaker
-        stats = cb.get_stats()
-        assert stats.state == CircuitState.CLOSED
-
-    def test_database_circuit_breaker(self):
-        """Database circuit breaker has appropriate settings."""
-        cb = create_database_circuit_breaker()
-
-        # Should be a valid circuit breaker
-        stats = cb.get_stats()
-        assert stats.state == CircuitState.CLOSED
-
-    def test_parsing_circuit_breaker(self):
-        """Parsing circuit breaker has appropriate settings."""
-        cb = create_parsing_circuit_breaker()
-
-        # Should be a valid circuit breaker
-        stats = cb.get_stats()
-        assert stats.state == CircuitState.CLOSED
 
 
 class TestCircuitBreakerManualControl:

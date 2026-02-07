@@ -197,7 +197,9 @@ class TestIntelligenceService:
 
         # Patterns should be accessible
         profile = service.get_developer_profile()
-        assert profile is not None
+        assert isinstance(profile, DeveloperProfile)
+        assert isinstance(profile.preferred_patterns, list)
+        assert isinstance(profile.coding_style, dict)
 
 
 class TestIntelligenceServiceOperations:
@@ -306,14 +308,18 @@ class TestIntelligenceServiceOperations:
             problem_description="create new API endpoint for users"
         )
         # Should suggest API-related approach
-        assert pred is not None
+        assert isinstance(pred, CodingApproachPrediction)
+        assert isinstance(pred.approach, str) and len(pred.approach) > 0
+        assert 0 <= pred.confidence <= 1
 
     def test_predict_coding_approach_test(self, service_with_data):
         """Test predicting test approach."""
         pred = service_with_data.predict_coding_approach(
             problem_description="write tests for user service"
         )
-        assert pred is not None
+        assert isinstance(pred, CodingApproachPrediction)
+        assert isinstance(pred.approach, str) and len(pred.approach) > 0
+        assert 0 <= pred.confidence <= 1
 
     def test_get_developer_profile(self, service_with_data):
         """Test getting developer profile."""
@@ -327,7 +333,9 @@ class TestIntelligenceServiceOperations:
             include_work_context=True,
             project_path="/test/project",
         )
-        assert profile is not None
+        assert isinstance(profile, DeveloperProfile)
+        assert isinstance(profile.coding_style, dict)
+        assert isinstance(profile.expertise_areas, list)
 
     def test_contribute_insight(self, service_with_data):
         """Test contributing an insight."""

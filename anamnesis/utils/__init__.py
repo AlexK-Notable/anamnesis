@@ -73,9 +73,6 @@ from .circuit_breaker import (
     CircuitBreakerStats,
     CircuitState,
     ErrorDetails,
-    create_api_circuit_breaker,
-    create_database_circuit_breaker,
-    create_parsing_circuit_breaker,
 )
 
 # Error Classifier (Phase 2)
@@ -107,6 +104,9 @@ from .serialization import (
     is_serialized,
     serialize_to_primitives,
 )
+
+# Helpers
+from .helpers import enum_value
 
 __all__ = [
     # Logger
@@ -163,9 +163,6 @@ __all__ = [
     "CircuitBreakerStats",
     "CircuitState",
     "ErrorDetails",
-    "create_api_circuit_breaker",
-    "create_database_circuit_breaker",
-    "create_parsing_circuit_breaker",
     # Error Classifier (Phase 2)
     "ErrorCategory",
     "ErrorClassification",
@@ -187,4 +184,6 @@ __all__ = [
     # Serialization (Phase 13)
     "is_serialized",
     "serialize_to_primitives",
+    # Helpers
+    "enum_value",
 ]

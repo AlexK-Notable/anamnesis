@@ -3,10 +3,10 @@
 import gc
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from anamnesis.constants import utcnow
 from anamnesis.mcp_server._shared import (
     _get_codebase_service,
     _get_current_path,
@@ -16,6 +16,7 @@ from anamnesis.mcp_server._shared import (
     _with_error_handling,
     mcp,
 )
+from anamnesis.utils.helpers import enum_value
 
 
 # =============================================================================
@@ -100,7 +101,7 @@ def _get_system_status_impl(
             pattern_types: dict[str, int] = {}
             for pattern in patterns:
                 ptype = pattern.pattern_type
-                ptype_str = ptype.value if hasattr(ptype, "value") else str(ptype)
+                ptype_str = enum_value(ptype)
                 pattern_types[ptype_str] = pattern_types.get(ptype_str, 0) + 1
             concept_confidences = [c.confidence for c in concepts]
             pattern_confidences = [p.confidence for p in patterns]
@@ -122,12 +123,12 @@ def _get_system_status_impl(
             },
         }
         if run_benchmark:
-            start = datetime.now()
+            start = utcnow()
             learning_service.has_intelligence(current_path)
-            elapsed = (datetime.now() - start).total_seconds() * 1000
+            elapsed = (utcnow() - start).total_seconds() * 1000
             perf["benchmark"] = {
                 "intelligence_check_ms": elapsed,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": utcnow().isoformat(),
             }
         result["performance"] = perf
 
@@ -165,7 +166,7 @@ def _get_system_status_impl(
             "healthy": len(issues) == 0,
             "checks": checks,
             "issues": issues,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": utcnow().isoformat(),
         }
 
     return result

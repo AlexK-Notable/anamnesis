@@ -109,6 +109,7 @@ def _search_memories_impl(
 # =============================================================================
 
 
+@_with_error_handling("reflect")
 def _reflect_impl(focus: str = "collected_information") -> dict:
     """Implementation for reflect tool."""
     prompt = _REFLECT_PROMPTS.get(focus)

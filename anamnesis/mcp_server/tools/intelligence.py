@@ -129,12 +129,9 @@ def _contribute_insights_impl(
         session_update=session_update,
     )
 
-    result = {"success": success, "insight_id": insight_id}
-    if success:
-        result["message"] = message
-    else:
-        result["error"] = message
-    return result
+    if not success:
+        return _failure_response(message, insight_id=insight_id)
+    return {"success": True, "insight_id": insight_id, "message": message}
 
 
 @_with_error_handling("get_project_blueprint")

@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
+from anamnesis.constants import utcnow
 from anamnesis.intelligence.embedding_engine import (
     EmbeddingConfig,
     EmbeddingEngine,
@@ -18,6 +19,7 @@ from anamnesis.intelligence.pattern_engine import (
 )
 from anamnesis.intelligence.semantic_engine import SemanticEngine
 from anamnesis.interfaces.engines import SemanticSearchResult
+from anamnesis.utils.helpers import enum_value
 
 if TYPE_CHECKING:
     from anamnesis.storage.schema import SemanticConcept as StorageSemanticConcept
@@ -100,7 +102,7 @@ class AIInsight:
     content: dict[str, Any]
     confidence: float
     source_agent: str
-    created_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=utcnow)
     validation_status: str = "pending"
     impact_prediction: Optional[dict] = None
 
@@ -283,7 +285,7 @@ class IntelligenceService:
         if concept_type:
             filtered = [
                 c for c in filtered
-                if (c.concept_type.value if hasattr(c.concept_type, "value") else str(c.concept_type)).lower() == concept_type.lower()
+                if enum_value(c.concept_type).lower() == concept_type.lower()
             ]
 
         # Filter by query
@@ -316,8 +318,8 @@ class IntelligenceService:
                     "contexts": [concept.file_path] if concept.file_path else [],
                 },
                 evolution={
-                    "first_seen": datetime.now().isoformat(),
-                    "last_modified": datetime.now().isoformat(),
+                    "first_seen": utcnow().isoformat(),
+                    "last_modified": utcnow().isoformat(),
                     "change_count": 0,
                 },
             )
@@ -477,7 +479,7 @@ class IntelligenceService:
         ):
             # Handle both enum and string pattern_type
             pt = rec.pattern_type
-            pattern_val = pt.value if hasattr(pt, "value") else str(pt)
+            pattern_val = enum_value(pt)
             preferred.append({
                 "pattern": pattern_val,
                 "description": rec.description,
@@ -801,7 +803,7 @@ class IntelligenceService:
 
             batch_data.append((
                 concept.name,
-                concept.concept_type.value if hasattr(concept.concept_type, "value") else str(concept.concept_type),
+                enum_value(concept.concept_type),
                 concept.file_path or "",
                 metadata,
             ))

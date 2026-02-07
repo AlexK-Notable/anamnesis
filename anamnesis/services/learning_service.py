@@ -7,7 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
-from anamnesis.constants import DEFAULT_IGNORE_DIRS
+from anamnesis.constants import DEFAULT_IGNORE_DIRS, utcnow
+from anamnesis.utils.helpers import enum_value
 from anamnesis.intelligence.pattern_engine import PatternEngine
 from anamnesis.intelligence.semantic_engine import SemanticEngine
 from anamnesis.utils.error_classifier import classify_error
@@ -131,7 +132,7 @@ class LearningService:
         """Get pattern type as string from DetectedPattern or UnifiedPattern."""
         # DetectedPattern has pattern_type, UnifiedPattern has kind
         ptype = getattr(pattern, "pattern_type", None) or getattr(pattern, "kind", "unknown")
-        return ptype.value if hasattr(ptype, "value") else str(ptype)
+        return enum_value(ptype)
 
     def learn_from_codebase(
         self,
@@ -148,7 +149,7 @@ class LearningService:
             Learning result with insights and statistics
         """
         options = options or LearningOptions()
-        start_time = datetime.now()
+        start_time = utcnow()
         insights: list[str] = []
         path = Path(path).resolve()
 
@@ -204,7 +205,7 @@ class LearningService:
             for concept in concepts:
                 # UnifiedSymbol uses .kind, engine SemanticConcept uses .concept_type
                 ct = getattr(concept, "concept_type", None) or getattr(concept, "kind", "unknown")
-                ctype = ct.value if hasattr(ct, "value") else str(ct)
+                ctype = enum_value(ct)
                 concept_types[ctype] = concept_types.get(ctype, 0) + 1
 
             insights.append(f"   ✅ Extracted {len(concepts)} semantic concepts:")
@@ -249,7 +250,7 @@ class LearningService:
                 "concepts": concepts,
                 "patterns": patterns,
                 "analysis": analysis,
-                "learned_at": datetime.now(),
+                "learned_at": utcnow(),
             }
 
             # Persist to backend if available
@@ -590,7 +591,7 @@ class LearningService:
 
     def _elapsed_ms(self, start_time: datetime) -> int:
         """Calculate elapsed milliseconds."""
-        return int((datetime.now() - start_time).total_seconds() * 1000)
+        return int((utcnow() - start_time).total_seconds() * 1000)
 
     def get_learned_data(self, path: str) -> Optional[dict]:
         """Get learned data for a path."""

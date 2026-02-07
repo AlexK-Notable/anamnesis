@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from anamnesis.constants import utcnow
+from anamnesis.utils.helpers import enum_value
 
 if TYPE_CHECKING:
     from anamnesis.intelligence.pattern_engine import DetectedPattern
@@ -43,9 +44,7 @@ def engine_concept_to_storage(
     from anamnesis.storage.schema import SemanticConcept as StorageSemanticConcept
 
     # Handle concept_type conversion
-    concept_type = concept.concept_type
-    if hasattr(concept_type, "value"):
-        concept_type = concept_type.value
+    concept_type = enum_value(concept.concept_type)
     try:
         concept_type = StorageConceptType(concept_type)
     except ValueError:
@@ -96,9 +95,7 @@ def detected_pattern_to_storage(
     from anamnesis.storage.schema import PatternType as StoragePatternType
 
     # Handle pattern_type conversion
-    pattern_type = pattern.pattern_type
-    if hasattr(pattern_type, "value"):
-        pattern_type = pattern_type.value
+    pattern_type = enum_value(pattern.pattern_type)
     try:
         pattern_type = StoragePatternType(pattern_type)
     except ValueError:
@@ -138,9 +135,7 @@ def storage_pattern_to_detected(pattern: "StorageDeveloperPattern") -> "Detected
     from anamnesis.intelligence.pattern_engine import PatternType as EnginePatternType
 
     # Handle pattern_type conversion
-    pattern_type = pattern.pattern_type
-    if hasattr(pattern_type, "value"):
-        pattern_type = pattern_type.value
+    pattern_type = enum_value(pattern.pattern_type)
     try:
         pattern_type = EnginePatternType(pattern_type)
     except ValueError:

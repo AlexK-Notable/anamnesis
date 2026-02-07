@@ -165,7 +165,7 @@ Currently asserts `tool_count == 41` (line 564).
 
 ### Vendored LSP Code
 
-`lsp/solidlsp/` is vendored from the Serena project. Do not modify unless porting upstream changes. 11 of 15 files lack module docstrings -- this is known and accepted.
+`lsp/solidlsp/` is vendored from the Serena project. Do not modify unless porting upstream changes. 11 of 24 files lack module docstrings -- this is known and accepted.
 
 ### pytest-xdist Parallelism
 
@@ -243,4 +243,3 @@ Install all: `uv sync --all-extras`
 - ~2000 tests passing
 - All synergy features (S1-S5) complete
 - Phase 14 (search pipeline) complete
-- README.md is severely stale and inaccurate -- do not trust it

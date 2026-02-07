@@ -12,6 +12,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from anamnesis.utils.helpers import enum_value
+
 
 class PatternType(str, Enum):
     """Types of patterns that can be detected.
@@ -154,7 +156,7 @@ def _pattern_type_key(pattern: Any) -> str:
     # UnifiedPattern path
     kind = getattr(pattern, "kind", None)
     if kind is not None:
-        return str(kind.value if hasattr(kind, "value") else kind)
+        return enum_value(kind)
 
     return "unknown"
 

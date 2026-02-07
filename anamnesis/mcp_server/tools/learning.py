@@ -9,6 +9,7 @@ from anamnesis.services import LearningOptions
 from anamnesis.utils.logger import logger
 from anamnesis.mcp_server._shared import (
     _collect_key_symbols,
+    _failure_response,
     _format_blueprint_as_memory,
     _get_intelligence_service,
     _get_learning_service,
@@ -85,9 +86,22 @@ def _auto_learn_if_needed_impl(
             intelligence_service.load_concepts(learned_data.get("concepts", []))
             intelligence_service.load_patterns(learned_data.get("patterns", []))
 
+    if not result.success:
+        return _failure_response(
+            result.error or "Learning failed",
+            status="failed",
+            path=resolved_path,
+            action_taken="learn",
+            concepts_learned=result.concepts_learned,
+            patterns_learned=result.patterns_learned,
+            features_learned=result.features_learned,
+            time_elapsed_ms=result.time_elapsed_ms,
+        )
+
     response = {
-        "success": result.success,
-        "status": "learned" if result.success else "failed",
+        "success": True,
+        "status": "learned",
+        "message": "Successfully learned from codebase",
         "path": resolved_path,
         "action_taken": "learn",
         "concepts_learned": result.concepts_learned,
@@ -95,10 +109,6 @@ def _auto_learn_if_needed_impl(
         "features_learned": result.features_learned,
         "time_elapsed_ms": result.time_elapsed_ms,
     }
-    if result.success:
-        response["message"] = "Successfully learned from codebase"
-    else:
-        response["error"] = result.error
 
     if include_progress:
         response["insights"] = result.insights

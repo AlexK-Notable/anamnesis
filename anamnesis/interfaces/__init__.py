@@ -12,27 +12,8 @@ from .search import (
     ISearchService,
 )
 from .engines import (
-    # Callback type
     ProgressCallback,
-    # Supporting types
-    ApproachPrediction,
-    CacheStats,
-    CodeMetadata,
-    EngineCacheStats,
-    EngineAnalyzedConcept,
-    EngineAnalyzedPattern,
-    EngineCodebaseAnalysisResult,
-    EngineFeatureMapResult,
-    EngineLearnedConcept,
-    EngineLearnedPattern,
-    EngineRelevantPattern,
-    EntryPointInfo,
-    FileRouting,
-    KeyDirectoryInfo,
-    PatternExtractionResult,
-    RustBridgeHealth,
     SemanticSearchResult,
-    VectorSearchResult,
 )
 
 __all__ = [
@@ -42,25 +23,7 @@ __all__ = [
     "SearchQuery",
     "SearchBackend",
     "ISearchService",
-    # Callback type
+    # Engine types
     "ProgressCallback",
-    # Supporting types
     "SemanticSearchResult",
-    "EntryPointInfo",
-    "KeyDirectoryInfo",
-    "ApproachPrediction",
-    "FileRouting",
-    "RustBridgeHealth",
-    "EngineCodebaseAnalysisResult",
-    "EngineAnalyzedConcept",
-    "EngineLearnedConcept",
-    "EngineAnalyzedPattern",
-    "PatternExtractionResult",
-    "EngineRelevantPattern",
-    "EngineFeatureMapResult",
-    "EngineLearnedPattern",
-    "CacheStats",
-    "EngineCacheStats",
-    "CodeMetadata",
-    "VectorSearchResult",
 ]

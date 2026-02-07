@@ -8,6 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from anamnesis.constants import utcnow
+
 from watchdog.events import (
     DirCreatedEvent,
     DirDeletedEvent,
@@ -30,7 +32,7 @@ class FileChange:
     content: Optional[str] = None
     hash: Optional[str] = None
     language: Optional[str] = None
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=utcnow)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""

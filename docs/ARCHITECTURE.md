@@ -95,7 +95,7 @@ cross-project data contamination. The primary entry point is either the CLI
 |   LspManager       (language server lifecycle)                      |
 |   SymbolRetriever   (find, overview, references)                    |
 |   CodeEditor        (rename, replace body, insert)                  |
-|   solidlsp/         (vendored from Serena -- 15 files)              |
+|   solidlsp/         (vendored from Serena -- 24 files)              |
 +---------------------------------------------------------------------+
         |
         v
@@ -212,7 +212,7 @@ deprecation notice in `extractors/__init__.py`, they are actively used.
 | `editor.py` | `CodeEditor` | Symbol mutations: rename, replace body, insert before/after. Requires active LSP. |
 | `backend.py` | `LspExtractionBackend` | Extraction backend at priority=100. Prepared but **not wired** into the ExtractionOrchestrator by default. |
 | `utils.py` | (functions) | Path safety utilities (`safe_join`, `uri_to_relative`) |
-| `solidlsp/` | (15 files) | Vendored from the Serena project. Contains the LSP protocol layer, language server configurations, subprocess management, and caching. |
+| `solidlsp/` | (24 files) | Vendored from the Serena project. Contains the LSP protocol layer, language server configurations, subprocess management, and caching. |
 
 ### Search Pipeline (`anamnesis/search/`)
 
@@ -529,7 +529,7 @@ Vendoring gives Anamnesis full control over the LSP integration without
 depending on Serena's release cycle or API stability. The vendored code
 supports Pyright, gopls, rust-analyzer, and TypeScript language server.
 
-**Trade-off**: 15 vendored files that must be manually updated when upstream
+**Trade-off**: 24 vendored files that must be manually updated when upstream
 Serena changes. 11 of these files lack module docstrings (acceptable for
 vendored code).
 
