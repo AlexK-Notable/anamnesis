@@ -73,7 +73,7 @@ class LearningService:
         semantic_engine: Optional[SemanticEngine] = None,
         pattern_engine: Optional[PatternEngine] = None,
         backend: Optional["SyncSQLiteBackend"] = None,
-        use_unified_pipeline: bool = False,
+        use_unified_pipeline: bool = True,
     ):
         """Initialize learning service.
 
@@ -202,7 +202,9 @@ class LearningService:
                 concepts = analysis.concepts
             concept_types: dict[str, int] = {}
             for concept in concepts:
-                ctype = concept.concept_type.value if hasattr(concept.concept_type, 'value') else str(concept.concept_type)
+                # UnifiedSymbol uses .kind, engine SemanticConcept uses .concept_type
+                ct = getattr(concept, "concept_type", None) or getattr(concept, "kind", "unknown")
+                ctype = ct.value if hasattr(ct, "value") else str(ct)
                 concept_types[ctype] = concept_types.get(ctype, 0) + 1
 
             insights.append(f"   ✅ Extracted {len(concepts)} semantic concepts:")
@@ -330,31 +332,37 @@ class LearningService:
     def _persist_learned_data(self, concepts: list, patterns: list) -> None:
         """Persist learned concepts and patterns to backend.
 
-        Args:
-            concepts: List of engine SemanticConcept objects
-            patterns: List of DetectedPattern or UnifiedPattern objects
+        Accepts both unified types (UnifiedSymbol, UnifiedPattern) and legacy
+        engine types (SemanticConcept, DetectedPattern). Uses direct 1-hop
+        converters for unified types, falling back to engine→storage converters
+        for legacy types.
         """
         if not self._backend:
             return
 
-        from anamnesis.extraction.converters import unified_pattern_to_engine_pattern
-        from anamnesis.extraction.types import UnifiedPattern
+        from anamnesis.extraction.converters import (
+            unified_pattern_to_storage_pattern,
+            unified_symbol_to_storage_concept,
+        )
+        from anamnesis.extraction.types import UnifiedPattern, UnifiedSymbol
         from anamnesis.services.type_converters import (
             detected_pattern_to_storage,
             engine_concept_to_storage,
         )
 
-        # Persist concepts
         with self._backend.batch_context():
             for concept in concepts:
-                storage_concept = engine_concept_to_storage(concept)
+                if isinstance(concept, UnifiedSymbol):
+                    storage_concept = unified_symbol_to_storage_concept(concept)
+                else:
+                    storage_concept = engine_concept_to_storage(concept)
                 self._backend.save_concept(storage_concept)
 
             for pattern in patterns:
-                # Convert UnifiedPattern → DetectedPattern for storage
                 if isinstance(pattern, UnifiedPattern):
-                    pattern = unified_pattern_to_engine_pattern(pattern)
-                storage_pattern = detected_pattern_to_storage(pattern)
+                    storage_pattern = unified_pattern_to_storage_pattern(pattern)
+                else:
+                    storage_pattern = detected_pattern_to_storage(pattern)
                 self._backend.save_pattern(storage_pattern)
 
     def _learn_patterns_from_directory(self, path: str, max_files: int) -> list:
@@ -399,13 +407,11 @@ class LearningService:
     def _extract_concepts_unified(self, path: Path, max_files: int) -> list:
         """Extract concepts using the unified ExtractionOrchestrator.
 
-        Returns engine-compatible SemanticConcept objects by converting
-        from the unified types.
+        Returns UnifiedSymbol objects directly — no intermediate engine
+        conversion. Downstream consumers (persistence, IntelligenceService)
+        use direct unified→storage converters where possible.
         """
-        from anamnesis.extraction.converters import (
-            flatten_unified_symbols,
-            unified_symbol_to_semantic_concept,
-        )
+        from anamnesis.extraction.converters import flatten_unified_symbols
 
         orchestrator = self._get_orchestrator()
         concepts = []
@@ -433,12 +439,7 @@ class LearningService:
                     continue
 
                 result = orchestrator.extract(content, str(file_path.relative_to(path)), language)
-
-                # Convert UnifiedSymbol -> SemanticConcept for downstream compatibility
-                flat_symbols = flatten_unified_symbols(result.symbols)
-                for sym in flat_symbols:
-                    concept = unified_symbol_to_semantic_concept(sym)
-                    concepts.append(concept)
+                concepts.extend(flatten_unified_symbols(result.symbols))
             except (OSError, IOError):
                 continue
 

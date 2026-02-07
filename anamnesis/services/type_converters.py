@@ -14,11 +14,9 @@ from anamnesis.constants import utcnow
 
 if TYPE_CHECKING:
     from anamnesis.intelligence.pattern_engine import DetectedPattern
-    from anamnesis.intelligence.semantic_engine import SemanticConcept as EngineSemanticConcept
     from anamnesis.storage.schema import (
         AIInsight as StorageAIInsight,
         DeveloperPattern as StorageDeveloperPattern,
-        SemanticConcept as StorageSemanticConcept,
     )
 
 
@@ -78,52 +76,6 @@ def engine_concept_to_storage(
         line_end=line_end,
         relationships=relationships,
         confidence=concept.confidence,
-    )
-
-
-def storage_concept_to_engine(concept: "StorageSemanticConcept") -> "EngineSemanticConcept":
-    """Convert storage SemanticConcept to engine SemanticConcept.
-
-    Args:
-        concept: Storage semantic concept
-
-    Returns:
-        Engine semantic concept (lightweight)
-    """
-    from anamnesis.intelligence.semantic_engine import ConceptType as EngineConceptType
-    from anamnesis.intelligence.semantic_engine import SemanticConcept as EngineSemanticConcept
-
-    # Handle concept_type conversion
-    concept_type = concept.concept_type
-    if hasattr(concept_type, "value"):
-        concept_type = concept_type.value
-    try:
-        concept_type = EngineConceptType(concept_type)
-    except ValueError:
-        pass  # Keep as string
-
-    # Convert line_start/line_end to line_range
-    line_range = None
-    if concept.line_start or concept.line_end:
-        line_range = (concept.line_start, concept.line_end)
-
-    # Convert relationships from list[dict] to list[str]
-    relationships = []
-    if concept.relationships:
-        for rel in concept.relationships:
-            if isinstance(rel, dict):
-                relationships.append(rel.get("target", str(rel)))
-            else:
-                relationships.append(str(rel))
-
-    return EngineSemanticConcept(
-        name=concept.name,
-        concept_type=concept_type,
-        confidence=concept.confidence,
-        file_path=concept.file_path or None,
-        line_range=line_range,
-        description=concept.description or None,
-        relationships=relationships,
     )
 
 

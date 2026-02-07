@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
 
+from anamnesis.utils.logger import logger
+
 from ..types.errors import (
     AnamnesisError,
     ErrorCode,
@@ -451,6 +453,7 @@ class ErrorClassifier:
                     result.details["context"] = ctx
                     return result
             except Exception:
+                logger.debug("Custom classifier failed", exc_info=True)
                 pass  # Skip failing classifiers
 
         # Handle AnamnesisError specially

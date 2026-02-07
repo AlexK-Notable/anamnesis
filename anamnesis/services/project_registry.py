@@ -528,6 +528,7 @@ class ProjectRegistry:
             try:
                 ctx.cleanup()
             except Exception:
+                logger.debug("Cleanup failed during reset for %s", ctx.path, exc_info=True)
                 pass
         self._projects.clear()
         self._active_path = None

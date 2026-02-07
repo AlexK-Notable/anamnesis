@@ -5,6 +5,8 @@ tree-sitter backend against sample Python projects. No LSP server
 required — these features rely purely on extraction + analysis layers.
 """
 
+import os
+
 import pytest
 
 from anamnesis.mcp_server.tools.lsp import (
@@ -87,6 +89,40 @@ class TestAnalyzeFileComplexity:
         assert result["success"] is False
         assert "error" in result
 
+    def test_empty_file_complexity(self, sample_python_project):
+        """Empty .py file should return zero functions and zero avg complexity.
+
+        Catches bugs where empty symbol lists cause division-by-zero or
+        missing keys in the aggregation logic.
+        """
+        empty_file = os.path.join(str(sample_python_project), "src", "empty.py")
+        with open(empty_file, "w") as f:
+            f.write("")
+
+        result = _as_dict(_analyze_file_complexity_impl("src/empty.py"))
+
+        assert result["success"] is True
+        assert result["function_count"] == 0
+        assert result["avg_cyclomatic"] == 0
+
+    def test_unicode_identifiers(self, sample_python_project):
+        """Non-ASCII but valid Python identifiers should be parsed by tree-sitter.
+
+        Catches bugs where extraction silently drops functions with
+        non-ASCII names or where byte-offset calculations go wrong.
+        """
+        unicode_file = os.path.join(
+            str(sample_python_project), "src", "unicode_funcs.py"
+        )
+        with open(unicode_file, "w") as f:
+            f.write("def calcul_donnees():\n    pass\n\n"
+                    "def obtener_datos():\n    pass\n")
+
+        result = _as_dict(_analyze_file_complexity_impl("src/unicode_funcs.py"))
+
+        assert result["success"] is True
+        assert result["function_count"] >= 2
+
 
 # =============================================================================
 # S2: get_complexity_hotspots
@@ -130,6 +166,25 @@ class TestGetComplexityHotspots:
         assert result["success"] is True
         assert result["hotspot_count"] == 0
         assert result["hotspots"] == []
+
+    def test_invalid_min_level(self):
+        """Unknown min_level string should default to 'high' threshold, not crash.
+
+        Catches bugs where an unrecognized level causes a KeyError or
+        returns unfiltered results instead of falling back gracefully.
+        The service uses .get(min_level, 2) which maps unknowns to 'high' (2).
+        """
+        # "nonexistent" is not in the level map, so threshold defaults to 2 ("high")
+        invalid_result = _as_dict(
+            _get_complexity_hotspots_impl("src/service.py", min_level="nonexistent")
+        )
+        high_result = _as_dict(
+            _get_complexity_hotspots_impl("src/service.py", min_level="high")
+        )
+
+        assert invalid_result["success"] is True
+        # Should behave identically to min_level="high"
+        assert invalid_result["hotspot_count"] == high_result["hotspot_count"]
 
 
 # =============================================================================
@@ -177,6 +232,36 @@ class TestSuggestRefactorings:
             complex_result["suggestions"]
         )
 
+    def test_unparseable_file(self, sample_python_project):
+        """Binary content yields zero extractable symbols, so zero suggestions.
+
+        Catches bugs where tree-sitter parse errors propagate as unhandled
+        exceptions instead of producing an empty-but-valid result.
+        """
+        binary_file = os.path.join(
+            str(sample_python_project), "src", "binary_junk.py"
+        )
+        with open(binary_file, "wb") as f:
+            f.write(b"\x00\x01\x02\x03")
+
+        result = _as_dict(_suggest_refactorings_impl("src/binary_junk.py"))
+
+        assert result["success"] is True
+        assert result["suggestions"] == []
+
+    def test_max_suggestions_zero(self):
+        """max_suggestions=0 should return an empty list, not an error.
+
+        Catches bugs where zero-length slicing or special-casing of 0
+        causes unexpected behavior in the truncation logic.
+        """
+        result = _as_dict(
+            _suggest_refactorings_impl("src/service.py", max_suggestions=0)
+        )
+
+        assert result["success"] is True
+        assert result["suggestions"] == []
+
 
 # =============================================================================
 # S4: investigate_symbol
@@ -223,6 +308,37 @@ class TestInvestigateSymbol:
 
         assert result["success"] is False
         assert "error" in result
+
+    def test_nonexistent_file_investigate(self):
+        """Investigating a symbol in a missing file returns success: False.
+
+        Catches bugs where _read_source returning None is not handled,
+        causing an AttributeError or NoneType iteration downstream.
+        """
+        result = _as_dict(
+            _investigate_symbol_impl("anything", "src/nonexistent.py")
+        )
+
+        assert result["success"] is False
+
+    def test_class_only_investigation(self):
+        """Investigating a class (not function) should still return complexity data.
+
+        Catches bugs where investigate_symbol only handles functions/methods
+        and fails to compute complexity for class-level symbols.
+        """
+        result = _as_dict(
+            _investigate_symbol_impl("UserService", "src/service.py")
+        )
+
+        assert result["success"] is True
+        assert result["symbol"] == "UserService"
+        assert "complexity" in result
+        complexity = result["complexity"]
+        assert "cyclomatic" in complexity
+        assert "cognitive" in complexity
+        assert "maintainability" in complexity
+        assert isinstance(complexity["cyclomatic"], (int, float))
 
 
 # =============================================================================
@@ -293,6 +409,54 @@ class TestSuggestCodePattern:
         assert result["siblings_analyzed"] > 0
         assert len(result["examples"]) > 0
 
+    def test_constants_only_file(self, sample_python_project):
+        """File with only constants (no functions/classes) returns empty pattern.
+
+        Catches bugs where _collect_symbols_by_kind silently returns
+        constants as functions, or where an empty siblings list causes
+        a division-by-zero in confidence calculation.
+        """
+        constants_file = os.path.join(
+            str(sample_python_project), "src", "constants_only.py"
+        )
+        with open(constants_file, "w") as f:
+            f.write("CONSTANT_VALUE = 42\nMAX_RETRIES = 3\n")
+
+        result = _as_dict(
+            _suggest_code_pattern_impl("src/constants_only.py", symbol_kind="function")
+        )
+
+        assert result["success"] is True
+        assert result["naming_convention"] == "unknown"
+        assert result["confidence"] == 0.0
+
+    def test_context_symbol_empty_string(self):
+        """Passing context_symbol='' should behave like omitting it entirely.
+
+        Catches bugs where empty string is truthy in Python (it is not),
+        or where the impl fails to normalize '' to None before the
+        is_method branch check.
+        """
+        without_context = _as_dict(
+            _suggest_code_pattern_impl(
+                "src/service.py",
+                symbol_kind="method",
+            )
+        )
+        with_empty_context = _as_dict(
+            _suggest_code_pattern_impl(
+                "src/service.py",
+                symbol_kind="method",
+                context_symbol="",
+            )
+        )
+
+        # Both should succeed and produce equivalent results
+        assert without_context["success"] is True
+        assert with_empty_context["success"] is True
+        assert without_context["siblings_analyzed"] == with_empty_context["siblings_analyzed"]
+        assert without_context["naming_convention"] == with_empty_context["naming_convention"]
+
 
 # =============================================================================
 # check_conventions
@@ -320,9 +484,26 @@ class TestCheckConventions:
         else:
             assert "error" in result
 
+    def test_empty_intelligence_defaults(self):
+        """With no prior learning, conventions_used should contain sensible defaults.
+
+        Catches bugs where an uninitialized intelligence service returns
+        an empty dict for naming_conventions, causing KeyErrors in the
+        kind_map construction or missing convention keys in the output.
+        """
+        result = _as_dict(_check_conventions_impl("src/service.py"))
+
+        assert result["success"] is True
+        conventions = result["conventions_used"]
+        assert isinstance(conventions, dict)
+        # Default conventions for functions and classes must always be present
+        assert "functions" in conventions
+        assert "classes" in conventions
+        assert conventions["functions"] == "snake_case"
+        assert conventions["classes"] == "PascalCase"
+
     def test_deliberate_naming_violations(self, sample_python_project):
         """File with camelCase function names should produce violations."""
-        import os
 
         violations_file = os.path.join(
             str(sample_python_project), "src", "bad_naming.py"

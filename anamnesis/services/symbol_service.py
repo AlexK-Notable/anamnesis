@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any, Optional
 
+from anamnesis.utils.logger import logger
+
 
 class SymbolService:
     """High-level symbol operations for a single project.
@@ -292,6 +294,11 @@ class SymbolService:
             # Get file overview with depth 1 to see methods in classes
             overview = self.get_overview(relative_path, depth=1)
         except Exception:
+            logger.debug(
+                "Symbol overview failed for %s, returning empty suggestion",
+                relative_path,
+                exc_info=True,
+            )
             return self._empty_pattern_suggestion(symbol_kind)
 
         # Normalize symbol kind for matching

@@ -183,32 +183,35 @@ class TestTypeConversion:
     """Tests for type conversion between engine and storage types."""
 
     def test_concept_round_trip_preserves_data(self, backend):
-        """Concept data survives engine→storage→engine round trip."""
-        from anamnesis.services.type_converters import (
-            engine_concept_to_storage,
-            storage_concept_to_engine,
-        )
+        """Concept data survives unified→storage conversion."""
+        from anamnesis.extraction.converters import unified_symbol_to_storage_concept
+        from anamnesis.extraction.types import SymbolKind, UnifiedSymbol
 
-        # Given: Engine concept with full data
-        original = SemanticConcept(
+        # Given: UnifiedSymbol with full data
+        original = UnifiedSymbol(
             name="TestClass",
-            concept_type=ConceptType.CLASS,
+            kind=SymbolKind.CLASS,
+            file_path="test.py",
+            start_line=10,
+            end_line=50,
             confidence=0.95,
-            file_path="/test.py",
-            line_range=(10, 50),
-            description="A test class",
-            relationships=["BaseClass", "Interface"],
+            docstring="A test class",
+            references=["BaseClass"],
+            dependencies=["Interface"],
+            backend="tree_sitter",
         )
 
-        # When: Convert to storage and back
-        storage = engine_concept_to_storage(original)
-        restored = storage_concept_to_engine(storage)
+        # When: Convert to storage
+        storage = unified_symbol_to_storage_concept(original)
 
         # Then: Key data preserved
-        assert restored.name == original.name
-        assert restored.confidence == original.confidence
-        assert restored.file_path == original.file_path
-        assert restored.description == original.description
+        assert storage.name == original.name
+        assert storage.confidence == original.confidence
+        assert storage.file_path == original.file_path
+        assert storage.description == original.docstring
+        assert storage.line_start == original.start_line
+        assert storage.line_end == original.end_line
+        assert len(storage.relationships) == 2  # 1 reference + 1 dependency
 
     def test_pattern_round_trip_preserves_data(self, backend):
         """Pattern data survives engine→storage→engine round trip."""

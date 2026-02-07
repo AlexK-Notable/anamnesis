@@ -261,10 +261,12 @@ class TestLearningServiceContentVerification:
         singleton_found = False
         for pattern in patterns:
             pattern_type = None
-            if hasattr(pattern, "pattern_type"):
+            if hasattr(pattern, "kind"):
+                pattern_type = pattern.kind
+            elif hasattr(pattern, "pattern_type"):
                 pattern_type = pattern.pattern_type
             elif isinstance(pattern, dict):
-                pattern_type = pattern.get("pattern_type", "")
+                pattern_type = pattern.get("pattern_type", pattern.get("kind", ""))
 
             if pattern_type and "singleton" in str(pattern_type).lower():
                 singleton_found = True
@@ -291,10 +293,12 @@ class TestLearningServiceContentVerification:
         factory_found = False
         for pattern in patterns:
             pattern_type = None
-            if hasattr(pattern, "pattern_type"):
+            if hasattr(pattern, "kind"):
+                pattern_type = pattern.kind
+            elif hasattr(pattern, "pattern_type"):
                 pattern_type = pattern.pattern_type
             elif isinstance(pattern, dict):
-                pattern_type = pattern.get("pattern_type", "")
+                pattern_type = pattern.get("pattern_type", pattern.get("kind", ""))
 
             if pattern_type and "factory" in str(pattern_type).lower():
                 factory_found = True

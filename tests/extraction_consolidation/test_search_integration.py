@@ -228,7 +228,7 @@ class TestBackwardCompatibility:
         # Note: legacy may be 0 if AST matcher doesn't match the sample code.
         # See TestSearchPipelineWithDeterministicEmbedding for a meaningful
         # unified-vs-legacy comparison using real (hash-based) embeddings.
-        assert legacy_calls >= 0 or unified_calls > legacy_calls
+        # Legacy call count verified in TestSearchPipelineWithDeterministicEmbedding.test_both_paths_produce_embeddings
 
 
 # ============================================================================

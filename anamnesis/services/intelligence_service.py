@@ -16,13 +16,11 @@ from anamnesis.intelligence.pattern_engine import (
     PatternRecommendation,
     _pattern_type_key,
 )
-from anamnesis.intelligence.semantic_engine import (
-    SemanticConcept,
-    SemanticEngine,
-)
+from anamnesis.intelligence.semantic_engine import SemanticEngine
 from anamnesis.interfaces.engines import SemanticSearchResult
 
 if TYPE_CHECKING:
+    from anamnesis.storage.schema import SemanticConcept as StorageSemanticConcept
     from anamnesis.storage.sync_backend import SyncSQLiteBackend
 
 
@@ -158,7 +156,7 @@ class IntelligenceService:
         self._backend = backend
 
         # In-memory caches (populated from backend or used standalone)
-        self._concepts: list[SemanticConcept] = []
+        self._concepts: list[StorageSemanticConcept] = []
         self._patterns: list = []  # DetectedPattern or UnifiedPattern
         self._insights: list[AIInsight] = []
         self._work_sessions: dict[str, dict] = {}
@@ -183,70 +181,82 @@ class IntelligenceService:
         """Get embedding engine for semantic search."""
         return self._embedding_engine
 
-    def load_concepts(self, concepts: list[SemanticConcept]) -> None:
+    def load_concepts(self, concepts: list) -> None:
         """Load semantic concepts.
 
-        Stores concepts in memory cache, persists to backend if available,
-        and indexes in embedding engine for semantic search.
+        Accepts engine SemanticConcept, unified UnifiedSymbol, or storage
+        SemanticConcept objects. All are converted to storage types for the
+        in-memory cache and persisted to the backend.
         """
-        self._concepts = concepts
+        from anamnesis.extraction.converters import unified_symbol_to_storage_concept
+        from anamnesis.extraction.types import UnifiedSymbol
+        from anamnesis.services.type_converters import engine_concept_to_storage
+        from anamnesis.storage.schema import SemanticConcept as StorageSC
+
+        # Convert everything to storage types for uniform in-memory cache
+        storage_concepts = []
+        for concept in concepts:
+            if isinstance(concept, StorageSC):
+                storage_concepts.append(concept)
+            elif isinstance(concept, UnifiedSymbol):
+                storage_concepts.append(unified_symbol_to_storage_concept(concept))
+            else:
+                # Engine SemanticConcept (legacy path)
+                storage_concepts.append(engine_concept_to_storage(concept))
+
+        self._concepts = storage_concepts
 
         # Persist to backend if available
         if self._backend:
-            from anamnesis.services.type_converters import engine_concept_to_storage
-
             with self._backend.batch_context():
-                for concept in concepts:
-                    storage_concept = engine_concept_to_storage(concept)
-                    self._backend.save_concept(storage_concept)
+                for sc in storage_concepts:
+                    self._backend.save_concept(sc)
 
-        # Index concepts in embedding engine for semantic search
-        self._index_concepts_for_search(concepts)
+        # Index concepts for semantic search
+        self._index_concepts_for_search(storage_concepts)
 
     def load_patterns(self, patterns: list) -> None:
         """Load detected patterns.
 
         Accepts both ``DetectedPattern`` and ``UnifiedPattern`` objects.
         Stores in memory cache, forwards to the pattern engine for
-        recommendation building, and persists to backend if available.
+        recommendation building, and persists to backend using direct
+        converters for unified types.
         """
         self._patterns = patterns
 
         # Forward to pattern engine so recommendations have data
         self._pattern_engine.load_unified_patterns(patterns)
 
-        # Persist to backend if available
+        # Persist to backend if available — use direct converters for unified types
         if self._backend:
-            from anamnesis.extraction.converters import unified_pattern_to_engine_pattern
+            from anamnesis.extraction.converters import unified_pattern_to_storage_pattern
             from anamnesis.extraction.types import UnifiedPattern
             from anamnesis.services.type_converters import detected_pattern_to_storage
 
             with self._backend.batch_context():
                 for pattern in patterns:
-                    # Convert UnifiedPattern → DetectedPattern for storage
                     if isinstance(pattern, UnifiedPattern):
-                        pattern = unified_pattern_to_engine_pattern(pattern)
-                    storage_pattern = detected_pattern_to_storage(pattern)
+                        storage_pattern = unified_pattern_to_storage_pattern(pattern)
+                    else:
+                        storage_pattern = detected_pattern_to_storage(pattern)
                     self._backend.save_pattern(storage_pattern)
 
     def load_from_backend(self) -> None:
         """Load concepts and patterns from backend into memory cache.
 
-        Call this to restore state after service restart.
+        Call this to restore state after service restart. Keeps storage
+        types directly — no conversion to intermediate engine types.
         """
         if not self._backend:
             return
 
-        from anamnesis.services.type_converters import (
-            storage_concept_to_engine,
-            storage_pattern_to_detected,
-        )
+        from anamnesis.services.type_converters import storage_pattern_to_detected
 
-        # Load concepts
-        storage_concepts = self._backend.search_concepts("", limit=10000)
-        self._concepts = [storage_concept_to_engine(c) for c in storage_concepts]
+        # Load concepts directly as storage types (no engine conversion)
+        self._concepts = self._backend.search_concepts("", limit=10000)
 
-        # Load patterns and forward to pattern engine
+        # Load patterns as engine types (PatternEngine needs DetectedPattern)
         storage_patterns = self._backend.get_all_patterns()
         self._patterns = [storage_pattern_to_detected(p) for p in storage_patterns]
         self._pattern_engine.load_unified_patterns(self._patterns)
@@ -273,7 +283,7 @@ class IntelligenceService:
         if concept_type:
             filtered = [
                 c for c in filtered
-                if c.concept_type.value.lower() == concept_type.lower()
+                if (c.concept_type.value if hasattr(c.concept_type, "value") else str(c.concept_type)).lower() == concept_type.lower()
             ]
 
         # Filter by query
@@ -289,9 +299,18 @@ class IntelligenceService:
 
         insights = []
         for concept in limited:
+            # Extract relationship targets from list[dict] format
+            rel_targets = []
+            if concept.relationships:
+                for rel in concept.relationships:
+                    if isinstance(rel, dict):
+                        rel_targets.append(rel.get("target", str(rel)))
+                    else:
+                        rel_targets.append(str(rel))
+
             insight = SemanticInsight(
                 concept=concept.name,
-                relationships=list(concept.relationships.keys()) if concept.relationships else [],
+                relationships=rel_targets,
                 usage={
                     "frequency": concept.confidence * 100,
                     "contexts": [concept.file_path] if concept.file_path else [],
@@ -759,11 +778,10 @@ class IntelligenceService:
         # Note: We don't clear the backend here as that would be destructive.
         # Use backend.clear_all() explicitly if needed.
 
-    def _index_concepts_for_search(self, concepts: list[SemanticConcept]) -> None:
+    def _index_concepts_for_search(self, concepts: list) -> None:
         """Index concepts in embedding engine for semantic search.
 
-        Args:
-            concepts: List of semantic concepts to index
+        Accepts storage SemanticConcept objects (with line_start/line_end).
         """
         if not concepts:
             return
@@ -777,8 +795,9 @@ class IntelligenceService:
             }
             if concept.relationships:
                 metadata["relationships"] = concept.relationships
-            if concept.line_range:
-                metadata["line_range"] = concept.line_range
+            # Storage type uses line_start/line_end instead of line_range
+            if concept.line_start or concept.line_end:
+                metadata["line_range"] = (concept.line_start, concept.line_end)
 
             batch_data.append((
                 concept.name,

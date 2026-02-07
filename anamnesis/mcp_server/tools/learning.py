@@ -6,6 +6,7 @@ from typing import Optional
 
 from anamnesis.services import LearningOptions
 
+from anamnesis.utils.logger import logger
 from anamnesis.mcp_server._shared import (
     _collect_key_symbols,
     _format_blueprint_as_memory,
@@ -134,7 +135,7 @@ def _auto_learn_if_needed_impl(
                         onboarding_msg += f" (enriched with symbols from {len(symbol_data)} files)"
                     response["auto_onboarding"] = onboarding_msg
         except Exception:
-            pass  # Non-critical — don't break learning on onboarding failure
+            logger.warning("Auto-onboarding failed for %s", resolved_path, exc_info=True)
 
     return response
 

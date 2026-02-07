@@ -416,6 +416,7 @@ class MemoryIndex:
             self._model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
             return True
         except Exception:
+            logger.debug("Sentence-transformers model load failed", exc_info=True)
             return False
 
     def index(self, name: str, content: str) -> None:

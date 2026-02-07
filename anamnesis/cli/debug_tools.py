@@ -26,6 +26,7 @@ class DebugTools:
 
     def __init__(
         self,
+        project_context=None,
         verbose: bool = False,
         check_database: bool = True,
         check_intelligence: bool = True,
@@ -36,6 +37,8 @@ class DebugTools:
         """Initialize debug tools.
 
         Args:
+            project_context: Optional ProjectContext for registry-based service access.
+                Falls back to direct instantiation when None (backward compat).
             verbose: Show detailed diagnostic information
             check_database: Include database diagnostics
             check_intelligence: Include intelligence diagnostics
@@ -43,6 +46,7 @@ class DebugTools:
             validate_data: Validate data consistency
             check_performance: Run performance analysis
         """
+        self._ctx = project_context
         self.verbose = verbose
         self.check_database = check_database
         self.check_intelligence = check_intelligence
@@ -50,6 +54,22 @@ class DebugTools:
         self.validate_data = validate_data
         self.check_performance = check_performance
         self.results: list[DiagnosticResult] = []
+
+    def _get_learning_service(self):
+        """Get learning service via project context or direct instantiation."""
+        if self._ctx is not None:
+            return self._ctx.get_learning_service()
+        from anamnesis.services.learning_service import LearningService
+
+        return LearningService()
+
+    def _get_intelligence_service(self):
+        """Get intelligence service via project context or direct instantiation."""
+        if self._ctx is not None:
+            return self._ctx.get_intelligence_service()
+        from anamnesis.services.intelligence_service import IntelligenceService
+
+        return IntelligenceService()
 
     def run_diagnostics(self, path: str) -> list[DiagnosticResult]:
         """Run all diagnostics for the given path.
@@ -350,9 +370,7 @@ class DebugTools:
         start = time.time()
 
         try:
-            from anamnesis.services.learning_service import LearningService
-
-            service = LearningService()
+            service = self._get_learning_service()
             duration = (time.time() - start) * 1000
 
             return DiagnosticResult(
@@ -376,9 +394,7 @@ class DebugTools:
         start = time.time()
 
         try:
-            from anamnesis.services.intelligence_service import IntelligenceService
-
-            service = IntelligenceService()
+            service = self._get_intelligence_service()
             duration = (time.time() - start) * 1000
 
             return DiagnosticResult(
@@ -402,9 +418,7 @@ class DebugTools:
         start = time.time()
 
         try:
-            from anamnesis.services.learning_service import LearningService
-
-            service = LearningService()
+            service = self._get_learning_service()
             has_data = service.has_learned_data()
             duration = (time.time() - start) * 1000
 
@@ -437,11 +451,8 @@ class DebugTools:
         start = time.time()
 
         try:
-            from anamnesis.services.learning_service import LearningService
-            from anamnesis.services.intelligence_service import IntelligenceService
-
-            LearningService()
-            IntelligenceService()
+            self._get_learning_service()
+            self._get_intelligence_service()
 
             duration = (time.time() - start) * 1000
 
@@ -476,9 +487,7 @@ class DebugTools:
         start = time.time()
 
         try:
-            from anamnesis.services.intelligence_service import IntelligenceService
-
-            service = IntelligenceService()
+            service = self._get_intelligence_service()
 
             # Run a simple query
             query_start = time.time()
@@ -518,9 +527,7 @@ class DebugTools:
         start = time.time()
 
         try:
-            from anamnesis.services.learning_service import LearningService
-
-            service = LearningService()
+            service = self._get_learning_service()
             concepts = service.get_learned_concepts()
             duration = (time.time() - start) * 1000
 
@@ -572,9 +579,7 @@ class DebugTools:
         start = time.time()
 
         try:
-            from anamnesis.services.learning_service import LearningService
-
-            service = LearningService()
+            service = self._get_learning_service()
             patterns = service.get_learned_patterns()
             duration = (time.time() - start) * 1000
 

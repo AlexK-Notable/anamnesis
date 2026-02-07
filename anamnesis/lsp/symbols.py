@@ -650,6 +650,7 @@ class SymbolRetriever:
                     )
             return None
         except Exception:
+            log.debug("Hover info request failed", exc_info=True)
             return None
 
     def _uri_to_relative(self, uri: str) -> str:
@@ -677,6 +678,7 @@ class SymbolRetriever:
                 result.append(f"{prefix}{i:4d}:{lines[i].rstrip()}")
             return "\n".join(result)
         except Exception:
+            log.debug("Snippet extraction failed for line %d", line, exc_info=True)
             return ""
 
     def _get_source_files(self) -> list[str]:

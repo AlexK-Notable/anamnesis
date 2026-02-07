@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from anamnesis.utils.logger import logger
 from anamnesis.watchers.file_watcher import FileChange
 
 
@@ -508,6 +509,7 @@ class ChangeAnalyzer:
             return list(set(dependent_files))
 
         except Exception:
+            logger.debug("Dependency scan failed", exc_info=True)
             return []
 
     def _learn_from_change(self, analysis: ChangeAnalysis) -> None:
@@ -521,6 +523,7 @@ class ChangeAnalyzer:
             try:
                 self.pattern_engine.learn_from_analysis(analysis)
             except Exception:
+                logger.debug("Pattern learning from change failed", exc_info=True)
                 pass
 
         # Update semantic understanding
@@ -528,6 +531,7 @@ class ChangeAnalyzer:
             try:
                 self.semantic_engine.update_from_analysis(analysis)
             except Exception:
+                logger.debug("Semantic update from change failed", exc_info=True)
                 pass
 
     def _create_minimal_analysis(self, change: FileChange) -> ChangeAnalysis:

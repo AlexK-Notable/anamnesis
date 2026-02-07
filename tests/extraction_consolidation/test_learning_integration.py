@@ -110,9 +110,9 @@ class FileManager:
 class TestFeatureFlag:
     """Verify the feature flag controls pipeline selection."""
 
-    def test_default_is_legacy(self):
+    def test_default_is_unified(self):
         service = LearningService()
-        assert service.use_unified_pipeline is False
+        assert service.use_unified_pipeline is True
 
     def test_can_enable_unified(self):
         service = LearningService(use_unified_pipeline=True)

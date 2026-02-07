@@ -235,9 +235,10 @@ class InteractiveSetup:
             click.echo("\n   Starting learning process...")
 
             try:
-                from anamnesis.services.learning_service import LearningService
+                from anamnesis.cli._context import get_project_context
 
-                service = LearningService()
+                ctx = get_project_context(str(self.project_path))
+                service = ctx.get_learning_service()
                 result = service.learn_from_codebase(str(self.project_path))
 
                 if result.success:

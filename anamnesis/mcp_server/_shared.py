@@ -398,6 +398,7 @@ def _collect_key_symbols(
                 content = f.read()
             result = backend.extract_all(content, rel_path, lang)
         except Exception:
+            logger.debug("Symbol extraction failed for %s", rel_path, exc_info=True)
             continue
 
         file_symbols: list[dict[str, str]] = []

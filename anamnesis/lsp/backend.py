@@ -141,6 +141,7 @@ class LspExtractionBackend:
             imports = ts_result.imports
             frameworks = ts_result.frameworks
         except Exception:
+            log.debug("Pattern extraction failed, using empty defaults", exc_info=True)
             patterns = []
             imports = []
             frameworks = []
@@ -231,6 +232,7 @@ class LspExtractionBackend:
         try:
             return self._get_tree_sitter().extract_symbols(content, file_path, language)
         except Exception:
+            log.debug("Tree-sitter fallback also failed for %s", file_path, exc_info=True)
             return []
 
     def _get_tree_sitter(self) -> Any:

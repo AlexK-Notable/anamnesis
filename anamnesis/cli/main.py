@@ -61,34 +61,36 @@ def learn(path: str, force: bool) -> None:
 
     PATH is the directory to learn from (defaults to current directory).
     """
-    from anamnesis.services.learning_service import LearningOptions, LearningService
+    from anamnesis.cli._context import cli_project_scope
+    from anamnesis.services.learning_service import LearningOptions
 
     resolved_path = Path(path).resolve()
     click.echo(f"🧠 Starting intelligent learning from: {resolved_path}\n")
 
     try:
-        service = LearningService()
-        options = LearningOptions(force=force)
-        result = service.learn_from_codebase(str(resolved_path), options=options)
+        with cli_project_scope(str(resolved_path)) as ctx:
+            service = ctx.get_learning_service()
+            options = LearningOptions(force=force)
+            result = service.learn_from_codebase(str(resolved_path), options=options)
 
-        if not result.success:
-            click.echo(f"❌ Learning failed: {result.error}", err=True)
-            sys.exit(1)
+            if not result.success:
+                click.echo(f"❌ Learning failed: {result.error}", err=True)
+                sys.exit(1)
 
-        # Print summary
-        separator = "━" * 60
-        click.echo(separator)
-        click.echo(f"📊 Concepts:  {result.concepts_learned}")
-        click.echo(f"🔍 Patterns:  {result.patterns_learned}")
-        click.echo(f"🗺️  Features:  {result.features_learned}")
-        click.echo(separator)
+            # Print summary
+            separator = "━" * 60
+            click.echo(separator)
+            click.echo(f"📊 Concepts:  {result.concepts_learned}")
+            click.echo(f"🔍 Patterns:  {result.patterns_learned}")
+            click.echo(f"🗺️  Features:  {result.features_learned}")
+            click.echo(separator)
 
-        if result.insights:
-            click.echo("\n📝 Insights:")
-            for insight in result.insights:
-                click.echo(f"   {insight}")
+            if result.insights:
+                click.echo("\n📝 Insights:")
+                for insight in result.insights:
+                    click.echo(f"   {insight}")
 
-        click.echo("\n✅ Learning complete!")
+            click.echo("\n✅ Learning complete!")
 
     except Exception as e:
         click.echo(f"❌ Learning failed: {e}", err=True)
@@ -102,48 +104,46 @@ def analyze(path: str) -> None:
 
     PATH is the directory to analyze (defaults to current directory).
     """
-    from anamnesis.services.codebase_service import CodebaseService
-    from anamnesis.services.intelligence_service import IntelligenceService
-    from anamnesis.services.learning_service import LearningService
+    from anamnesis.cli._context import cli_project_scope
 
     resolved_path = Path(path).resolve()
     click.echo(f"🔍 Analyzing codebase: {resolved_path}\n")
 
     try:
-        codebase_service = CodebaseService()
-        intelligence_service = IntelligenceService()
-        learning_service = LearningService()
+        with cli_project_scope(str(resolved_path)) as ctx:
+            codebase_service = ctx.get_codebase_service()
+            intelligence_service = ctx.get_intelligence_service()
 
-        # Get analysis
-        analysis = codebase_service.analyze_codebase(
-            str(resolved_path),
-            include_complexity=True,
-            include_dependencies=True,
-        )
+            # Get analysis
+            analysis = codebase_service.analyze_codebase(
+                str(resolved_path),
+                include_complexity=True,
+                include_dependencies=True,
+            )
 
-        # Get blueprint
-        blueprint = intelligence_service.get_project_blueprint(str(resolved_path))
+            # Get blueprint
+            blueprint = intelligence_service.get_project_blueprint(str(resolved_path))
 
-        click.echo("=== Codebase Analysis Results ===")
+            click.echo("=== Codebase Analysis Results ===")
 
-        if blueprint.get("tech_stack"):
-            click.echo(f"Tech Stack: {', '.join(blueprint['tech_stack'])}")
+            if blueprint.get("tech_stack"):
+                click.echo(f"Tech Stack: {', '.join(blueprint['tech_stack'])}")
 
-        click.echo(f"Architecture: {blueprint.get('architecture', 'unknown')}")
+            click.echo(f"Architecture: {blueprint.get('architecture', 'unknown')}")
 
-        learning_status = blueprint.get("learning_status", {})
-        click.echo(f"Concepts stored: {learning_status.get('concepts_stored', 0)}")
-        click.echo(f"Patterns stored: {learning_status.get('patterns_stored', 0)}")
+            learning_status = blueprint.get("learning_status", {})
+            click.echo(f"Concepts stored: {learning_status.get('concepts_stored', 0)}")
+            click.echo(f"Patterns stored: {learning_status.get('patterns_stored', 0)}")
 
-        if blueprint.get("entry_points"):
-            click.echo("\nEntry Points:")
-            for entry_type, file_path in blueprint["entry_points"].items():
-                click.echo(f"  - {entry_type}: {file_path}")
+            if blueprint.get("entry_points"):
+                click.echo("\nEntry Points:")
+                for entry_type, file_path in blueprint["entry_points"].items():
+                    click.echo(f"  - {entry_type}: {file_path}")
 
-        if blueprint.get("key_directories"):
-            click.echo("\nKey Directories:")
-            for dir_path, dir_type in list(blueprint["key_directories"].items())[:5]:
-                click.echo(f"  - {dir_path}: {dir_type}")
+            if blueprint.get("key_directories"):
+                click.echo("\nKey Directories:")
+                for dir_path, dir_type in list(blueprint["key_directories"].items())[:5]:
+                    click.echo(f"  - {dir_path}: {dir_type}")
 
     except Exception as e:
         click.echo(f"❌ Analysis failed: {e}", err=True)
@@ -299,8 +299,8 @@ def search(
     import asyncio
     import json as json_module
 
+    from anamnesis.cli._context import get_project_context
     from anamnesis.interfaces.search import SearchQuery, SearchType
-    from anamnesis.search.service import SearchService
 
     resolved_path = Path(path).resolve()
 
@@ -317,12 +317,14 @@ def search(
         click.echo(f"📂 Path: {resolved_path}")
         click.echo()
 
+    ctx = get_project_context(str(resolved_path))
+
     async def run_search():
-        # Create search service (with semantic for semantic search)
+        # Initialize semantic search if needed, otherwise use sync service
         if search_type_enum == SearchType.SEMANTIC:
-            service = await SearchService.create(str(resolved_path), enable_semantic=True)
-        else:
-            service = SearchService.create_sync(str(resolved_path))
+            await ctx.ensure_semantic_search()
+
+        service = ctx.get_search_service()
 
         search_query = SearchQuery(
             query=query,
@@ -385,13 +387,16 @@ def check(path: str, verbose: bool, validate: bool, performance: bool) -> None:
 
     PATH is the project directory to check (defaults to current directory).
     """
+    from anamnesis.cli._context import get_project_context
     from anamnesis.cli.debug_tools import DebugTools
 
     resolved_path = Path(path).resolve()
     click.echo(f"🔧 Running diagnostics for: {resolved_path}\n")
 
     try:
+        ctx = get_project_context(str(resolved_path))
         debug_tools = DebugTools(
+            project_context=ctx,
             verbose=verbose,
             validate_data=validate,
             check_performance=performance,
