@@ -52,6 +52,7 @@ from .language_registry import (
     detect_language_from_extension,
     get_all_extensions,
     get_all_languages,
+    get_code_extensions,
     get_comment_styles,
     get_compiled_languages,
     get_default_watch_patterns,
@@ -91,6 +92,12 @@ from .toon_encoder import (
 from .serialization import (
     is_serialized,
     serialize_to_primitives,
+)
+
+# Model Registry
+from .model_registry import (
+    get_model_cache_stats,
+    get_shared_sentence_transformer,
 )
 
 # Helpers
@@ -133,6 +140,7 @@ __all__ = [
     "detect_language_from_extension",
     "get_all_extensions",
     "get_all_languages",
+    "get_code_extensions",
     "get_comment_styles",
     "get_compiled_languages",
     "get_default_watch_patterns",
@@ -162,6 +170,9 @@ __all__ = [
     # Serialization (Phase 13)
     "is_serialized",
     "serialize_to_primitives",
+    # Model Registry
+    "get_model_cache_stats",
+    "get_shared_sentence_transformer",
     # Helpers
     "enum_value",
 ]
