@@ -13,20 +13,8 @@ from loguru import logger
 
 from anamnesis.constants import DEFAULT_IGNORE_DIRS, MAX_FILE_SIZE
 from anamnesis.interfaces.search import SearchBackend, SearchQuery, SearchResult, SearchType
+from anamnesis.utils.language_registry import get_extensions_for_language
 from anamnesis.utils.security import is_sensitive_file
-
-
-# File extensions by language
-LANGUAGE_EXTENSIONS = {
-    "python": [".py", ".pyi"],
-    "javascript": [".js", ".mjs", ".cjs", ".jsx"],
-    "typescript": [".ts", ".mts", ".tsx"],
-    "go": [".go"],
-    "rust": [".rs"],
-    "java": [".java"],
-    "c": [".c", ".h"],
-    "cpp": [".cpp", ".cc", ".cxx", ".hpp", ".hh"],
-}
 
 
 class TextSearchBackend(SearchBackend):
@@ -143,7 +131,8 @@ class TextSearchBackend(SearchBackend):
             List of glob patterns.
         """
         if language:
-            extensions = LANGUAGE_EXTENSIONS.get(language.lower(), [f".{language}"])
+            exts = get_extensions_for_language(language)
+            extensions = [f".{e}" for e in exts] if exts else [f".{language}"]
             return [f"**/*{ext}" for ext in extensions]
 
         # Default: common code file extensions

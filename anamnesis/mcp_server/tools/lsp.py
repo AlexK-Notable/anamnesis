@@ -215,6 +215,7 @@ def _get_complexity_hotspots_helper(relative_path: str, min_level: str = "high")
 # Decorated _impl functions (kept for backward test compatibility)
 
 
+# TODO(cleanup): Remove this backward-compat wrapper — tests migrated to canonical function
 @_with_error_handling("analyze_file_complexity")
 def _analyze_file_complexity_impl(relative_path: str) -> dict:
     """Implementation for analyze_file_complexity tool."""
@@ -231,12 +232,14 @@ def _investigate_symbol_impl(
     return svc.investigate_symbol(name_path, relative_path)
 
 
+# TODO(cleanup): Remove this backward-compat wrapper — tests migrated to canonical function
 @_with_error_handling("suggest_refactorings")
 def _suggest_refactorings_impl(relative_path: str, max_suggestions: int = 10) -> dict:
     """Implementation for suggest_refactorings tool."""
     return _suggest_refactorings_helper(relative_path, max_suggestions)
 
 
+# TODO(cleanup): Remove this backward-compat wrapper — tests migrated to canonical function
 @_with_error_handling("get_complexity_hotspots")
 def _get_complexity_hotspots_impl(relative_path: str, min_level: str = "high") -> dict:
     """Implementation for get_complexity_hotspots tool."""

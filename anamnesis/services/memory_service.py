@@ -412,8 +412,8 @@ class MemoryIndex:
             return self._model is not None
         self._model_loaded = True
         try:
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+            from anamnesis.utils.model_registry import get_shared_sentence_transformer
+            self._model = get_shared_sentence_transformer()
             return True
         except Exception:
             logger.debug("Sentence-transformers model load failed", exc_info=True)

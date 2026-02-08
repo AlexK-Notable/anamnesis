@@ -21,25 +21,29 @@ def _as_dict(result):
     return result
 
 
-# Import implementation functions for direct testing
-from anamnesis.mcp_server.server import (
-    _analyze_codebase_impl,
-    _auto_learn_if_needed_impl,
-    _contribute_insights_impl,
+# Import implementation functions from their canonical tool modules
+from anamnesis.mcp_server._shared import (
     _get_codebase_service,
     _get_current_path,
-    _get_developer_profile_impl,
     _get_intelligence_service,
     _get_learning_service,
+    _set_current_path,
+    mcp,
+)
+from anamnesis.mcp_server.server import create_server
+from anamnesis.mcp_server.tools.intelligence import (
+    _contribute_insights_impl,
+    _get_developer_profile_impl,
     _get_pattern_recommendations_impl,
     _get_project_blueprint_impl,
     _get_semantic_insights_impl,
-    _get_system_status_impl,
     _predict_coding_approach_impl,
+)
+from anamnesis.mcp_server.tools.learning import _auto_learn_if_needed_impl
+from anamnesis.mcp_server.tools.monitoring import _get_system_status_impl
+from anamnesis.mcp_server.tools.search import (
+    _analyze_codebase_impl,
     _search_codebase_impl,
-    _set_current_path,
-    create_server,
-    mcp,
 )
 
 

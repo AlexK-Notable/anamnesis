@@ -15,7 +15,6 @@ from typing import Generator, Optional
 
 from .schema import (
     AIInsight,
-    ArchitecturalDecision,
     DeveloperPattern,
     EntryPoint,
     FeatureMap,
@@ -86,10 +85,16 @@ class SyncSQLiteBackend:
     def batch_context(self) -> Generator[None, None, None]:
         """Context manager for batch operations.
 
-        Retained for API compatibility. All operations already share
-        a persistent event loop, so this is now a no-op context.
+        Defers all commits until the context exits, then issues a
+        single commit. On exception, rolls back instead.
         """
-        yield
+        self._run(self._async_backend.begin_batch())
+        try:
+            yield
+            self._run(self._async_backend.end_batch(commit=True))
+        except BaseException:
+            self._run(self._async_backend.end_batch(commit=False))
+            raise
 
     # =========================================================================
     # Connection Management
@@ -193,26 +198,6 @@ class SyncSQLiteBackend:
     def delete_pattern(self, pattern_id: str) -> bool:
         """Delete a pattern."""
         return self._run(self._async_backend.delete_pattern(pattern_id))
-
-    # =========================================================================
-    # Architectural Decisions
-    # =========================================================================
-
-    def save_decision(self, decision: ArchitecturalDecision) -> None:
-        """Save an architectural decision."""
-        self._run(self._async_backend.save_decision(decision))
-
-    def get_decision(self, decision_id: str) -> Optional[ArchitecturalDecision]:
-        """Get decision by ID."""
-        return self._run(self._async_backend.get_decision(decision_id))
-
-    def get_all_decisions(self) -> list[ArchitecturalDecision]:
-        """Get all architectural decisions."""
-        return self._run(self._async_backend.get_all_decisions())
-
-    def delete_decision(self, decision_id: str) -> bool:
-        """Delete a decision."""
-        return self._run(self._async_backend.delete_decision(decision_id))
 
     # =========================================================================
     # File Intelligence

@@ -18,9 +18,7 @@ import pytest
 
 from anamnesis.storage.schema import (
     AIInsight,
-    ArchitecturalDecision,
     ConceptType,
-    DecisionStatus,
     DeveloperPattern,
     EntryPoint,
     FeatureMap,
@@ -320,46 +318,6 @@ class TestDeveloperPatternCRUD:
 
         result = await memory_backend.get_pattern("delete-pattern")
         assert result is None
-
-
-class TestArchitecturalDecisionCRUD:
-    """Tests for ArchitecturalDecision CRUD operations."""
-
-    @pytest.mark.asyncio
-    async def test_save_and_get_decision(self, memory_backend):
-        """Can save and get a decision."""
-        decision = ArchitecturalDecision(
-            id="adr-001",
-            title="Use SQLite",
-            context="Need local storage for codebase intelligence",
-            decision="Use SQLite for local storage",
-            status=DecisionStatus.ACCEPTED,
-            consequences=["Limited concurrency", "Simple deployment"],
-        )
-
-        await memory_backend.save_decision(decision)
-        retrieved = await memory_backend.get_decision("adr-001")
-
-        assert retrieved is not None
-        assert retrieved.title == "Use SQLite"
-        assert retrieved.status == DecisionStatus.ACCEPTED
-        assert "Limited concurrency" in retrieved.consequences
-
-    @pytest.mark.asyncio
-    async def test_get_all_decisions(self, memory_backend):
-        """Can get all decisions."""
-        for i in range(3):
-            decision = ArchitecturalDecision(
-                id=f"adr-{i}",
-                title=f"Decision {i}",
-                context="test context",
-                decision="test decision",
-                status=DecisionStatus.PROPOSED,
-            )
-            await memory_backend.save_decision(decision)
-
-        result = await memory_backend.get_all_decisions()
-        assert len(result) == 3
 
 
 class TestFileIntelligenceCRUD:

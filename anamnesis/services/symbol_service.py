@@ -9,9 +9,15 @@ lifecycle management (one instance per project, lazily initialized).
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 from anamnesis.utils.logger import logger
+
+if TYPE_CHECKING:
+    from anamnesis.lsp.editor import CodeEditor
+    from anamnesis.lsp.manager import LspManager
+    from anamnesis.lsp.symbols import SymbolRetriever
+    from anamnesis.services.intelligence_service import IntelligenceService
 
 _REFACTORING_THRESHOLDS = {
     "extract_method": {"cyclomatic": 20, "cognitive": 25},
@@ -36,17 +42,17 @@ class SymbolService:
     def __init__(
         self,
         project_root: str,
-        lsp_manager: Any,
-        intelligence_service: Any = None,
+        lsp_manager: LspManager,
+        intelligence_service: IntelligenceService | None = None,
     ) -> None:
         self._project_root = project_root
-        self._lsp_manager = lsp_manager
-        self._intelligence_service = intelligence_service
-        self._retriever: Any = None
-        self._editor: Any = None
+        self._lsp_manager: LspManager = lsp_manager
+        self._intelligence_service: IntelligenceService | None = intelligence_service
+        self._retriever: SymbolRetriever | None = None
+        self._editor: CodeEditor | None = None
 
     @property
-    def retriever(self) -> Any:
+    def retriever(self) -> SymbolRetriever:
         """Lazily initialize SymbolRetriever."""
         if self._retriever is None:
             from anamnesis.lsp.symbols import SymbolRetriever
@@ -56,7 +62,7 @@ class SymbolService:
         return self._retriever
 
     @property
-    def editor(self) -> Any:
+    def editor(self) -> CodeEditor:
         """Lazily initialize CodeEditor."""
         if self._editor is None:
             from anamnesis.lsp.editor import CodeEditor
@@ -67,7 +73,7 @@ class SymbolService:
         return self._editor
 
     @property
-    def intelligence(self) -> Any:
+    def intelligence(self) -> IntelligenceService | None:
         """Optional IntelligenceService for enriched symbol analysis.
 
         Returns None if no intelligence service was provided.

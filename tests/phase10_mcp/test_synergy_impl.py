@@ -3,6 +3,10 @@
 Exercises the five synergy _impl functions directly with a real
 tree-sitter backend against sample Python projects. No LSP server
 required — these features rely purely on extraction + analysis layers.
+
+Uses _analyze_code_quality_impl (canonical merged function) instead of
+the old per-detail-level wrappers (_analyze_file_complexity_impl,
+_get_complexity_hotspots_impl, _suggest_refactorings_impl).
 """
 
 import os
@@ -10,12 +14,10 @@ import os
 import pytest
 
 from anamnesis.mcp_server.tools.lsp import (
-    _analyze_file_complexity_impl,
+    _analyze_code_quality_impl,
     _check_conventions_impl,
-    _get_complexity_hotspots_impl,
     _investigate_symbol_impl,
     _match_sibling_style_impl,
-    _suggest_refactorings_impl,
 )
 from tests.phase10_mcp.conftest import _as_dict
 
@@ -46,11 +48,13 @@ def _activate_project(sample_python_project):
 
 
 class TestAnalyzeFileComplexity:
-    """Tests for _analyze_file_complexity_impl."""
+    """Tests for _analyze_code_quality_impl with detail_level='standard'."""
 
     def test_returns_complexity_metrics(self):
         """Result contains expected top-level keys and per-function breakdown."""
-        result = _as_dict(_analyze_file_complexity_impl("src/service.py"))
+        result = _as_dict(
+            _analyze_code_quality_impl("src/service.py", detail_level="standard")
+        )
 
         assert result["success"] is True
         assert result["file"] == "src/service.py"
@@ -72,7 +76,9 @@ class TestAnalyzeFileComplexity:
 
     def test_complex_function_detected(self):
         """complex_handler has higher complexity than simple_add."""
-        result = _as_dict(_analyze_file_complexity_impl("src/service.py"))
+        result = _as_dict(
+            _analyze_code_quality_impl("src/service.py", detail_level="standard")
+        )
 
         funcs_by_name = {f["name"]: f for f in result["functions"]}
         assert "complex_handler" in funcs_by_name
@@ -84,7 +90,9 @@ class TestAnalyzeFileComplexity:
 
     def test_nonexistent_file_returns_error(self):
         """Requesting a missing file returns a failure dict."""
-        result = _as_dict(_analyze_file_complexity_impl("src/does_not_exist.py"))
+        result = _as_dict(
+            _analyze_code_quality_impl("src/does_not_exist.py", detail_level="standard")
+        )
 
         assert result["success"] is False
         assert "error" in result
@@ -99,7 +107,9 @@ class TestAnalyzeFileComplexity:
         with open(empty_file, "w") as f:
             f.write("")
 
-        result = _as_dict(_analyze_file_complexity_impl("src/empty.py"))
+        result = _as_dict(
+            _analyze_code_quality_impl("src/empty.py", detail_level="standard")
+        )
 
         assert result["success"] is True
         assert result["function_count"] == 0
@@ -118,7 +128,9 @@ class TestAnalyzeFileComplexity:
             f.write("def calcul_donnees():\n    pass\n\n"
                     "def obtener_datos():\n    pass\n")
 
-        result = _as_dict(_analyze_file_complexity_impl("src/unicode_funcs.py"))
+        result = _as_dict(
+            _analyze_code_quality_impl("src/unicode_funcs.py", detail_level="standard")
+        )
 
         assert result["success"] is True
         assert result["function_count"] >= 2
@@ -130,12 +142,16 @@ class TestAnalyzeFileComplexity:
 
 
 class TestGetComplexityHotspots:
-    """Tests for _get_complexity_hotspots_impl."""
+    """Tests for _analyze_code_quality_impl with detail_level='quick'."""
 
     def test_returns_hotspots_moderate(self):
         """At 'moderate' level, complex_handler should appear."""
         result = _as_dict(
-            _get_complexity_hotspots_impl("src/service.py", min_level="moderate")
+            _analyze_code_quality_impl(
+                "src/service.py",
+                detail_level="quick",
+                min_complexity_level="moderate",
+            )
         )
 
         assert result["success"] is True
@@ -148,10 +164,18 @@ class TestGetComplexityHotspots:
     def test_high_level_filter(self):
         """At 'high' level, only highest-complexity functions are returned."""
         moderate = _as_dict(
-            _get_complexity_hotspots_impl("src/service.py", min_level="moderate")
+            _analyze_code_quality_impl(
+                "src/service.py",
+                detail_level="quick",
+                min_complexity_level="moderate",
+            )
         )
         high = _as_dict(
-            _get_complexity_hotspots_impl("src/service.py", min_level="high")
+            _analyze_code_quality_impl(
+                "src/service.py",
+                detail_level="quick",
+                min_complexity_level="high",
+            )
         )
 
         assert high["success"] is True
@@ -160,7 +184,11 @@ class TestGetComplexityHotspots:
     def test_low_complexity_file_empty(self):
         """utils.py has simple functions — no 'high' hotspots expected."""
         result = _as_dict(
-            _get_complexity_hotspots_impl("src/utils.py", min_level="high")
+            _analyze_code_quality_impl(
+                "src/utils.py",
+                detail_level="quick",
+                min_complexity_level="high",
+            )
         )
 
         assert result["success"] is True
@@ -176,14 +204,22 @@ class TestGetComplexityHotspots:
         """
         # "nonexistent" is not in the level map, so threshold defaults to 2 ("high")
         invalid_result = _as_dict(
-            _get_complexity_hotspots_impl("src/service.py", min_level="nonexistent")
+            _analyze_code_quality_impl(
+                "src/service.py",
+                detail_level="quick",
+                min_complexity_level="nonexistent",
+            )
         )
         high_result = _as_dict(
-            _get_complexity_hotspots_impl("src/service.py", min_level="high")
+            _analyze_code_quality_impl(
+                "src/service.py",
+                detail_level="quick",
+                min_complexity_level="high",
+            )
         )
 
         assert invalid_result["success"] is True
-        # Should behave identically to min_level="high"
+        # Should behave identically to min_complexity_level="high"
         assert invalid_result["hotspot_count"] == high_result["hotspot_count"]
 
 
@@ -193,17 +229,20 @@ class TestGetComplexityHotspots:
 
 
 class TestSuggestRefactorings:
-    """Tests for _suggest_refactorings_impl."""
+    """Tests for _analyze_code_quality_impl with detail_level='deep'."""
 
     def test_returns_suggestions(self):
         """Result has expected structure and non-empty suggestions list."""
-        result = _as_dict(_suggest_refactorings_impl("src/service.py"))
+        result = _as_dict(
+            _analyze_code_quality_impl("src/service.py", detail_level="deep")
+        )
 
         assert result["success"] is True
         assert "suggestions" in result
         assert isinstance(result["suggestions"], list)
-        assert "summary" in result
-        assert result["summary"]["functions_analyzed"] > 0
+        # deep merges complexity + refactoring — complexity keys present too
+        assert "function_count" in result
+        assert result["function_count"] > 0
 
         # Each suggestion has required keys
         for s in result["suggestions"]:
@@ -215,7 +254,9 @@ class TestSuggestRefactorings:
     def test_max_suggestions_respected(self):
         """Passing max_suggestions=1 limits output to at most 1 suggestion."""
         result = _as_dict(
-            _suggest_refactorings_impl("src/service.py", max_suggestions=1)
+            _analyze_code_quality_impl(
+                "src/service.py", detail_level="deep", max_suggestions=1,
+            )
         )
 
         assert result["success"] is True
@@ -223,8 +264,12 @@ class TestSuggestRefactorings:
 
     def test_simple_file_fewer_suggestions(self):
         """utils.py (simple functions) produces fewer suggestions than service.py."""
-        complex_result = _as_dict(_suggest_refactorings_impl("src/service.py"))
-        simple_result = _as_dict(_suggest_refactorings_impl("src/utils.py"))
+        complex_result = _as_dict(
+            _analyze_code_quality_impl("src/service.py", detail_level="deep")
+        )
+        simple_result = _as_dict(
+            _analyze_code_quality_impl("src/utils.py", detail_level="deep")
+        )
 
         assert complex_result["success"] is True
         assert simple_result["success"] is True
@@ -244,7 +289,9 @@ class TestSuggestRefactorings:
         with open(binary_file, "wb") as f:
             f.write(b"\x00\x01\x02\x03")
 
-        result = _as_dict(_suggest_refactorings_impl("src/binary_junk.py"))
+        result = _as_dict(
+            _analyze_code_quality_impl("src/binary_junk.py", detail_level="deep")
+        )
 
         assert result["success"] is True
         assert result["suggestions"] == []
@@ -256,7 +303,9 @@ class TestSuggestRefactorings:
         causes unexpected behavior in the truncation logic.
         """
         result = _as_dict(
-            _suggest_refactorings_impl("src/service.py", max_suggestions=0)
+            _analyze_code_quality_impl(
+                "src/service.py", detail_level="deep", max_suggestions=0,
+            )
         )
 
         assert result["success"] is True

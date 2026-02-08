@@ -107,7 +107,21 @@ data contamination.
 # Module-level Globals
 # =============================================================================
 
-_registry = ProjectRegistry()
+
+def _parse_allowed_roots() -> list[str] | None:
+    """Parse ``ANAMNESIS_ALLOWED_ROOTS`` env var (colon-separated paths).
+
+    Returns ``None`` when unset or empty (unrestricted mode).
+    """
+    import os
+
+    raw = os.environ.get("ANAMNESIS_ALLOWED_ROOTS", "")
+    if not raw.strip():
+        return None
+    return [p for p in raw.split(":") if p]
+
+
+_registry = ProjectRegistry(allowed_roots=_parse_allowed_roots())
 _server_start_time: float = time.time()
 _toon_encoder = ToonEncoder()
 

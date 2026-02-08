@@ -12,7 +12,6 @@ Supports SQLite (local) and Turso (distributed) backends.
 
 from .schema import (
     AIInsight,
-    ArchitecturalDecision,
     DeveloperPattern,
     EntryPoint,
     FeatureMap,
@@ -33,7 +32,6 @@ __all__ = [
     # Schema types
     "SemanticConcept",
     "DeveloperPattern",
-    "ArchitecturalDecision",
     "FileIntelligence",
     "SharedPattern",
     "AIInsight",

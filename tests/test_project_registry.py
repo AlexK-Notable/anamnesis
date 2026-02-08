@@ -616,3 +616,108 @@ class TestProjectPersistence:
         resolved_b = str(Path(project_b).resolve())
         assert resolved_a in data["projects"]
         assert resolved_b in data["projects"]
+
+
+# ---------------------------------------------------------------------------
+# Boundary enforcement tests
+# ---------------------------------------------------------------------------
+
+
+class TestProjectRegistryBoundary:
+    """Tests for allowed_roots boundary enforcement."""
+
+    def test_activate_within_allowed_root_succeeds(self, tmp_path):
+        root = tmp_path / "allowed"
+        root.mkdir()
+        project = root / "myproject"
+        project.mkdir()
+
+        reg = ProjectRegistry(
+            persist_path=None,
+            allowed_roots=[str(root)],
+        )
+        ctx = reg.activate(str(project))
+        assert ctx.path == str(project.resolve())
+
+    def test_activate_outside_allowed_root_raises(self, tmp_path):
+        allowed = tmp_path / "allowed"
+        allowed.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+
+        reg = ProjectRegistry(
+            persist_path=None,
+            allowed_roots=[str(allowed)],
+        )
+        with pytest.raises(ValueError, match="outside the allowed project roots"):
+            reg.activate(str(outside))
+
+    def test_activate_exact_root_succeeds(self, tmp_path):
+        root = tmp_path / "root_project"
+        root.mkdir()
+
+        reg = ProjectRegistry(
+            persist_path=None,
+            allowed_roots=[str(root)],
+        )
+        ctx = reg.activate(str(root))
+        assert ctx.path == str(root.resolve())
+
+    def test_activate_prefix_confusion_blocked(self, tmp_path):
+        """``/tmp/project`` should NOT allow ``/tmp/project-evil``."""
+        legit = tmp_path / "project"
+        legit.mkdir()
+        evil = tmp_path / "project-evil"
+        evil.mkdir()
+
+        reg = ProjectRegistry(
+            persist_path=None,
+            allowed_roots=[str(legit)],
+        )
+        # The exact root and its children are fine
+        ctx = reg.activate(str(legit))
+        assert ctx is not None
+
+        # But the prefix-confusable sibling is blocked
+        with pytest.raises(ValueError, match="outside the allowed project roots"):
+            reg.activate(str(evil))
+
+    def test_activate_symlink_escape_blocked(self, tmp_path):
+        """A symlink inside an allowed root that points outside must be blocked."""
+        allowed = tmp_path / "allowed"
+        allowed.mkdir()
+        outside = tmp_path / "outside"
+        outside.mkdir()
+
+        # Create a symlink inside allowed/ that points to outside/
+        escape_link = allowed / "escape"
+        escape_link.symlink_to(outside)
+
+        reg = ProjectRegistry(
+            persist_path=None,
+            allowed_roots=[str(allowed)],
+        )
+        with pytest.raises(ValueError, match="outside the allowed project roots"):
+            reg.activate(str(escape_link))
+
+    def test_allowed_roots_none_is_unrestricted(self, tmp_path):
+        project = tmp_path / "anywhere"
+        project.mkdir()
+
+        reg = ProjectRegistry(
+            persist_path=None,
+            allowed_roots=None,
+        )
+        ctx = reg.activate(str(project))
+        assert ctx.path == str(project.resolve())
+
+    def test_allowed_roots_empty_blocks_all(self, tmp_path):
+        project = tmp_path / "blocked"
+        project.mkdir()
+
+        reg = ProjectRegistry(
+            persist_path=None,
+            allowed_roots=[],
+        )
+        with pytest.raises(ValueError, match="outside the allowed project roots"):
+            reg.activate(str(project))

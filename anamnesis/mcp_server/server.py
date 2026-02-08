@@ -38,8 +38,10 @@ from anamnesis.mcp_server._shared import (  # noqa: F401
 )
 
 # Import all tool modules — this triggers @mcp.tool registration on the
-# shared `mcp` instance.  The _impl re-exports keep existing tests working
-# (they do `from anamnesis.mcp_server.server import _foo_impl`).
+# shared `mcp` instance.  The _impl re-exports below are backward-compat
+# shims — tests have been migrated to import from tools/<module>.py and
+# _shared.py directly.
+# TODO(cleanup): Remove these re-exports once all external consumers are migrated.
 from anamnesis.mcp_server.tools import (  # noqa: F401
     # intelligence
     _get_semantic_insights_impl,

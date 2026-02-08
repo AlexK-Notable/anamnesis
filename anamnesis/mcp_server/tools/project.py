@@ -46,18 +46,21 @@ def _list_projects_helper() -> dict:
 # =============================================================================
 
 
+# TODO(cleanup): Remove this backward-compat wrapper — tests migrated to canonical function
 @_with_error_handling("get_project_config")
 def _get_project_config_impl() -> dict:
     """Implementation for get_project_config tool (read-only)."""
     return _get_project_config_helper()
 
 
+# TODO(cleanup): Remove this backward-compat wrapper — tests migrated to canonical function
 @_with_error_handling("activate_project")
 def _activate_project_impl(path: str) -> dict:
     """Implementation for activate_project tool."""
     return _activate_project_helper(path)
 
 
+# TODO(cleanup): Remove this backward-compat wrapper — tests migrated to canonical function
 @_with_error_handling("list_projects")
 def _list_projects_impl() -> dict:
     """Implementation for list_projects tool."""

@@ -78,11 +78,13 @@ def _get_system_status_impl(
             mem_mb = mem_usage / 1024 if sys.platform != "darwin" else mem_usage / (1024 * 1024)
         except (ImportError, AttributeError):
             mem_mb = 0
+        from anamnesis.utils.model_registry import get_model_cache_stats
         result["metrics"] = {
             "memory_mb": round(mem_mb, 1),
             "python_objects": len(gc.get_objects()),
             "gc_collections": collected_total,
             "uptime_seconds": round(time.time() - _server_start_time, 1) if _server_start_time else 0,
+            "model_cache": get_model_cache_stats(),
         }
 
     # --- intelligence section (detailed breakdown) ---

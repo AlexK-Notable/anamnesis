@@ -16,6 +16,7 @@ from anamnesis.interfaces.search import SearchBackend, SearchQuery, SearchResult
 from anamnesis.storage.qdrant_store import QdrantVectorStore, QdrantConfig
 from anamnesis.intelligence.embedding_engine import EmbeddingEngine, EmbeddingConfig
 from anamnesis.patterns import ASTPatternMatcher
+from anamnesis.utils.language_registry import detect_language
 
 # Optional unified extraction support
 try:
@@ -349,19 +350,7 @@ class SemanticSearchBackend(SearchBackend):
         Returns:
             Language name.
         """
-        ext_map = {
-            ".py": "python",
-            ".pyi": "python",
-            ".js": "javascript",
-            ".mjs": "javascript",
-            ".jsx": "javascript",
-            ".ts": "typescript",
-            ".tsx": "typescript",
-            ".mts": "typescript",
-            ".go": "go",
-        }
-        ext = Path(file_path).suffix.lower()
-        return ext_map.get(ext, "unknown")
+        return detect_language(file_path)
 
     async def get_stats(self) -> dict:
         """Get backend statistics.

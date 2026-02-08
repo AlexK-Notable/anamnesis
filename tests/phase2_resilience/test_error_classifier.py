@@ -4,7 +4,6 @@ Phase 2 Tests: Error Classifier
 Tests for the error classifier module including:
 - Error categorization
 - Retry strategy determination
-- Circuit breaker triggering decisions
 - Fallback action recommendations
 - Pattern-based matching
 - AnamnesisError integration
@@ -25,7 +24,6 @@ from anamnesis.utils import (
     classify_error,
     get_default_classifier,
     is_error_retryable,
-    should_trip_breaker,
 )
 
 
@@ -36,7 +34,6 @@ class TestErrorCategory:
         """All expected categories exist."""
         assert ErrorCategory.TRANSIENT == "transient"
         assert ErrorCategory.PERMANENT == "permanent"
-        assert ErrorCategory.CIRCUIT_BREAKER == "circuit_breaker"
         assert ErrorCategory.CLIENT_ERROR == "client_error"
         assert ErrorCategory.SYSTEM_ERROR == "system_error"
         assert ErrorCategory.UNKNOWN == "unknown"
@@ -77,7 +74,6 @@ class TestErrorClassification:
             is_retryable=True,
             retry_strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
             max_retries=3,
-            should_trip_breaker=False,
             fallback_action=FallbackAction.USE_CACHE,
             user_notification_required=False,
             severity="warning",
@@ -88,7 +84,6 @@ class TestErrorClassification:
         assert classification.is_retryable is True
         assert classification.retry_strategy == RetryStrategy.EXPONENTIAL_BACKOFF
         assert classification.max_retries == 3
-        assert classification.should_trip_breaker is False
         assert classification.fallback_action == FallbackAction.USE_CACHE
         assert classification.user_notification_required is False
         assert classification.severity == "warning"
@@ -101,7 +96,6 @@ class TestErrorClassification:
             is_retryable=True,
             retry_strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
             max_retries=3,
-            should_trip_breaker=False,
             fallback_action=FallbackAction.USE_CACHE,
             user_notification_required=False,
             severity="warning",
@@ -127,7 +121,6 @@ class TestErrorPattern:
                 is_retryable=False,
                 retry_strategy=RetryStrategy.NO_RETRY,
                 max_retries=0,
-                should_trip_breaker=False,
                 fallback_action=FallbackAction.NOTIFY_USER,
                 user_notification_required=True,
                 severity="low",
@@ -148,7 +141,6 @@ class TestErrorPattern:
                 is_retryable=True,
                 retry_strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
                 max_retries=3,
-                should_trip_breaker=True,
                 fallback_action=FallbackAction.USE_CACHE,
                 user_notification_required=False,
                 severity="medium",
@@ -166,7 +158,6 @@ class TestErrorPattern:
                 is_retryable=False,
                 retry_strategy=RetryStrategy.NO_RETRY,
                 max_retries=0,
-                should_trip_breaker=False,
                 fallback_action=FallbackAction.NOTIFY_USER,
                 user_notification_required=True,
                 severity="low",
@@ -302,16 +293,6 @@ class TestErrorClassifierMethods:
         assert classifier.is_retryable(ConnectionError("test")) is True
         assert classifier.is_retryable(ValueError("test")) is False
 
-    def test_should_trip_breaker_method(self):
-        """should_trip_breaker method works correctly."""
-        classifier = ErrorClassifier()
-
-        # Connection errors should trip breaker
-        assert classifier.should_trip_breaker(ConnectionError("test")) is True
-
-        # Value errors (client errors) should not trip breaker
-        assert classifier.should_trip_breaker(ValueError("test")) is False
-
     def test_get_retry_strategy_method(self):
         """get_retry_strategy method works correctly."""
         classifier = ErrorClassifier()
@@ -343,7 +324,6 @@ class TestErrorClassifierCustomPatterns:
                 is_retryable=False,
                 retry_strategy=RetryStrategy.NO_RETRY,
                 max_retries=0,
-                should_trip_breaker=False,
                 fallback_action=FallbackAction.USE_DEFAULT,
                 user_notification_required=True,
                 severity="low",
@@ -369,7 +349,6 @@ class TestErrorClassifierCustomPatterns:
                 is_retryable=True,
                 retry_strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
                 max_retries=3,
-                should_trip_breaker=True,
                 fallback_action=FallbackAction.USE_CACHE,
                 user_notification_required=False,
                 severity="medium",
@@ -461,11 +440,6 @@ class TestGlobalConvenienceFunctions:
         """is_error_retryable function works."""
         assert is_error_retryable(ConnectionError("test")) is True
         assert is_error_retryable(ValueError("test")) is False
-
-    def test_should_trip_breaker_function(self):
-        """should_trip_breaker function works."""
-        assert should_trip_breaker(ConnectionError("test")) is True
-        assert should_trip_breaker(ValueError("test")) is False
 
 
 class TestDefaultClassifier:

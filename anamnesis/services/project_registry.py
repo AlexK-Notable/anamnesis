@@ -309,12 +309,18 @@ class ProjectRegistry:
     def __init__(
         self,
         persist_path: Optional[Union[str, Path]] = _DEFAULT_PERSIST_PATH,
+        allowed_roots: list[str] | None = None,
     ) -> None:
         self._projects: dict[str, ProjectContext] = {}
         self._active_path: Optional[str] = None
         self._lock = threading.Lock()
         self._persist_path: Optional[Path] = (
             Path(persist_path) if persist_path is not None else None
+        )
+        self._allowed_roots: list[str] | None = (
+            [str(Path(r).resolve()) for r in allowed_roots]
+            if allowed_roots is not None
+            else None
         )
         self._load()
 
@@ -408,6 +414,30 @@ class ProjectRegistry:
             logger.warning("Failed to save project registry to %s: %s", self._persist_path, exc)
 
     # -----------------------------------------------------------------
+    # Boundary enforcement
+    # -----------------------------------------------------------------
+
+    def _is_within_allowed_roots(self, resolved_path: str) -> bool:
+        """Check whether *resolved_path* falls within the configured allowed roots.
+
+        If ``self._allowed_roots`` is ``None`` (unset), all paths are allowed.
+        An empty list means **no** paths are allowed.
+
+        Uses ``os.path.realpath`` to resolve symlinks before comparison and
+        appends ``os.sep`` to prevent prefix-confusion attacks (e.g.
+        ``/tmp/project`` should not match ``/tmp/project-evil``).
+        """
+        if self._allowed_roots is None:
+            return True
+
+        real = os.path.realpath(resolved_path)
+        for root in self._allowed_roots:
+            real_root = os.path.realpath(root)
+            if real == real_root or real.startswith(real_root + os.sep):
+                return True
+        return False
+
+    # -----------------------------------------------------------------
     # Public API
     # -----------------------------------------------------------------
 
@@ -434,6 +464,9 @@ class ProjectRegistry:
             raise ValueError(f"Project path does not exist: {resolved}")
         if not resolved_path.is_dir():
             raise ValueError(f"Project path is not a directory: {resolved}")
+
+        if not self._is_within_allowed_roots(resolved):
+            raise ValueError("Project path is outside the allowed project roots")
 
         with self._lock:
             if resolved not in self._projects:

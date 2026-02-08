@@ -165,9 +165,11 @@ class EmbeddingEngine:
         return len(self._concepts)
 
     def _load_model(self) -> bool:
-        """Load the embedding model lazily.
+        """Load the embedding model lazily via shared registry.
 
-        Supports HuggingFace models, local paths, and custom architectures.
+        Uses the shared model registry to avoid duplicate loads across
+        MemoryIndex and EmbeddingEngine. Falls back to direct instantiation
+        for non-default HuggingFace options (trust_remote_code, etc.).
 
         Returns:
             True if model loaded successfully, False otherwise.
@@ -176,46 +178,30 @@ class EmbeddingEngine:
             return self._model is not None
 
         try:
-            from sentence_transformers import SentenceTransformer
-
             device = self._config.get_effective_device()
             logger.info(f"Loading embedding model: {self._config.model_name} on {device}")
 
-            # Build model kwargs for HuggingFace options
-            model_kwargs = {}
-            if self._config.trust_remote_code:
-                model_kwargs["trust_remote_code"] = True
-            if self._config.revision:
-                model_kwargs["revision"] = self._config.revision
-            if self._config.token:
-                model_kwargs["token"] = self._config.token
-            if self._config.use_fp16:
-                model_kwargs["torch_dtype"] = "float16"
+            # Check if we have non-default HuggingFace options that require
+            # direct instantiation (the shared registry only handles simple
+            # model_name + device combos).
+            has_custom_kwargs = (
+                self._config.trust_remote_code
+                or self._config.revision
+                or self._config.token
+                or self._config.use_fp16
+                or self._config.cache_dir
+            )
 
-            try:
-                self._model = SentenceTransformer(
-                    self._config.model_name,
-                    cache_folder=self._config.cache_dir,
-                    device=device,
-                    model_kwargs=model_kwargs if model_kwargs else None,
-                )
-            except Exception as e:
-                # Fallback to CPU if device fails and fallback enabled
-                if self._config.fallback_to_cpu and device != "cpu":
-                    logger.warning(f"Failed to load on {device}, falling back to CPU: {e}")
-                    self._model = SentenceTransformer(
-                        self._config.model_name,
-                        cache_folder=self._config.cache_dir,
-                        device="cpu",
-                        model_kwargs=model_kwargs if model_kwargs else None,
-                    )
-                else:
-                    raise
+            if has_custom_kwargs:
+                self._model = self._load_model_direct(device)
+            else:
+                self._model = self._load_model_shared(device)
 
+            # max_seq_length is set on the shared instance; this is safe
+            # because all callers currently use the same default (512).
             self._model.max_seq_length = self._config.max_sequence_length
             self._model_loaded = True
 
-            # Log model info
             embedding_dim = self._model.get_sentence_embedding_dimension()
             logger.info(
                 f"Embedding model loaded: dim={embedding_dim}, "
@@ -234,6 +220,58 @@ class EmbeddingEngine:
             logger.warning(self._model_error)
             self._model_loaded = True
             return False
+
+    def _load_model_shared(self, device: str) -> "SentenceTransformer":
+        """Load via the shared model registry (default path)."""
+        from anamnesis.utils.model_registry import get_shared_sentence_transformer
+
+        try:
+            return get_shared_sentence_transformer(
+                model_name=self._config.model_name, device=device,
+            )
+        except Exception as e:
+            if self._config.fallback_to_cpu and device != "cpu":
+                logger.warning(
+                    f"Failed to load on {device}, falling back to CPU: {e}"
+                )
+                return get_shared_sentence_transformer(
+                    model_name=self._config.model_name, device="cpu",
+                )
+            raise
+
+    def _load_model_direct(self, device: str) -> "SentenceTransformer":
+        """Load directly when non-default HuggingFace options are needed."""
+        from sentence_transformers import SentenceTransformer
+
+        model_kwargs: dict = {}
+        if self._config.trust_remote_code:
+            model_kwargs["trust_remote_code"] = True
+        if self._config.revision:
+            model_kwargs["revision"] = self._config.revision
+        if self._config.token:
+            model_kwargs["token"] = self._config.token
+        if self._config.use_fp16:
+            model_kwargs["torch_dtype"] = "float16"
+
+        try:
+            return SentenceTransformer(
+                self._config.model_name,
+                cache_folder=self._config.cache_dir,
+                device=device,
+                model_kwargs=model_kwargs if model_kwargs else None,
+            )
+        except Exception as e:
+            if self._config.fallback_to_cpu and device != "cpu":
+                logger.warning(
+                    f"Failed to load on {device}, falling back to CPU: {e}"
+                )
+                return SentenceTransformer(
+                    self._config.model_name,
+                    cache_folder=self._config.cache_dir,
+                    device="cpu",
+                    model_kwargs=model_kwargs if model_kwargs else None,
+                )
+            raise
 
     def get_embedding_dimension(self) -> int:
         """Get the embedding dimension for the loaded model.

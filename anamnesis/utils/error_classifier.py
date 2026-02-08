@@ -3,11 +3,10 @@ Error classification system for intelligent error handling.
 
 Provides error categorization to determine:
 - Retry eligibility (transient vs permanent errors)
-- Circuit breaker behavior
 - Fallback strategies
 - User notification requirements
 
-Integrates with circuit breaker and retry mechanisms for resilient operations.
+Integrates with retry mechanisms for resilient operations.
 """
 
 from __future__ import annotations
@@ -34,9 +33,6 @@ class ErrorCategory(str, Enum):
 
     PERMANENT = "permanent"
     """Errors that won't resolve with retry (invalid input, missing files)."""
-
-    CIRCUIT_BREAKER = "circuit_breaker"
-    """Errors that should trip the circuit breaker (service down, rate limits)."""
 
     CLIENT_ERROR = "client_error"
     """Errors caused by client/user input (validation, invalid params)."""
@@ -105,9 +101,6 @@ class ErrorClassification:
     max_retries: int
     """Maximum recommended retry attempts."""
 
-    should_trip_breaker: bool
-    """Whether this error should count toward circuit breaker."""
-
     fallback_action: FallbackAction
     """Recommended fallback action."""
 
@@ -127,7 +120,6 @@ class ErrorClassification:
             "is_retryable": self.is_retryable,
             "retry_strategy": self.retry_strategy.value,
             "max_retries": self.max_retries,
-            "should_trip_breaker": self.should_trip_breaker,
             "fallback_action": self.fallback_action.value,
             "user_notification_required": self.user_notification_required,
             "severity": self.severity,
@@ -207,7 +199,6 @@ class ErrorClassifier:
                     is_retryable=True,
                     retry_strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
                     max_retries=5,
-                    should_trip_breaker=True,
                     fallback_action=FallbackAction.USE_CACHE,
                     user_notification_required=False,
                     severity=ErrorSeverity.MEDIUM,
@@ -227,11 +218,10 @@ class ErrorClassifier:
                 ],
                 error_codes=[429],
                 classification=ErrorClassification(
-                    category=ErrorCategory.CIRCUIT_BREAKER,
+                    category=ErrorCategory.TRANSIENT,
                     is_retryable=True,
                     retry_strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
                     max_retries=3,
-                    should_trip_breaker=True,
                     fallback_action=FallbackAction.QUEUE_FOR_LATER,
                     user_notification_required=True,
                     severity=ErrorSeverity.MEDIUM,
@@ -239,7 +229,7 @@ class ErrorClassifier:
             )
         )
 
-        # Service unavailable - trip circuit breaker
+        # Service unavailable - retryable with backoff
         self._patterns.append(
             ErrorPattern(
                 message_patterns=[
@@ -252,11 +242,10 @@ class ErrorClassifier:
                 ],
                 error_codes=[502, 503, 504],
                 classification=ErrorClassification(
-                    category=ErrorCategory.CIRCUIT_BREAKER,
+                    category=ErrorCategory.TRANSIENT,
                     is_retryable=True,
                     retry_strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
                     max_retries=3,
-                    should_trip_breaker=True,
                     fallback_action=FallbackAction.DEGRADE_GRACEFULLY,
                     user_notification_required=True,
                     severity=ErrorSeverity.HIGH,
@@ -282,7 +271,6 @@ class ErrorClassifier:
                     is_retryable=False,
                     retry_strategy=RetryStrategy.NO_RETRY,
                     max_retries=0,
-                    should_trip_breaker=False,
                     fallback_action=FallbackAction.NOTIFY_USER,
                     user_notification_required=True,
                     severity=ErrorSeverity.MEDIUM,
@@ -305,7 +293,6 @@ class ErrorClassifier:
                     is_retryable=True,
                     retry_strategy=RetryStrategy.LINEAR_BACKOFF,
                     max_retries=3,
-                    should_trip_breaker=False,
                     fallback_action=FallbackAction.NOTIFY_USER,
                     user_notification_required=True,
                     severity=ErrorSeverity.MEDIUM,
@@ -329,7 +316,6 @@ class ErrorClassifier:
                     is_retryable=True,
                     retry_strategy=RetryStrategy.DELAYED,
                     max_retries=2,
-                    should_trip_breaker=False,
                     fallback_action=FallbackAction.FAIL_FAST,
                     user_notification_required=True,
                     severity=ErrorSeverity.HIGH,
@@ -354,7 +340,6 @@ class ErrorClassifier:
                     is_retryable=False,
                     retry_strategy=RetryStrategy.NO_RETRY,
                     max_retries=0,
-                    should_trip_breaker=False,
                     fallback_action=FallbackAction.NOTIFY_USER,
                     user_notification_required=True,
                     severity=ErrorSeverity.LOW,
@@ -379,7 +364,6 @@ class ErrorClassifier:
                     is_retryable=False,
                     retry_strategy=RetryStrategy.NO_RETRY,
                     max_retries=0,
-                    should_trip_breaker=False,
                     fallback_action=FallbackAction.NOTIFY_USER,
                     user_notification_required=True,
                     severity=ErrorSeverity.HIGH,
@@ -401,7 +385,6 @@ class ErrorClassifier:
                     is_retryable=False,
                     retry_strategy=RetryStrategy.NO_RETRY,
                     max_retries=0,
-                    should_trip_breaker=True,
                     fallback_action=FallbackAction.FAIL_FAST,
                     user_notification_required=True,
                     severity=ErrorSeverity.CRITICAL,
@@ -473,7 +456,6 @@ class ErrorClassifier:
                         is_retryable=pattern.classification.is_retryable,
                         retry_strategy=pattern.classification.retry_strategy,
                         max_retries=pattern.classification.max_retries,
-                        should_trip_breaker=pattern.classification.should_trip_breaker,
                         fallback_action=pattern.classification.fallback_action,
                         user_notification_required=pattern.classification.user_notification_required,
                         severity=pattern.classification.severity,
@@ -491,7 +473,6 @@ class ErrorClassifier:
             is_retryable=False,
             retry_strategy=RetryStrategy.NO_RETRY,
             max_retries=0,
-            should_trip_breaker=False,
             fallback_action=FallbackAction.NOTIFY_USER,
             user_notification_required=True,
             severity=ErrorSeverity.MEDIUM,
@@ -551,7 +532,6 @@ class ErrorClassifier:
                 is_retryable=True,
                 retry_strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
                 max_retries=5,
-                should_trip_breaker=True,
                 fallback_action=FallbackAction.USE_CACHE,
                 user_notification_required=False,
                 severity=error.severity,
@@ -561,26 +541,11 @@ class ErrorClassifier:
         # Rate limited
         if code == ErrorCode.RATE_LIMIT_EXCEEDED:
             return ErrorClassification(
-                category=ErrorCategory.CIRCUIT_BREAKER,
+                category=ErrorCategory.TRANSIENT,
                 is_retryable=True,
                 retry_strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
                 max_retries=3,
-                should_trip_breaker=True,
                 fallback_action=FallbackAction.QUEUE_FOR_LATER,
-                user_notification_required=True,
-                severity=error.severity,
-                details={"anamnesis_code": code.value, "context": context},
-            )
-
-        # Circuit breaker already open
-        if code == ErrorCode.CIRCUIT_BREAKER_OPEN:
-            return ErrorClassification(
-                category=ErrorCategory.CIRCUIT_BREAKER,
-                is_retryable=False,
-                retry_strategy=RetryStrategy.NO_RETRY,
-                max_retries=0,
-                should_trip_breaker=False,  # Already open
-                fallback_action=FallbackAction.DEGRADE_GRACEFULLY,
                 user_notification_required=True,
                 severity=error.severity,
                 details={"anamnesis_code": code.value, "context": context},
@@ -597,7 +562,6 @@ class ErrorClassifier:
                 is_retryable=False,
                 retry_strategy=RetryStrategy.NO_RETRY,
                 max_retries=0,
-                should_trip_breaker=False,
                 fallback_action=FallbackAction.NOTIFY_USER,
                 user_notification_required=True,
                 severity=error.severity,
@@ -611,7 +575,6 @@ class ErrorClassifier:
                 is_retryable=True,
                 retry_strategy=RetryStrategy.LINEAR_BACKOFF,
                 max_retries=3,
-                should_trip_breaker=False,
                 fallback_action=FallbackAction.NOTIFY_USER,
                 user_notification_required=True,
                 severity=error.severity,
@@ -631,7 +594,6 @@ class ErrorClassifier:
                 is_retryable=False,
                 retry_strategy=RetryStrategy.NO_RETRY,
                 max_retries=0,
-                should_trip_breaker=False,
                 fallback_action=FallbackAction.NOTIFY_USER,
                 user_notification_required=True,
                 severity=error.severity,
@@ -648,7 +610,6 @@ class ErrorClassifier:
                 is_retryable=False,
                 retry_strategy=RetryStrategy.NO_RETRY,
                 max_retries=0,
-                should_trip_breaker=False,
                 fallback_action=FallbackAction.FAIL_FAST,
                 user_notification_required=True,
                 severity=ErrorSeverity.CRITICAL,
@@ -666,7 +627,6 @@ class ErrorClassifier:
                 is_retryable=True,
                 retry_strategy=RetryStrategy.LINEAR_BACKOFF,
                 max_retries=2,
-                should_trip_breaker=True,
                 fallback_action=FallbackAction.FAIL_FAST,
                 user_notification_required=True,
                 severity=error.severity,
@@ -687,7 +647,6 @@ class ErrorClassifier:
                 is_retryable=False,
                 retry_strategy=RetryStrategy.NO_RETRY,
                 max_retries=0,
-                should_trip_breaker=False,
                 fallback_action=FallbackAction.DEGRADE_GRACEFULLY,
                 user_notification_required=False,
                 severity=error.severity,
@@ -700,7 +659,6 @@ class ErrorClassifier:
             is_retryable=False,
             retry_strategy=RetryStrategy.NO_RETRY,
             max_retries=0,
-            should_trip_breaker=False,
             fallback_action=FallbackAction.NOTIFY_USER,
             user_notification_required=True,
             severity=error.severity,
@@ -717,17 +675,6 @@ class ErrorClassifier:
             True if the error can be retried.
         """
         return self.classify(error).is_retryable
-
-    def should_trip_breaker(self, error: Exception) -> bool:
-        """Quick check if error should trip circuit breaker.
-
-        Args:
-            error: The exception to check.
-
-        Returns:
-            True if the error should count toward circuit breaker.
-        """
-        return self.classify(error).should_trip_breaker
 
     def get_retry_strategy(self, error: Exception) -> RetryStrategy:
         """Get recommended retry strategy for an error.
@@ -780,13 +727,3 @@ def is_retryable(error: Exception) -> bool:
     return get_default_classifier().is_retryable(error)
 
 
-def should_trip_breaker(error: Exception) -> bool:
-    """Convenience function to check if error should trip circuit breaker.
-
-    Args:
-        error: The exception to check.
-
-    Returns:
-        True if the error should count toward circuit breaker.
-    """
-    return get_default_classifier().should_trip_breaker(error)

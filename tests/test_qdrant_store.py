@@ -19,7 +19,7 @@ Covers:
 
 from __future__ import annotations
 
-import hashlib
+import uuid
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -154,10 +154,10 @@ class TestGenerateId:
         id2 = store._generate_id("src/auth.py", "AuthService", "class")
         assert id1 == id2
 
-    def test_matches_sha256(self, config):
+    def test_matches_uuid5(self, config):
         store = QdrantVectorStore(config)
         result = store._generate_id("a.py", "Foo", "function")
-        expected = hashlib.sha256("a.py:Foo:function".encode()).hexdigest()
+        expected = str(uuid.uuid5(uuid.NAMESPACE_DNS, "a.py:Foo:function"))
         assert result == expected
 
     def test_different_inputs_produce_different_ids(self, config):
@@ -349,7 +349,7 @@ class TestUpsert:
                 metadata={"language": "python"},
             )
 
-        expected_id = hashlib.sha256("src/auth.py:AuthService:class".encode()).hexdigest()
+        expected_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, "src/auth.py:AuthService:class"))
         assert point_id == expected_id
 
     async def test_upsert_constructs_correct_payload(self, store_connected, mock_qdrant_client):
@@ -413,8 +413,8 @@ class TestUpsertBatch:
             ids = await store_connected.upsert_batch(points)
 
         assert len(ids) == 2
-        assert ids[0] == hashlib.sha256("a.py:Foo:class".encode()).hexdigest()
-        assert ids[1] == hashlib.sha256("b.py:bar:function".encode()).hexdigest()
+        assert ids[0] == str(uuid.uuid5(uuid.NAMESPACE_DNS, "a.py:Foo:class"))
+        assert ids[1] == str(uuid.uuid5(uuid.NAMESPACE_DNS, "b.py:bar:function"))
         # One call to client.upsert with all points batched
         mock_qdrant_client.upsert.assert_called_once()
 
@@ -451,10 +451,12 @@ class TestSearch:
 
     async def test_search_transforms_results(self, store_connected, mock_qdrant_client):
         """search() converts ScoredPoints into {id, score, payload} dicts."""
-        mock_qdrant_client.search.return_value = [
-            _make_scored_point("id1", 0.95, {"name": "Foo"}),
-            _make_scored_point("id2", 0.80, {"name": "Bar"}),
-        ]
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(
+            points=[
+                _make_scored_point("id1", 0.95, {"name": "Foo"}),
+                _make_scored_point("id2", 0.80, {"name": "Bar"}),
+            ]
+        )
 
         mock_models = MagicMock()
         with patch.dict("sys.modules", {"qdrant_client": MagicMock(models=mock_models)}):
@@ -466,7 +468,7 @@ class TestSearch:
 
     async def test_search_empty_results(self, store_connected, mock_qdrant_client):
         """search() returns empty list when Qdrant returns no results."""
-        mock_qdrant_client.search.return_value = []
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
 
         mock_models = MagicMock()
         with patch.dict("sys.modules", {"qdrant_client": MagicMock(models=mock_models)}):
@@ -476,7 +478,7 @@ class TestSearch:
 
     async def test_search_passes_parameters(self, store_connected, mock_qdrant_client):
         """search() forwards limit, score_threshold, and collection_name."""
-        mock_qdrant_client.search.return_value = []
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
         mock_models = MagicMock()
 
         with patch.dict("sys.modules", {"qdrant_client": MagicMock(models=mock_models)}):
@@ -486,16 +488,16 @@ class TestSearch:
                 score_threshold=0.7,
             )
 
-        call_kwargs = mock_qdrant_client.search.call_args.kwargs
+        call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
         assert call_kwargs["collection_name"] == "test_collection"
-        assert call_kwargs["query_vector"] == [0.5]
+        assert call_kwargs["query"] == [0.5]
         assert call_kwargs["limit"] == 20
         assert call_kwargs["score_threshold"] == 0.7
         assert call_kwargs["query_filter"] is None
 
     async def test_search_builds_filter_from_conditions(self, store_connected, mock_qdrant_client):
         """search() constructs a Qdrant Filter from filter_conditions dict."""
-        mock_qdrant_client.search.return_value = []
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
         mock_models = MagicMock()
 
         with patch.dict("sys.modules", {"qdrant_client": MagicMock(models=mock_models)}):
@@ -511,7 +513,7 @@ class TestSearch:
 
     async def test_search_skips_none_values_in_filter(self, store_connected, mock_qdrant_client):
         """None values in filter_conditions are excluded from the Qdrant filter."""
-        mock_qdrant_client.search.return_value = []
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
         mock_models = MagicMock()
 
         with patch.dict("sys.modules", {"qdrant_client": MagicMock(models=mock_models)}):
@@ -527,7 +529,7 @@ class TestSearch:
 
     async def test_search_no_filter_when_all_values_none(self, store_connected, mock_qdrant_client):
         """When all filter values are None, no filter is passed to Qdrant."""
-        mock_qdrant_client.search.return_value = []
+        mock_qdrant_client.query_points.return_value = SimpleNamespace(points=[])
         mock_models = MagicMock()
 
         with patch.dict("sys.modules", {"qdrant_client": MagicMock(models=mock_models)}):
@@ -536,7 +538,7 @@ class TestSearch:
                 filter_conditions={"language": None},
             )
 
-        call_kwargs = mock_qdrant_client.search.call_args.kwargs
+        call_kwargs = mock_qdrant_client.query_points.call_args.kwargs
         assert call_kwargs["query_filter"] is None
 
     async def test_search_raises_when_not_connected(self, config):

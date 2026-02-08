@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
@@ -197,7 +198,10 @@ class QdrantVectorStore:
             logger.info(f"Created collection with indexes: {self._config.collection_name}")
 
     def _generate_id(self, file_path: str, name: str, concept_type: str) -> str:
-        """Generate deterministic ID for deduplication.
+        """Generate deterministic UUID for deduplication.
+
+        Uses UUID-5 (SHA-1, deterministic) so the same inputs always produce
+        the same ID.  Qdrant requires valid UUID strings as point IDs.
 
         Args:
             file_path: Source file path.
@@ -205,10 +209,10 @@ class QdrantVectorStore:
             concept_type: Type of concept.
 
         Returns:
-            SHA256-based unique ID.
+            Deterministic UUID string.
         """
         content = f"{file_path}:{name}:{concept_type}"
-        return hashlib.sha256(content.encode()).hexdigest()
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, content))
 
     async def upsert(
         self,
@@ -310,7 +314,7 @@ class QdrantVectorStore:
         self,
         query_vector: list[float],
         limit: int = 10,
-        score_threshold: float = 0.5,
+        score_threshold: Optional[float] = 0.5,
         filter_conditions: Optional[dict] = None,
     ) -> list[dict]:
         """Search for similar vectors.
@@ -344,10 +348,10 @@ class QdrantVectorStore:
             if must_conditions:
                 qdrant_filter = models.Filter(must=must_conditions)
 
-        results = await asyncio.to_thread(
-            self._client.search,
+        response = await asyncio.to_thread(
+            self._client.query_points,
             collection_name=self._config.collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=limit,
             score_threshold=score_threshold,
             query_filter=qdrant_filter,
@@ -359,7 +363,7 @@ class QdrantVectorStore:
                 "score": r.score,
                 "payload": r.payload,
             }
-            for r in results
+            for r in response.points
         ]
 
     async def delete_by_file(self, file_path: str) -> bool:
@@ -423,8 +427,8 @@ class QdrantVectorStore:
                 self._client.get_collection, self._config.collection_name
             )
             return QdrantStats(
-                vectors_count=info.vectors_count or 0,
-                indexed_vectors_count=info.indexed_vectors_count or 0,
+                vectors_count=getattr(info, "vectors_count", None) or 0,
+                indexed_vectors_count=getattr(info, "indexed_vectors_count", None) or 0,
                 points_count=info.points_count or 0,
                 status=info.status.value if info.status else "unknown",
                 collection_name=self._config.collection_name,

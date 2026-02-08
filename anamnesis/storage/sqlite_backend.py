@@ -19,7 +19,6 @@ import aiosqlite
 
 from .schema import (
     AIInsight,
-    ArchitecturalDecision,
     DeveloperPattern,
     EntryPoint,
     FeatureMap,
@@ -101,6 +100,7 @@ class SQLiteBackend:
         self.db_path = str(db_path)
         self._conn: aiosqlite.Connection | None = None
         self._migrator = migrator or DatabaseMigrator()
+        self._in_batch: bool = False
 
     @property
     def is_connected(self) -> bool:
@@ -147,6 +147,33 @@ class SQLiteBackend:
         if self._conn is None:
             raise RuntimeError("Database not connected. Call connect() first.")
 
+    async def _maybe_commit(self) -> None:
+        """Commit unless inside a batch context.
+
+        When ``_in_batch`` is True, commits are deferred until
+        ``end_batch()`` is called.
+        """
+        if not self._in_batch and self._conn is not None:
+            await self._conn.commit()
+
+    async def begin_batch(self) -> None:
+        """Begin a batch context -- defers commits until ``end_batch()``."""
+        self._in_batch = True
+
+    async def end_batch(self, *, commit: bool = True) -> None:
+        """End the batch context.
+
+        Args:
+            commit: If True (default), commit the transaction.
+                    Pass False to rollback instead.
+        """
+        self._in_batch = False
+        if self._conn is not None:
+            if commit:
+                await self._conn.commit()
+            else:
+                await self._conn.rollback()
+
     async def get_migration_status(self) -> MigrationStatus:
         """Get the current migration status."""
         self._ensure_connected()
@@ -184,7 +211,7 @@ class SQLiteBackend:
                 data["line_end"],
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_concept(self, concept_id: str) -> SemanticConcept | None:
         """Get a semantic concept by ID."""
@@ -246,7 +273,7 @@ class SQLiteBackend:
             "DELETE FROM semantic_concepts WHERE id = ?",
             (concept_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     async def delete_concepts_by_file(self, file_path: str) -> int:
@@ -256,7 +283,7 @@ class SQLiteBackend:
             "DELETE FROM semantic_concepts WHERE file_path = ?",
             (file_path,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount
 
     def _row_to_concept(self, row: aiosqlite.Row) -> SemanticConcept:
@@ -305,7 +332,7 @@ class SQLiteBackend:
                 data["updated_at"],
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_pattern(self, pattern_id: str) -> DeveloperPattern | None:
         """Get a developer pattern by ID."""
@@ -355,7 +382,7 @@ class SQLiteBackend:
             "DELETE FROM developer_patterns WHERE id = ?",
             (pattern_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     def _row_to_pattern(self, row: aiosqlite.Row) -> DeveloperPattern:
@@ -369,84 +396,6 @@ class SQLiteBackend:
             "examples": _safe_json_loads(row["examples"], default=[], field="examples", row_id=row_id),
             "file_paths": _safe_json_loads(row["file_paths"], default=[], field="file_paths", row_id=row_id),
             "confidence": row["confidence"],
-            "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        })
-
-    # ========== Architectural Decisions ==========
-
-    async def save_decision(self, decision: ArchitecturalDecision) -> None:
-        """Save or update an architectural decision."""
-        self._ensure_connected()
-        data = decision.to_dict()
-
-        await self._conn.execute(
-            """
-            INSERT OR REPLACE INTO architectural_decisions
-            (id, title, context, decision, consequences, status,
-             related_files, tags, metadata, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                data["id"],
-                data["title"],
-                data["context"],
-                data["decision"],
-                json.dumps(data["consequences"]),
-                data["status"],
-                json.dumps(data["related_files"]),
-                json.dumps(data["tags"]),
-                json.dumps(data["metadata"]),
-                data["created_at"],
-                data["updated_at"],
-            ),
-        )
-        await self._conn.commit()
-
-    async def get_decision(self, decision_id: str) -> ArchitecturalDecision | None:
-        """Get an architectural decision by ID."""
-        self._ensure_connected()
-        cursor = await self._conn.execute(
-            "SELECT * FROM architectural_decisions WHERE id = ?",
-            (decision_id,),
-        )
-        row = await cursor.fetchone()
-        if row is None:
-            return None
-        return self._row_to_arch_decision(row)
-
-    async def get_all_decisions(self) -> list[ArchitecturalDecision]:
-        """Get all architectural decisions."""
-        self._ensure_connected()
-        cursor = await self._conn.execute(
-            "SELECT * FROM architectural_decisions ORDER BY created_at DESC"
-        )
-        rows = await cursor.fetchall()
-        return [self._row_to_arch_decision(row) for row in rows]
-
-    async def delete_decision(self, decision_id: str) -> bool:
-        """Delete an architectural decision."""
-        self._ensure_connected()
-        cursor = await self._conn.execute(
-            "DELETE FROM architectural_decisions WHERE id = ?",
-            (decision_id,),
-        )
-        await self._conn.commit()
-        return cursor.rowcount > 0
-
-    def _row_to_arch_decision(self, row: aiosqlite.Row) -> ArchitecturalDecision:
-        """Convert a database row to an ArchitecturalDecision."""
-        row_id = row.get("id", "unknown") if hasattr(row, "get") else row["id"]
-        return ArchitecturalDecision.from_dict({
-            "id": row["id"],
-            "title": row["title"],
-            "context": row["context"],
-            "decision": row["decision"],
-            "consequences": _safe_json_loads(row["consequences"], default=[], field="consequences", row_id=row_id),
-            "status": row["status"],
-            "related_files": _safe_json_loads(row["related_files"], default=[], field="related_files", row_id=row_id),
-            "tags": _safe_json_loads(row["tags"], default=[], field="tags", row_id=row_id),
             "metadata": _safe_json_loads(row["metadata"], default={}, field="metadata", row_id=row_id),
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
@@ -484,7 +433,7 @@ class SQLiteBackend:
                 data["content_hash"],
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_file_intelligence(self, file_path: str) -> FileIntelligence | None:
         """Get file intelligence by path."""
@@ -527,7 +476,7 @@ class SQLiteBackend:
             "DELETE FROM file_intelligence WHERE file_path = ?",
             (file_path,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     def _row_to_file_intel(self, row: aiosqlite.Row) -> FileIntelligence:
@@ -578,7 +527,7 @@ class SQLiteBackend:
                 data["updated_at"],
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_shared_pattern(self, pattern_id: str) -> SharedPattern | None:
         """Get a shared pattern by ID."""
@@ -609,7 +558,7 @@ class SQLiteBackend:
             "DELETE FROM shared_patterns WHERE id = ?",
             (pattern_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     def _row_to_shared_pattern(self, row: aiosqlite.Row) -> SharedPattern:
@@ -660,7 +609,7 @@ class SQLiteBackend:
                 1 if data["resolved"] else 0,
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_insight(self, insight_id: str) -> AIInsight | None:
         """Get an AI insight by ID."""
@@ -700,7 +649,7 @@ class SQLiteBackend:
             "UPDATE ai_insights SET acknowledged = 1 WHERE id = ?",
             (insight_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     async def resolve_insight(self, insight_id: str) -> bool:
@@ -710,7 +659,7 @@ class SQLiteBackend:
             "UPDATE ai_insights SET resolved = 1 WHERE id = ?",
             (insight_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     async def delete_insight(self, insight_id: str) -> bool:
@@ -720,7 +669,7 @@ class SQLiteBackend:
             "DELETE FROM ai_insights WHERE id = ?",
             (insight_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     def _row_to_insight(self, row: aiosqlite.Row) -> AIInsight:
@@ -774,7 +723,7 @@ class SQLiteBackend:
                 data["last_analyzed"],
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_project_metadata(self, project_id: str) -> ProjectMetadata | None:
         """Get project metadata by ID."""
@@ -807,7 +756,7 @@ class SQLiteBackend:
             "DELETE FROM project_metadata WHERE id = ?",
             (project_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     def _row_to_project_metadata(self, row: aiosqlite.Row) -> ProjectMetadata:
@@ -857,7 +806,7 @@ class SQLiteBackend:
                 data["updated_at"],
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_feature_map(self, feature_id: str) -> FeatureMap | None:
         """Get a feature map by ID."""
@@ -902,7 +851,7 @@ class SQLiteBackend:
             "DELETE FROM feature_maps WHERE id = ?",
             (feature_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     def _row_to_feature_map(self, row: aiosqlite.Row) -> FeatureMap:
@@ -945,7 +894,7 @@ class SQLiteBackend:
                 data["created_at"],
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_entry_point(self, entry_id: str) -> EntryPoint | None:
         """Get an entry point by ID."""
@@ -983,7 +932,7 @@ class SQLiteBackend:
             "DELETE FROM entry_points WHERE id = ?",
             (entry_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     def _row_to_entry_point(self, row: aiosqlite.Row) -> EntryPoint:
@@ -1025,7 +974,7 @@ class SQLiteBackend:
                 data["created_at"],
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_key_directory(self, dir_id: str) -> KeyDirectory | None:
         """Get a key directory by ID."""
@@ -1065,7 +1014,7 @@ class SQLiteBackend:
             "DELETE FROM key_directories WHERE id = ?",
             (dir_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     def _row_to_key_directory(self, row: aiosqlite.Row) -> KeyDirectory:
@@ -1110,7 +1059,7 @@ class SQLiteBackend:
                 data["ended_at"],
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_work_session(self, session_id: str) -> WorkSession | None:
         """Get a work session by ID."""
@@ -1150,7 +1099,7 @@ class SQLiteBackend:
             "UPDATE work_sessions SET ended_at = ? WHERE id = ?",
             (utcnow().isoformat(), session_id),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     async def delete_work_session(self, session_id: str) -> bool:
@@ -1160,7 +1109,7 @@ class SQLiteBackend:
             "DELETE FROM work_sessions WHERE id = ?",
             (session_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     def _row_to_work_session(self, row: aiosqlite.Row) -> WorkSession:
@@ -1205,7 +1154,7 @@ class SQLiteBackend:
                 data["created_at"],
             ),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
 
     async def get_project_decision(self, decision_id: str) -> ProjectDecision | None:
         """Get a project decision by ID."""
@@ -1272,7 +1221,7 @@ class SQLiteBackend:
             "DELETE FROM project_decisions WHERE id = ?",
             (decision_id,),
         )
-        await self._conn.commit()
+        await self._maybe_commit()
         return cursor.rowcount > 0
 
     def _row_to_project_decision(self, row: aiosqlite.Row) -> ProjectDecision:

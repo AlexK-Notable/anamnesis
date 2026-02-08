@@ -15,6 +15,7 @@ from loguru import logger
 from anamnesis.constants import DEFAULT_IGNORE_DIRS, DEFAULT_SOURCE_PATTERNS
 from anamnesis.interfaces.search import SearchBackend, SearchQuery, SearchResult, SearchType
 from anamnesis.patterns import RegexPatternMatcher, ASTPatternMatcher, PatternMatch
+from anamnesis.utils.language_registry import detect_language, get_extensions_for_language
 from anamnesis.utils.security import is_sensitive_file
 
 
@@ -158,10 +159,9 @@ class PatternSearchBackend(SearchBackend):
         Returns:
             List of file paths.
         """
-        from anamnesis.search.text_backend import LANGUAGE_EXTENSIONS
-
         if language:
-            extensions = LANGUAGE_EXTENSIONS.get(language.lower(), [f".{language}"])
+            exts = get_extensions_for_language(language)
+            extensions = [f".{e}" for e in exts] if exts else [f".{language}"]
             patterns = [f"**/*{ext}" for ext in extensions]
         else:
             patterns = list(DEFAULT_SOURCE_PATTERNS)
@@ -187,14 +187,7 @@ class PatternSearchBackend(SearchBackend):
         Returns:
             Language name.
         """
-        ext_map = {
-            ".py": "python",
-            ".js": "javascript",
-            ".ts": "typescript",
-            ".tsx": "typescript",
-            ".go": "go",
-        }
-        return ext_map.get(file_path.suffix.lower(), "unknown")
+        return detect_language(str(file_path))
 
     def _search_regex(
         self,

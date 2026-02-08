@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS developer_patterns (
 );
 
 -- Architectural decisions table
+-- Table retained for backward compat; not actively used
 CREATE TABLE IF NOT EXISTS architectural_decisions (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,

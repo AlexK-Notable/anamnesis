@@ -73,7 +73,6 @@ from .error_classifier import (
     classify_error,
     get_default_classifier,
     is_retryable as is_error_retryable,
-    should_trip_breaker,
 )
 
 # TOON Encoder (Phase 13)
@@ -149,7 +148,6 @@ __all__ = [
     "classify_error",
     "get_default_classifier",
     "is_error_retryable",
-    "should_trip_breaker",
     # TOON Encoder (Phase 13)
     "ResponseFormat",
     "ToonEncoder",
