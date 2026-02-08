@@ -15,6 +15,7 @@ from typing import Any, Sequence
 from anamnesis.lsp.solidlsp.compat import ToStringMixin
 from anamnesis.lsp.solidlsp.lsp_protocol_handler import lsp_types
 from anamnesis.lsp.utils import safe_join, uri_to_relative
+from anamnesis.constants import DEFAULT_IGNORE_DIRS
 from anamnesis.utils.language_registry import detect_language_from_extension, get_code_extensions
 
 log = logging.getLogger(__name__)
@@ -689,10 +690,7 @@ class SymbolRetriever:
             # Skip hidden dirs and common non-source dirs
             dirs[:] = [
                 d for d in dirs
-                if not d.startswith(".") and d not in {
-                    "node_modules", "__pycache__", "venv", ".venv",
-                    "target", "build", "dist", ".git",
-                }
+                if not d.startswith(".") and d not in DEFAULT_IGNORE_DIRS
             ]
             for fn in filenames:
                 ext = os.path.splitext(fn)[1]

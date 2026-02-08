@@ -416,25 +416,30 @@ class LearningService:
         duplicate rglob walks over the same directory tree.
         """
         extensions = get_code_extensions()
-        files: list[Path] = []
-        for ext in extensions:
-            files.extend(path.rglob(f"*{ext}"))
+        ext_set = frozenset(extensions)
+        filtered: list[Path] = []
 
-        # Skip ignored directories, sensitive files, oversized files; then limit
-        filtered = []
-        for f in files:
-            if any(part in DEFAULT_IGNORE_DIRS for part in f.parts):
-                continue
-            if is_sensitive_file(str(f)):
-                continue
-            try:
-                if f.stat().st_size > MAX_FILE_SIZE:
+        # Single os.walk instead of N rglob calls (one per extension).
+        # Prune ignored dirs in-place via dirs[:] for O(1) skip.
+        import os
+
+        for root, dirs, filenames in os.walk(path):
+            dirs[:] = [d for d in dirs if d not in DEFAULT_IGNORE_DIRS]
+            for fn in filenames:
+                if len(filtered) >= max_files:
+                    return filtered
+                ext = os.path.splitext(fn)[1]
+                if ext not in ext_set:
                     continue
-            except OSError:
-                continue
-            filtered.append(f)
-            if len(filtered) >= max_files:
-                break
+                fpath = Path(root) / fn
+                if is_sensitive_file(str(fpath)):
+                    continue
+                try:
+                    if fpath.stat().st_size > MAX_FILE_SIZE:
+                        continue
+                except OSError:
+                    continue
+                filtered.append(fpath)
 
         return filtered
 
@@ -467,22 +472,8 @@ class LearningService:
 
         return concepts, patterns
 
-    def _extract_concepts_unified(self, path: Path, max_files: int) -> list:
-        """Extract concepts using the unified pipeline (backward compat)."""
-        concepts, _ = self._extract_unified(path, max_files)
-        return concepts
-
-    def _learn_patterns_unified(self, path: Path, max_files: int) -> list:
-        """Learn patterns using the unified pipeline (backward compat)."""
-        _, patterns = self._extract_unified(path, max_files)
-        return patterns
-
     def _extract_both_unified(self, path: Path, max_files: int) -> tuple[list, list]:
-        """Extract concepts AND patterns in a single traversal.
-
-        Replaces separate _extract_concepts_unified + _learn_patterns_unified
-        calls in learn_from_codebase to avoid redundant rglob and parsing.
-        """
+        """Extract concepts AND patterns in a single traversal."""
         return self._extract_unified(path, max_files)
 
     def _analyze_relationships(self, concepts: list, patterns: list) -> dict:
@@ -559,6 +550,7 @@ class LearningService:
     def _build_feature_map(self, path: str, concepts: list) -> dict[str, list[str]]:
         """Build feature-to-file mapping."""
         feature_map: dict[str, list[str]] = {}
+        feature_seen: dict[str, set[str]] = {}
 
         # Group concepts by inferred feature
         for concept in concepts:
@@ -581,7 +573,9 @@ class LearningService:
             if feature:
                 if feature not in feature_map:
                     feature_map[feature] = []
-                if concept.file_path not in feature_map[feature]:
+                    feature_seen[feature] = set()
+                if concept.file_path not in feature_seen[feature]:
+                    feature_seen[feature].add(concept.file_path)
                     feature_map[feature].append(concept.file_path)
 
         return feature_map

@@ -160,7 +160,7 @@ class TextSearchBackend(SearchBackend):
         Returns:
             True if the path should be skipped.
         """
-        skip_dirs = DEFAULT_IGNORE_DIRS | {".svn", ".tox", ".mypy_cache", ".pytest_cache", "dist", "build", ".eggs", "*.egg-info"}
+        skip_dirs = DEFAULT_IGNORE_DIRS
 
         for part in path.parts:
             if part in skip_dirs or part.endswith(".egg-info"):

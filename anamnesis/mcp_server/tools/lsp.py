@@ -189,7 +189,9 @@ def _match_sibling_style_impl(
         context_symbol=context_symbol or None,
         max_examples=max_examples,
     )
-    return raw if not raw.get("success", True) else _success_response(raw)
+    if raw.get("success") is False:
+        return _failure_response(raw.get("error", "Unknown error"))
+    return _success_response(raw)
 
 
 # Raw helpers (undecorated -- called by the merged analyze_code_quality dispatch)
@@ -221,7 +223,9 @@ def _investigate_symbol_impl(
     """Implementation for investigate_symbol tool."""
     svc = _get_symbol_service()
     raw = svc.investigate_symbol(name_path, relative_path)
-    return raw if not raw.get("success", True) else _success_response(raw)
+    if raw.get("success") is False:
+        return _failure_response(raw.get("error", "Unknown error"))
+    return _success_response(raw)
 
 
 def _check_conventions_helper(relative_path: str) -> dict:
@@ -282,16 +286,21 @@ def _analyze_code_quality_impl(
     detail_level values: quick, standard, deep, conventions.
     """
     max_suggestions = clamp_integer(max_suggestions, "max_suggestions", 1, 50)
+
+    def _wrap(raw: dict) -> dict:
+        """Normalize service-layer result into standard envelope."""
+        if raw.get("success") is False:
+            return _failure_response(raw.get("error", "Unknown error"))
+        return _success_response(raw)
+
     if detail_level == "quick":
-        raw = _get_complexity_hotspots_helper(relative_path, min_complexity_level)
-        return raw if not raw.get("success", True) else _success_response(raw)
+        return _wrap(_get_complexity_hotspots_helper(relative_path, min_complexity_level))
     elif detail_level == "standard":
-        raw = _analyze_file_complexity_helper(relative_path)
-        return raw if not raw.get("success", True) else _success_response(raw)
+        return _wrap(_analyze_file_complexity_helper(relative_path))
     elif detail_level == "deep":
         complexity_result = _analyze_file_complexity_helper(relative_path)
-        if not complexity_result.get("success", True):
-            return complexity_result
+        if complexity_result.get("success") is False:
+            return _failure_response(complexity_result.get("error", "Unknown error"))
         refactoring_result = _suggest_refactorings_helper(relative_path, max_suggestions)
         for key in ("suggestions", "suggestion_count"):
             if key in refactoring_result:

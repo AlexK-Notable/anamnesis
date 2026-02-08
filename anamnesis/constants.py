@@ -29,13 +29,23 @@ DEFAULT_SOURCE_PATTERNS: list[str] = [
 # Files larger than this are skipped to prevent pathological parse times.
 MAX_FILE_SIZE: int = 1_000_000
 
-# Directories to skip during file traversal (search, learning, indexing)
+# Directories to skip during file traversal (search, learning, indexing).
+# This is the single canonical set — import this instead of re-defining.
 DEFAULT_IGNORE_DIRS: set[str] = {
     "node_modules",
     ".git",
     "__pycache__",
     ".venv",
     "venv",
+    "dist",
+    "build",
+    "target",
+    ".tox",
+    ".svn",
+    ".eggs",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
 }
 
 # Glob patterns for file watching ignore rules (CLI init, watcher config)

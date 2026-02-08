@@ -282,10 +282,10 @@ class TestSemanticEngine:
         assert engine.detect_language("lib.rs") == "rust"
 
     def test_detect_language_unknown(self):
-        """Test detecting unknown language."""
+        """Test detecting unknown language returns None for truly unknown extensions."""
         engine = SemanticEngine()
-        assert engine.detect_language("README.md") is None
-        assert engine.detect_language("data.json") is None
+        assert engine.detect_language("data.bin") is None
+        assert engine.detect_language("image.png") is None
 
     def test_extract_concepts_class(self):
         """Test extracting class concepts."""

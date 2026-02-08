@@ -240,17 +240,14 @@ These structures should remain JSON-encoded.
 
 | Tool | TOON Adoption | Rationale |
 |------|---------------|-----------|
-| `get_semantic_insights` | **Yes** | Core use case. Concept arrays are ideal TOON targets. |
-| `get_pattern_recommendations` | **Partial** | TOON for metadata summary; JSON for full examples. |
-| `get_intelligence_metrics` | **Yes** | Breakdown tables map directly to TOON format. |
-| `predict_coding_approach` | **Partial** | TOON for file routing lists; JSON for approach narrative. |
-| `get_project_blueprint` | **No** | Nested structure, single-use response. |
+| `manage_concepts` (query) | **Yes** | Core use case. Concept arrays are ideal TOON targets. |
+| `get_coding_guidance` | **Partial** | TOON for metadata summary; JSON for full examples. |
 | `get_developer_profile` | **No** | Complex nesting, low frequency. |
 | `search_codebase` | **Partial** | TOON for file match lists; JSON for context snippets. |
-| `analyze_codebase` | **No** | Deep AST structures, nested metrics. |
-| `contribute_insights` | **No** | Input operation, not response optimization. |
+| `analyze_project` | **No** | Deep AST structures, nested metrics. |
+| `manage_concepts` (contribute) | **No** | Input operation, not response optimization. |
 | `auto_learn_if_needed` | **No** | Status response, not data-heavy. |
-| `list_sessions` | **Conditional** | TOON only if >10 sessions returned. |
+| `get_sessions` | **Conditional** | TOON only if >10 sessions returned. |
 
 ---
 
@@ -262,8 +259,8 @@ Consider supporting both formats with client preference:
 
 ```
 # Client indicates TOON preference via parameter
-get_semantic_insights(query="database", format="toon")
-get_semantic_insights(query="database", format="json")
+manage_concepts(action="query", query="database", format="toon")
+manage_concepts(action="query", query="database", format="json")
 ```
 
 Alternatively, detect LLM capability from client metadata and auto-select format.
@@ -338,9 +335,9 @@ TOON assumes LLMs can parse the format. Considerations:
 - Low-volume responses (<10 elements)
 
 **Implementation priority:**
-1. `get_semantic_insights` - highest volume, best fit
-2. `get_intelligence_metrics` - clean tabular mapping
-3. `get_pattern_recommendations` - hybrid approach (TOON metadata + JSON examples)
+1. `manage_concepts` (query) - highest volume, best fit
+2. `get_coding_guidance` - hybrid approach (TOON metadata + JSON examples)
+3. `search_codebase` - file match lists
 
 ---
 

@@ -4,11 +4,12 @@ import hashlib
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 from anamnesis.constants import utcnow
+from anamnesis.utils.language_registry import EXTENSION_TO_LANGUAGE
 
 from watchdog.events import (
     DirCreatedEvent,
@@ -124,57 +125,9 @@ class AnamnesisEventHandler(FileSystemEventHandler):
 class FileWatcher:
     """File watcher for detecting code changes."""
 
-    # Language detection map
+    # Language detection — delegates to canonical registry
     LANGUAGE_MAP: dict[str, str] = {
-        ".ts": "typescript",
-        ".tsx": "typescript",
-        ".js": "javascript",
-        ".jsx": "javascript",
-        ".py": "python",
-        ".rs": "rust",
-        ".go": "go",
-        ".java": "java",
-        ".cpp": "cpp",
-        ".cc": "cpp",
-        ".cxx": "cpp",
-        ".c": "c",
-        ".h": "c",
-        ".hpp": "cpp",
-        ".cs": "csharp",
-        ".php": "php",
-        ".rb": "ruby",
-        ".swift": "swift",
-        ".kt": "kotlin",
-        ".scala": "scala",
-        ".clj": "clojure",
-        ".hs": "haskell",
-        ".ml": "ocaml",
-        ".fs": "fsharp",
-        ".elm": "elm",
-        ".dart": "dart",
-        ".r": "r",
-        ".jl": "julia",
-        ".lua": "lua",
-        ".pl": "perl",
-        ".sh": "bash",
-        ".ps1": "powershell",
-        ".sql": "sql",
-        ".html": "html",
-        ".css": "css",
-        ".scss": "scss",
-        ".sass": "sass",
-        ".less": "less",
-        ".json": "json",
-        ".xml": "xml",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-        ".toml": "toml",
-        ".ini": "ini",
-        ".cfg": "ini",
-        ".conf": "conf",
-        ".md": "markdown",
-        ".rst": "rst",
-        ".tex": "latex",
+        k: v for k, v in EXTENSION_TO_LANGUAGE.items() if k.startswith(".")
     }
 
     # Text file extensions
@@ -367,7 +320,7 @@ class FileWatcher:
             stat = path_obj.stat()
             change.stats = {
                 "size": stat.st_size,
-                "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "mtime": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
                 "is_directory": path_obj.is_dir(),
             }
 

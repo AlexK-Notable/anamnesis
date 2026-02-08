@@ -97,9 +97,9 @@ Use `write_memory` and `read_memory` to persist project knowledge across
 sessions. Use `reflect` to pause and think before, during, and after
 complex tasks.
 
-For multi-project workflows, use `activate_project(path)` to switch between
-projects. Each project gets isolated services, preventing cross-project
-data contamination.
+For multi-project workflows, use `manage_project(action="activate", path=...)` to
+switch between projects. Each project gets isolated services, preventing
+cross-project data contamination.
 """,
 )
 
@@ -111,12 +111,16 @@ data contamination.
 def _parse_allowed_roots() -> list[str] | None:
     """Parse ``ANAMNESIS_ALLOWED_ROOTS`` env var (colon-separated paths).
 
-    Returns ``None`` when unset or empty (unrestricted mode).
+    Defaults to ``[cwd]`` when unset or empty — never unrestricted.
+    Set to ``*`` to explicitly allow all paths (development/testing only).
+    Returns ``None`` only when ``*`` is set (unrestricted mode).
     """
     import os
 
     raw = os.environ.get("ANAMNESIS_ALLOWED_ROOTS", "")
     if not raw.strip():
+        return [os.getcwd()]
+    if raw.strip() == "*":
         return None
     return [p for p in raw.split(":") if p]
 
@@ -491,7 +495,7 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                 if is_structurally_toon_eligible(result):
                     return _toon_encoder.encode(result)
             except Exception:
-                pass  # Silent fallback to dict/JSON on any encoding error
+                logger.debug("TOON encoding failed, falling back to JSON", exc_info=True)
         return result
 
     def _handle_exception(e: Exception):

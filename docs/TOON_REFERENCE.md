@@ -104,13 +104,12 @@ Only five escapes in quoted strings:
 ## Anamnesis Integration Tiers
 
 ### Tier 1: Adopt TOON (best fit)
-- `get_semantic_insights` - arrays of uniform SemanticInsight
-- `get_intelligence_metrics` - breakdown tables
-- `get_pattern_recommendations` - pattern metadata
+- `manage_concepts` (query) - arrays of uniform concept data
+- `get_coding_guidance` - pattern metadata and recommendations
 
 ### Tier 2: Conditional
 - `search_codebase` - file match lists
-- `predict_coding_approach` - file routing lists
+- `get_sessions` - session lists when >10 entries
 
 ### Tier 3: Keep JSON
 - Full pattern objects with code examples

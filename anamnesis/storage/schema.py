@@ -64,16 +64,6 @@ class InsightType(str, Enum):
     CODE_SMELL = "code_smell"
 
 
-class DecisionStatus(str, Enum):
-    """Status of architectural decisions."""
-
-    PROPOSED = "proposed"
-    ACCEPTED = "accepted"
-    DEPRECATED = "deprecated"
-    SUPERSEDED = "superseded"
-    REJECTED = "rejected"
-
-
 @dataclass
 class SemanticConcept:
     """A semantic concept extracted from code.
@@ -198,71 +188,6 @@ class DeveloperPattern:
         if isinstance(data.get("pattern_type"), str):
             try:
                 data["pattern_type"] = PatternType(data["pattern_type"])
-            except ValueError:
-                pass
-        if isinstance(data.get("created_at"), str):
-            data["created_at"] = datetime.fromisoformat(data["created_at"])
-        if isinstance(data.get("updated_at"), str):
-            data["updated_at"] = datetime.fromisoformat(data["updated_at"])
-        return cls(**data)
-
-
-@dataclass
-class ArchitecturalDecision:
-    """A recorded architectural decision (ADR).
-
-    Tracks important design decisions with context,
-    consequences, and status.
-    """
-
-    id: str
-    """Unique identifier for the decision."""
-
-    title: str
-    """Title of the decision."""
-
-    context: str
-    """Context and background for the decision."""
-
-    decision: str
-    """The actual decision made."""
-
-    consequences: list[str] = field(default_factory=list)
-    """Consequences of the decision."""
-
-    status: DecisionStatus | str = DecisionStatus.PROPOSED
-    """Current status of the decision."""
-
-    related_files: list[str] = field(default_factory=list)
-    """Files affected by this decision."""
-
-    tags: list[str] = field(default_factory=list)
-    """Tags for categorization."""
-
-    metadata: dict[str, Any] = field(default_factory=dict)
-    """Additional metadata."""
-
-    created_at: datetime = field(default_factory=utcnow)
-    """When the decision was created."""
-
-    updated_at: datetime = field(default_factory=utcnow)
-    """When the decision was last updated."""
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for serialization."""
-        data = asdict(self)
-        data["status"] = str(self.status.value if isinstance(self.status, DecisionStatus) else self.status)
-        data["created_at"] = self.created_at.isoformat()
-        data["updated_at"] = self.updated_at.isoformat()
-        return data
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> ArchitecturalDecision:
-        """Create from dictionary."""
-        data = data.copy()
-        if isinstance(data.get("status"), str):
-            try:
-                data["status"] = DecisionStatus(data["status"])
             except ValueError:
                 pass
         if isinstance(data.get("created_at"), str):
@@ -751,11 +676,7 @@ class WorkSession:
 
 @dataclass
 class ProjectDecision:
-    """A project-level decision made during work sessions.
-
-    Lighter weight than ArchitecturalDecision, for
-    day-to-day decisions.
-    """
+    """A project-level decision made during work sessions."""
 
     id: str
     """Unique identifier."""

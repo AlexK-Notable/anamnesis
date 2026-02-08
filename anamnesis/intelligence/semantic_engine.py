@@ -186,33 +186,10 @@ class SemanticEngine:
         self._analysis_cache: OrderedDict[str, CodebaseAnalysis] = OrderedDict()
         self._CACHE_MAX_SIZE = cache_size
 
-        # Language detection by extension
-        self._language_extensions: dict[str, str] = {
-            ".py": "Python",
-            ".pyi": "Python",
-            ".js": "JavaScript",
-            ".mjs": "JavaScript",
-            ".jsx": "JavaScript",
-            ".ts": "TypeScript",
-            ".tsx": "TypeScript",
-            ".go": "Go",
-            ".rs": "Rust",
-            ".java": "Java",
-            ".kt": "Kotlin",
-            ".rb": "Ruby",
-            ".php": "PHP",
-            ".c": "C",
-            ".cpp": "C++",
-            ".h": "C",
-            ".hpp": "C++",
-            ".cs": "C#",
-            ".swift": "Swift",
-            ".scala": "Scala",
-            ".lua": "Lua",
-            ".r": "R",
-            ".R": "R",
-            ".jl": "Julia",
-        }
+        # Language detection by extension — delegates to canonical registry
+        from anamnesis.utils.language_registry import EXTENSION_TO_LANGUAGE
+
+        self._language_extensions: dict[str, str] = EXTENSION_TO_LANGUAGE
 
         # Framework detection patterns
         self._framework_patterns: dict[str, list[tuple[str, re.Pattern[str]]]] = {
@@ -293,7 +270,7 @@ class SemanticEngine:
             List of file Paths (no directories), filtered by ignore_dirs.
         """
         if ignore_dirs is None:
-            ignore_dirs = DEFAULT_IGNORE_DIRS | {"dist", "build", "target", ".tox"}
+            ignore_dirs = DEFAULT_IGNORE_DIRS
 
         dir_path = Path(directory)
         if not dir_path.exists():
@@ -338,7 +315,7 @@ class SemanticEngine:
         language_counts: dict[str, int] = {}
 
         if files is None:
-            ignore_dirs = ignore_dirs or DEFAULT_IGNORE_DIRS | {"dist", "build", "target", ".tox"}
+            ignore_dirs = ignore_dirs or DEFAULT_IGNORE_DIRS
             dir_path = Path(directory)
 
             if not dir_path.exists():
@@ -576,7 +553,7 @@ class SemanticEngine:
         if not dir_path.exists():
             return key_dirs
 
-        skip_dirs = DEFAULT_IGNORE_DIRS | {"dist", "build", "target"}
+        skip_dirs = DEFAULT_IGNORE_DIRS
 
         if files is not None:
             # Group file counts by top-level subdirectory

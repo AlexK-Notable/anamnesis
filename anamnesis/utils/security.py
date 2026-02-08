@@ -169,8 +169,11 @@ def sanitize_path(path: str) -> str:
     Returns:
         Sanitized path
     """
+    # Strip leading tilde to prevent home-directory expansion
+    sanitized = path.lstrip("~")
+
     # Remove path traversal patterns
-    sanitized = re.sub(r"\.\.[\\/]?", "", path)
+    sanitized = re.sub(r"\.\.[\\/]?", "", sanitized)
 
     # Remove null bytes
     sanitized = sanitized.replace("\x00", "")

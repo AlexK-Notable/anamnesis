@@ -34,7 +34,7 @@ class ParseCache:
 
     def _make_key(self, content: str, file_path: str) -> str:
         """Create cache key from file path and content hash."""
-        content_hash = hashlib.md5(content.encode()).hexdigest()
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
         return f"{file_path}:{content_hash}"
 
     def get(self, content: str, file_path: str) -> ASTContext | None:

@@ -167,7 +167,7 @@ class PatternSearchBackend(SearchBackend):
             patterns = list(DEFAULT_SOURCE_PATTERNS)
 
         files = []
-        skip_dirs = DEFAULT_IGNORE_DIRS | {"dist", "build"}
+        skip_dirs = DEFAULT_IGNORE_DIRS
 
         for pattern in patterns:
             for file_path in self._base_path.glob(pattern):

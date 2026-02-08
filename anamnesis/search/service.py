@@ -285,26 +285,3 @@ class SearchService(ISearchService):
                     logger.warning(f"Error closing backend: {e}")
 
 
-async def create_search_service(
-    base_path: str,
-    enable_semantic: bool = True,
-    embedding_config: Optional[EmbeddingConfig] = None,
-    qdrant_config: Optional[QdrantConfig] = None,
-) -> SearchService:
-    """Convenience function to create a search service.
-
-    Args:
-        base_path: Base directory for searches.
-        enable_semantic: Whether to enable semantic search.
-        embedding_config: Optional embedding configuration.
-        qdrant_config: Optional Qdrant configuration.
-
-    Returns:
-        Initialized SearchService.
-    """
-    return await SearchService.create(
-        base_path,
-        enable_semantic=enable_semantic,
-        embedding_config=embedding_config,
-        qdrant_config=qdrant_config,
-    )

@@ -406,6 +406,23 @@ class RegexPatternMatcher(PatternMatcher):
 
         lines = content.split("\n")
 
+        # ReDoS mitigation: reject patterns that are too long or have
+        # nested quantifiers (e.g. (a+)+ or (a*)*) which cause catastrophic
+        # backtracking.
+        _MAX_PATTERN_LENGTH = 1000
+        if len(pattern) > _MAX_PATTERN_LENGTH:
+            logger.warning(
+                f"Regex pattern too long ({len(pattern)} chars, "
+                f"max {_MAX_PATTERN_LENGTH}), rejecting"
+            )
+            return
+        if re.search(r'[+*]\)?[+*{]', pattern):
+            logger.warning(
+                f"Regex pattern rejected (nested quantifiers detected): "
+                f"'{pattern[:100]}'"
+            )
+            return
+
         try:
             compiled = re.compile(pattern, flags)
         except re.error as e:

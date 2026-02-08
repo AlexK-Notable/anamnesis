@@ -16,9 +16,7 @@ from anamnesis.constants import utcnow
 
 from anamnesis.storage.schema import (
     AIInsight,
-    ArchitecturalDecision,
     ConceptType,
-    DecisionStatus,
     DeveloperPattern,
     EntryPoint,
     FeatureMap,
@@ -120,21 +118,6 @@ class TestInsightTypeEnum:
         """Insight type values are correct strings."""
         assert InsightType.BUG_PATTERN.value == "bug_pattern"
         assert InsightType.CODE_SMELL.value == "code_smell"
-
-
-class TestDecisionStatusEnum:
-    """Tests for DecisionStatus enum."""
-
-    def test_all_decision_statuses_exist(self):
-        """All expected decision statuses exist."""
-        expected = ["proposed", "accepted", "rejected", "deprecated", "superseded"]
-        for name in expected:
-            assert DecisionStatus(name) is not None
-
-    def test_decision_status_values(self):
-        """Decision status values are correct strings."""
-        assert DecisionStatus.PROPOSED.value == "proposed"
-        assert DecisionStatus.ACCEPTED.value == "accepted"
 
 
 class TestSemanticConcept:
@@ -326,77 +309,6 @@ class TestDeveloperPattern:
         assert pattern.id == "pattern-2"
         assert pattern.pattern_type == PatternType.SINGLETON
         assert pattern.frequency == 100
-
-
-class TestArchitecturalDecision:
-    """Tests for ArchitecturalDecision dataclass."""
-
-    def test_create_with_required_fields(self):
-        """Can create with minimal required fields."""
-        decision = ArchitecturalDecision(
-            id="adr-001",
-            title="Use SQLite for local storage",
-            context="Need lightweight local persistence",
-            decision="Use SQLite with aiosqlite",
-        )
-        assert decision.id == "adr-001"
-        assert decision.title == "Use SQLite for local storage"
-        assert decision.context == "Need lightweight local persistence"
-        assert decision.decision == "Use SQLite with aiosqlite"
-
-    def test_default_values(self):
-        """Default values are set correctly."""
-        decision = ArchitecturalDecision(
-            id="adr",
-            title="Test",
-            context="Context",
-            decision="Decision",
-        )
-        assert decision.consequences == []
-        assert decision.status == DecisionStatus.PROPOSED
-        assert decision.related_files == []
-        assert decision.tags == []
-        assert decision.metadata == {}
-
-    def test_to_dict(self):
-        """Serializes to dictionary correctly."""
-        decision = ArchitecturalDecision(
-            id="adr-002",
-            title="Use async/await",
-            context="Need non-blocking I/O",
-            decision="Use asyncio and aiosqlite",
-            status=DecisionStatus.ACCEPTED,
-            consequences=["learning curve", "better scaling"],
-            related_files=["/src/storage.py"],
-            tags=["architecture", "performance"],
-        )
-
-        data = decision.to_dict()
-
-        assert data["id"] == "adr-002"
-        assert data["status"] == "accepted"
-        assert data["consequences"] == ["learning curve", "better scaling"]
-        assert data["related_files"] == ["/src/storage.py"]
-
-    def test_from_dict(self):
-        """Deserializes from dictionary correctly."""
-        data = {
-            "id": "adr-003",
-            "title": "Test Decision",
-            "context": "Context",
-            "decision": "Decision",
-            "status": "deprecated",
-            "consequences": [],
-            "related_files": [],
-            "tags": [],
-            "metadata": {},
-            "created_at": "2024-01-01T00:00:00",
-            "updated_at": "2024-01-01T00:00:00",
-        }
-
-        decision = ArchitecturalDecision.from_dict(data)
-
-        assert decision.status == DecisionStatus.DEPRECATED
 
 
 class TestFileIntelligence:
@@ -978,21 +890,3 @@ class TestEdgeCases:
         assert insight is not None
         assert insight.insight_type == "new_insight_type"
 
-    def test_decision_status_from_dict(self):
-        """from_dict handles decision status correctly."""
-        data = {
-            "id": "adr-1",
-            "title": "test",
-            "context": "context",
-            "decision": "decision",
-            "status": "superseded",
-            "consequences": [],
-            "related_files": [],
-            "tags": [],
-            "metadata": {},
-            "created_at": "2024-01-01T00:00:00",
-            "updated_at": "2024-01-01T00:00:00",
-        }
-
-        decision = ArchitecturalDecision.from_dict(data)
-        assert decision.status == DecisionStatus.SUPERSEDED

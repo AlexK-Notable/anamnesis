@@ -117,13 +117,13 @@ cross-project data contamination. The primary entry point is either the CLI
 |------|---------------|-------------|
 | `_shared.py` | FastMCP instance, service accessors, `_with_error_handling` decorator, TOON encoding, metacognition prompts | `mcp`, `_registry`, `_with_error_handling` |
 | `server.py` | Coordinator -- imports all tool modules (triggering `@mcp.tool` registration), re-exports `_impl` names for tests | `create_server()` |
-| `tools/lsp.py` | 13 tools: symbol find/overview/references, rename/replace/insert, enable_lsp, get_lsp_status, match_sibling_style, check_conventions, analyze_code_quality, investigate_symbol | LSP + synergy _impl functions |
-| `tools/intelligence.py` | 6 tools: query_learned_concepts, pattern recommendations, approach prediction, developer profile, blueprint, contribute insights | Intelligence _impl functions |
-| `tools/memory.py` | 7 tools: write/read/list/delete/edit/search memory, reflect (metacognition) | Memory _impl functions |
-| `tools/session.py` | 6 tools: start/end/get/list sessions, record/get decisions | Session _impl functions |
+| `tools/lsp.py` | 10 tools: find_symbol, get_symbols_overview, find_referencing_symbols, replace_symbol_body, insert_near_symbol, rename_symbol, manage_lsp, match_sibling_style, analyze_code_quality, investigate_symbol | LSP + synergy _impl functions |
+| `tools/intelligence.py` | 5 tools: manage_concepts, get_coding_guidance, get_developer_profile, analyze_project, get_system_status | Intelligence _impl functions |
+| `tools/memory.py` | 6 tools: write/read/delete/edit memory, search_memories, reflect | Memory _impl functions |
+| `tools/session.py` | 3 tools: start_session, end_session, get_sessions, manage_decisions | Session _impl functions |
 | `tools/project.py` | 1 tool: manage_project (status + activate) | Project _impl functions |
-| `tools/search.py` | 2 tools: search_codebase, analyze_codebase | Search _impl functions |
-| `tools/learning.py` | 1 tool: auto_learn_if_needed (absorbs former learn_codebase_intelligence) | `_auto_learn_if_needed_impl` |
+| `tools/search.py` | 1 tool: search_codebase (text, pattern, semantic) | Search _impl functions |
+| `tools/learning.py` | 1 tool: auto_learn_if_needed | `_auto_learn_if_needed_impl` |
 | `tools/monitoring.py` | 1 tool: get_system_status | `_get_system_status_impl` |
 
 **Tool implementation pattern** (consistent across all tools):
