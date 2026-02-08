@@ -24,7 +24,12 @@ from .logger import (
 
 # Security
 from .security import (
+    MAX_CONTENT_LENGTH,
+    MAX_NAME_LENGTH,
+    MAX_QUERY_LENGTH,
+    MAX_RATIONALE_LENGTH,
     SENSITIVE_FILE_PATTERNS,
+    clamp_integer,
     escape_sql_like,
     escape_sql_string,
     get_sensitivity_reason,
@@ -106,7 +111,12 @@ __all__ = [
     "run_with_request_context",
     "with_correlation_id",
     # Security
+    "MAX_CONTENT_LENGTH",
+    "MAX_NAME_LENGTH",
+    "MAX_QUERY_LENGTH",
+    "MAX_RATIONALE_LENGTH",
     "SENSITIVE_FILE_PATTERNS",
+    "clamp_integer",
     "escape_sql_like",
     "escape_sql_string",
     "get_sensitivity_reason",

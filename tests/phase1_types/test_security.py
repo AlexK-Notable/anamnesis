@@ -11,6 +11,7 @@ Tests for security utilities including:
 import pytest
 
 from anamnesis.utils import (
+    clamp_integer,
     escape_sql_like,
     escape_sql_string,
     get_sensitivity_reason,
@@ -205,3 +206,19 @@ class TestInputValidation:
         """Invalid enum values raise error."""
         with pytest.raises(ValueError, match="must be one of"):
             validate_enum_value("grape", "fruit", ["apple", "banana", "orange"])
+
+
+class TestClampInteger:
+    """Tests for clamp_integer utility."""
+
+    def test_within_range(self):
+        assert clamp_integer(5, "x", 1, 10) == 5
+
+    def test_below_lower(self):
+        assert clamp_integer(0, "x", 1, 10) == 1
+
+    def test_above_upper(self):
+        assert clamp_integer(100, "x", 1, 10) == 10
+
+    def test_negative_with_zero_lower(self):
+        assert clamp_integer(-5, "x", 0, 100) == 0

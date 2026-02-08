@@ -2,6 +2,13 @@
 
 from typing import Literal, Optional
 
+from anamnesis.utils.security import (
+    MAX_NAME_LENGTH,
+    MAX_RATIONALE_LENGTH,
+    clamp_integer,
+    validate_string_length,
+)
+
 from anamnesis.mcp_server._shared import (
     _failure_response,
     _get_session_manager,
@@ -24,6 +31,8 @@ def _start_session_impl(
     tasks: Optional[list[str]] = None,
 ) -> dict:
     """Implementation for start_session tool."""
+    if name:
+        validate_string_length(name, "name", max_length=MAX_NAME_LENGTH)
     session_manager = _get_session_manager()
 
     session = session_manager.start_session(
@@ -90,7 +99,7 @@ def _get_sessions_impl(
         sessions = session_manager.get_active_sessions()
     else:
         # If no session_id, check for active session first (backward compat for get_session())
-        limit = max(1, min(limit, 100))
+        limit = clamp_integer(limit, "limit", 1, 100)
         sessions = session_manager.get_recent_sessions(limit=limit)
 
     return _success_response(
@@ -121,6 +130,9 @@ def _manage_decisions_impl(
     if action == "record":
         if not decision:
             return _failure_response("'decision' text is required when action='record'")
+        validate_string_length(decision, "decision", min_length=1, max_length=MAX_RATIONALE_LENGTH)
+        if rationale:
+            validate_string_length(rationale, "rationale", max_length=MAX_RATIONALE_LENGTH)
         decision_info = session_manager.record_decision(
             decision=decision,
             context=context,
@@ -134,7 +146,7 @@ def _manage_decisions_impl(
             message=f"Decision '{decision_info.decision_id}' recorded",
         )
     elif action == "list":
-        limit = max(1, min(limit, 100))
+        limit = clamp_integer(limit, "limit", 1, 100)
         if session_id:
             decisions = session_manager.get_decisions_by_session(session_id)
         else:

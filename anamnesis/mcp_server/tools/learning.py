@@ -7,6 +7,7 @@ from typing import Optional
 from anamnesis.services import LearningOptions
 
 from anamnesis.utils.logger import logger
+from anamnesis.utils.security import clamp_integer
 from anamnesis.mcp_server._shared import (
     _collect_key_symbols,
     _failure_response,
@@ -36,7 +37,7 @@ def _auto_learn_if_needed_impl(
     skip_learning: bool = False,
 ) -> dict:
     """Implementation for auto_learn_if_needed tool."""
-    max_files = max(1, min(max_files, 10_000))
+    max_files = clamp_integer(max_files, "max_files", 1, 10_000)
     path = path or os.getcwd()
     resolved_path = str(Path(path).resolve())
     _set_current_path(resolved_path)

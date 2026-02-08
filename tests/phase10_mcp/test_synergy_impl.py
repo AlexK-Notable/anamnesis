@@ -299,11 +299,11 @@ class TestSuggestRefactorings:
         assert result["success"] is True
         assert result["data"]["suggestions"] == []
 
-    def test_max_suggestions_zero(self):
-        """max_suggestions=0 should return an empty list, not an error.
+    def test_max_suggestions_zero_clamped_to_one(self):
+        """max_suggestions=0 is clamped to 1 by input validation.
 
-        Catches bugs where zero-length slicing or special-casing of 0
-        causes unexpected behavior in the truncation logic.
+        After input validation wiring, max_suggestions has a minimum of 1.
+        The result should still succeed and return at most 1 suggestion.
         """
         result = _as_dict(
             _analyze_code_quality_impl(
@@ -312,7 +312,7 @@ class TestSuggestRefactorings:
         )
 
         assert result["success"] is True
-        assert result["data"]["suggestions"] == []
+        assert len(result["data"]["suggestions"]) <= 1
 
 
 # =============================================================================

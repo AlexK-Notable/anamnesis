@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+from anamnesis.utils.security import clamp_integer
+
 from anamnesis.mcp_server._shared import (
     _categorize_references,
     _check_names_against_convention,
@@ -49,6 +51,7 @@ def _find_symbol_impl(
     include_info: bool = False,
     substring_matching: bool = False,
 ) -> dict:
+    depth = clamp_integer(depth, "depth", 0, 10)
     svc = _get_symbol_service()
     results = svc.find(
         name_path_pattern,
@@ -66,6 +69,7 @@ def _get_symbols_overview_impl(
     relative_path: str,
     depth: int = 0,
 ) -> dict:
+    depth = clamp_integer(depth, "depth", 0, 10)
     svc = _get_symbol_service()
     result = svc.get_overview(relative_path, depth=depth)
     return _success_response(result)
@@ -177,6 +181,7 @@ def _match_sibling_style_impl(
     max_examples: int = 3,
 ) -> dict:
     """Implementation for match_sibling_style tool."""
+    max_examples = clamp_integer(max_examples, "max_examples", 1, 20)
     svc = _get_symbol_service()
     raw = svc.suggest_code_pattern(
         relative_path,
@@ -276,6 +281,7 @@ def _analyze_code_quality_impl(
 
     detail_level values: quick, standard, deep, conventions.
     """
+    max_suggestions = clamp_integer(max_suggestions, "max_suggestions", 1, 50)
     if detail_level == "quick":
         raw = _get_complexity_hotspots_helper(relative_path, min_complexity_level)
         return raw if not raw.get("success", True) else _success_response(raw)

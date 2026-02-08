@@ -217,8 +217,23 @@ def is_safe_filename(filename: str) -> bool:
 
 
 # ============================================================================
+# Length Constants
+# ============================================================================
+
+MAX_QUERY_LENGTH = 10_000  # Search queries, problem descriptions
+MAX_CONTENT_LENGTH = 500_000  # Memory content, code bodies
+MAX_NAME_LENGTH = 500  # Session names, memory names, symbol names
+MAX_RATIONALE_LENGTH = 50_000  # Decision rationale, context strings
+
+
+# ============================================================================
 # Input Validation
 # ============================================================================
+
+
+def clamp_integer(value: int, name: str, lower: int = 1, upper: int = 10_000) -> int:
+    """Clamp an integer to [lower, upper] range, returning the clamped value."""
+    return max(lower, min(value, upper))
 
 
 def validate_string_length(

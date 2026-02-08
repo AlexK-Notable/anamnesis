@@ -2,6 +2,14 @@
 
 from typing import Literal, Optional
 
+from anamnesis.utils.security import (
+    MAX_CONTENT_LENGTH,
+    MAX_NAME_LENGTH,
+    MAX_QUERY_LENGTH,
+    clamp_integer,
+    validate_string_length,
+)
+
 from anamnesis.mcp_server._shared import (
     _failure_response,
     _get_memory_service,
@@ -23,6 +31,8 @@ def _write_memory_impl(
     content: str,
 ) -> dict:
     """Implementation for write_memory tool."""
+    validate_string_length(name, "name", min_length=1, max_length=MAX_NAME_LENGTH)
+    validate_string_length(content, "content", min_length=1, max_length=MAX_CONTENT_LENGTH)
     memory_service = _get_memory_service()
     result = memory_service.write_memory(name, content)
     return _success_response(result.to_dict())
@@ -33,6 +43,7 @@ def _read_memory_impl(
     name: str,
 ) -> dict:
     """Implementation for read_memory tool."""
+    validate_string_length(name, "name", min_length=1, max_length=MAX_NAME_LENGTH)
     memory_service = _get_memory_service()
     result = memory_service.read_memory(name)
     if result is None:
@@ -45,6 +56,7 @@ def _delete_memory_impl(
     name: str,
 ) -> dict:
     """Implementation for delete_memory tool."""
+    validate_string_length(name, "name", min_length=1, max_length=MAX_NAME_LENGTH)
     memory_service = _get_memory_service()
     deleted = memory_service.delete_memory(name)
     if not deleted:
@@ -59,6 +71,8 @@ def _edit_memory_impl(
     new_text: str,
 ) -> dict:
     """Implementation for edit_memory tool."""
+    validate_string_length(name, "name", min_length=1, max_length=MAX_NAME_LENGTH)
+    validate_string_length(old_text, "old_text", min_length=1, max_length=MAX_CONTENT_LENGTH)
     memory_service = _get_memory_service()
     result = memory_service.edit_memory(name, old_text, new_text)
     if result is None:
@@ -75,6 +89,9 @@ def _search_memories_impl(
 
     When query is None or empty, lists all memories instead of searching.
     """
+    if query is not None and query:
+        validate_string_length(query, "query", min_length=1, max_length=MAX_QUERY_LENGTH)
+    limit = clamp_integer(limit, "limit", 1, 100)
     memory_service = _get_memory_service()
     if not query:
         # List all memories (replaces former list_memories tool)

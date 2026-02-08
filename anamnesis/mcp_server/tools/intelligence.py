@@ -3,6 +3,13 @@
 from pathlib import Path
 from typing import Literal, Optional
 
+from anamnesis.utils.security import (
+    MAX_NAME_LENGTH,
+    MAX_QUERY_LENGTH,
+    clamp_integer,
+    validate_string_length,
+)
+
 from anamnesis.mcp_server._shared import (
     _failure_response,
     _get_codebase_service,
@@ -27,7 +34,7 @@ def _query_concepts_helper(
     limit: int = 50,
 ) -> dict:
     """Query learned concepts (no error wrapping)."""
-    limit = max(1, min(limit, 500))
+    limit = clamp_integer(limit, "limit", 1, 500)
     intelligence_service = _get_intelligence_service()
 
     insights, total = intelligence_service.get_semantic_insights(
@@ -187,12 +194,16 @@ def _manage_concepts_impl(
     action="contribute": contribute an AI-discovered insight.
     """
     if action == "query":
+        if query is not None:
+            validate_string_length(query, "query", max_length=MAX_QUERY_LENGTH)
         return _query_concepts_helper(query=query, concept_type=concept_type, limit=limit)
     elif action == "contribute":
         if not insight_type or content is None or confidence is None or not source_agent:
             return _failure_response(
                 "action='contribute' requires insight_type, content, confidence, and source_agent"
             )
+        validate_string_length(source_agent, "source_agent", min_length=1, max_length=MAX_NAME_LENGTH)
+        confidence = max(0.0, min(confidence, 1.0))
         return _contribute_helper(
             insight_type=insight_type,
             content=content,
@@ -218,6 +229,9 @@ def _get_coding_guidance_impl(
 
     Combines pattern recommendations and file routing into a single response.
     """
+    validate_string_length(
+        problem_description, "problem_description", min_length=1, max_length=MAX_QUERY_LENGTH,
+    )
     data: dict = {}
 
     if include_patterns:

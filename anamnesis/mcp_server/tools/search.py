@@ -4,6 +4,11 @@ from typing import Literal, Optional
 
 from anamnesis.interfaces.search import SearchQuery, SearchType
 from anamnesis.utils.logger import logger
+from anamnesis.utils.security import (
+    MAX_QUERY_LENGTH,
+    clamp_integer,
+    validate_string_length,
+)
 
 from anamnesis.mcp_server._shared import (
     _ensure_semantic_search,
@@ -34,7 +39,8 @@ async def _search_codebase_impl(
     - pattern: Regex and AST structural patterns
     - semantic: Vector similarity search (requires indexing)
     """
-    limit = max(1, min(limit, 500))
+    validate_string_length(query, "query", min_length=1, max_length=MAX_QUERY_LENGTH)
+    limit = clamp_integer(limit, "limit", 1, 500)
     current_path = _get_current_path()
 
     # Map string to SearchType enum
