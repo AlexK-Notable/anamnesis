@@ -255,4 +255,7 @@ Build responses with `_success_response(data, **metadata)` and `_failure_respons
 - Literal type constraints on all dispatch parameters (FastMCP generates JSON schema enums)
 - Parameter naming normalized (name_path, relative_path, name)
 - Layer violations fixed (tool layer only calls services)
-- Comprehensive code review remediation (Phases 1-3 complete)
+- Backward-compat wrappers removed; all tests use canonical function names
+- Dead code removed (EmbeddingEngine._build_index, unused fields)
+- Flaky test patterns fixed (freezegun for cache timing, select timeout for MCP protocol)
+- Comprehensive code review remediation (Phases 1-4 complete)
