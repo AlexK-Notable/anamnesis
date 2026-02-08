@@ -153,9 +153,9 @@ class UserService:
         """Test learning from codebase via auto_learn."""
         result = _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        assert result["status"] == "learned"
-        assert result["concepts_learned"] > 0
-        assert "insights" in result
+        assert result["data"]["status"] == "learned"
+        assert result["data"]["concepts_learned"] > 0
+        assert "insights" in result["data"]
 
     def test_learn_codebase_with_force(self, temp_codebase):
         """Test force re-learning."""
@@ -164,7 +164,7 @@ class UserService:
 
         # Force re-learn
         result = _auto_learn_if_needed_impl(path=temp_codebase, force=True)
-        assert result["status"] == "learned"
+        assert result["data"]["status"] == "learned"
 
     def test_learn_codebase_nonexistent_path(self):
         """Test learning from non-existent path."""
@@ -179,23 +179,23 @@ class UserService:
         service.clear()
 
         result = _as_dict(_get_semantic_insights_impl())
-        assert "insights" in result
-        assert "total" in result
+        assert isinstance(result["data"], list)
+        assert "total" in result["metadata"]
 
     def test_get_semantic_insights_after_learning(self, temp_codebase):
         """Test getting insights after learning."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _as_dict(_get_semantic_insights_impl())
-        assert result["total"] > 0
-        assert len(result["insights"]) > 0
+        assert result["metadata"]["total"] > 0
+        assert len(result["data"]) > 0
 
     def test_get_semantic_insights_with_query(self, temp_codebase):
         """Test getting insights with query filter."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _as_dict(_get_semantic_insights_impl(query="Service"))
-        assert "insights" in result
+        assert isinstance(result["data"], list)
         # May or may not have matches depending on extraction
 
     def test_get_semantic_insights_with_type_filter(self, temp_codebase):
@@ -203,7 +203,7 @@ class UserService:
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _as_dict(_get_semantic_insights_impl(concept_type="class"))
-        assert "insights" in result
+        assert isinstance(result["data"], list)
 
     def test_get_pattern_recommendations(self, temp_codebase):
         """Test getting pattern recommendations."""
@@ -213,9 +213,9 @@ class UserService:
             problem_description="create a new service class"
         ))
 
-        assert "recommendations" in result
-        assert "reasoning" in result
-        assert result["problem_description"] == "create a new service class"
+        assert "recommendations" in result["data"]
+        assert "reasoning" in result["data"]
+        assert result["metadata"]["problem_description"] == "create a new service class"
 
     def test_predict_coding_approach(self, temp_codebase):
         """Test predicting coding approach."""
@@ -225,8 +225,7 @@ class UserService:
             problem_description="add user authentication"
         ))
 
-        assert "prediction" in result
-        prediction = result["prediction"]
+        prediction = result["data"]
         assert "approach" in prediction
         assert "confidence" in prediction
         assert "reasoning" in prediction
@@ -237,8 +236,7 @@ class UserService:
 
         result = _as_dict(_get_developer_profile_impl())
 
-        assert "profile" in result
-        profile = result["profile"]
+        profile = result["data"]
         assert "preferred_patterns" in profile
         assert "coding_style" in profile
         assert "expertise_areas" in profile
@@ -266,8 +264,8 @@ class UserService:
         )
 
         assert result["success"] is True
-        assert result["insight_id"] != ""
-        assert "successfully" in result["message"]
+        assert result["data"]["insight_id"] != ""
+        assert "successfully" in result["metadata"]["message"]
 
     def test_contribute_insights_with_session(self, temp_codebase):
         """Test contributing with session update."""
@@ -293,8 +291,7 @@ class UserService:
 
         result = _as_dict(_get_project_blueprint_impl(path=temp_codebase))
 
-        assert "blueprint" in result
-        blueprint = result["blueprint"]
+        blueprint = result["data"]["blueprint"]
         assert "tech_stack" in blueprint
         assert "learning_status" in blueprint
 
@@ -319,8 +316,8 @@ class TestAutomationTools:
 
         result = _auto_learn_if_needed_impl(path=temp_codebase)
 
-        assert result["status"] in ["learned", "already_learned"]
-        assert result["path"] == str(Path(temp_codebase).resolve())
+        assert result["data"]["status"] in ["learned", "already_learned"]
+        assert result["metadata"]["path"] == str(Path(temp_codebase).resolve())
 
     def test_auto_learn_if_needed_skip_existing(self, temp_codebase):
         """Test auto learn skips if data exists."""
@@ -329,8 +326,8 @@ class TestAutomationTools:
 
         # Second call should skip
         result = _auto_learn_if_needed_impl(path=temp_codebase)
-        assert result["status"] == "already_learned"
-        assert result["action_taken"] == "none"
+        assert result["data"]["status"] == "already_learned"
+        assert result["data"]["action_taken"] == "none"
 
     def test_auto_learn_if_needed_force(self, temp_codebase):
         """Test force re-learning."""
@@ -339,13 +336,13 @@ class TestAutomationTools:
 
         # Force re-learn
         result = _auto_learn_if_needed_impl(path=temp_codebase, force=True)
-        assert result["status"] == "learned"
-        assert result["action_taken"] == "learn"
+        assert result["data"]["status"] == "learned"
+        assert result["data"]["action_taken"] == "learn"
 
     def test_auto_learn_if_needed_skip_learning(self, temp_codebase):
         """Test skip learning option."""
         result = _auto_learn_if_needed_impl(path=temp_codebase, skip_learning=True)
-        assert result["status"] == "skipped"
+        assert result["data"]["status"] == "skipped"
 
     def test_auto_learn_if_needed_with_progress(self, temp_codebase):
         """Test with progress information."""
@@ -355,8 +352,8 @@ class TestAutomationTools:
             include_progress=True,
         )
 
-        assert result["status"] == "learned"
-        assert "insights" in result
+        assert result["data"]["status"] == "learned"
+        assert "insights" in result["data"]
 
     def test_auto_learn_if_needed_with_setup_steps(self, temp_codebase):
         """Test with setup steps."""
@@ -366,8 +363,8 @@ class TestAutomationTools:
             include_setup_steps=True,
         )
 
-        assert result["status"] == "learned"
-        assert "setup_steps" in result
+        assert result["data"]["status"] == "learned"
+        assert "setup_steps" in result["data"]
 
 
 class TestMonitoringTools:
@@ -386,28 +383,28 @@ class TestMonitoringTools:
 
         result = _get_system_status_impl()
 
-        assert "summary" in result
-        assert result["summary"]["status"] == "healthy"
-        assert "metrics" in result
+        assert "summary" in result["data"]
+        assert result["data"]["summary"]["status"] == "healthy"
+        assert "metrics" in result["data"]
 
     def test_get_system_status_all_sections(self, temp_codebase):
         """Test system status with all sections."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _get_system_status_impl(sections="all")
-        assert "summary" in result
-        assert "metrics" in result
-        assert "intelligence" in result
-        assert "performance" in result
-        assert "health" in result
+        assert "summary" in result["data"]
+        assert "metrics" in result["data"]
+        assert "intelligence" in result["data"]
+        assert "performance" in result["data"]
+        assert "health" in result["data"]
 
     def test_get_system_status_summary_only(self, temp_codebase):
         """Test system status with summary section only."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
         result = _get_system_status_impl(sections="summary")
-        assert "summary" in result
-        assert "metrics" not in result
+        assert "summary" in result["data"]
+        assert "metrics" not in result["data"]
 
     def test_get_intelligence_metrics(self, temp_codebase):
         """Test getting intelligence metrics via get_system_status(sections='intelligence')."""
@@ -415,7 +412,7 @@ class TestMonitoringTools:
 
         result = _get_system_status_impl(sections="intelligence")
 
-        assert "intelligence" in result
+        assert "intelligence" in result["data"]
 
     def test_get_intelligence_metrics_with_breakdown(self, temp_codebase):
         """Test metrics with breakdown via get_system_status."""
@@ -425,7 +422,7 @@ class TestMonitoringTools:
             sections="intelligence", include_breakdown=True
         )
 
-        assert "intelligence" in result
+        assert "intelligence" in result["data"]
 
     def test_get_performance_status(self, temp_codebase):
         """Test getting performance status via get_system_status(sections='performance')."""
@@ -433,7 +430,7 @@ class TestMonitoringTools:
 
         result = _get_system_status_impl(sections="performance")
 
-        assert "performance" in result
+        assert "performance" in result["data"]
 
     def test_get_performance_status_with_benchmark(self, temp_codebase):
         """Test performance with benchmark via get_system_status."""
@@ -442,7 +439,7 @@ class TestMonitoringTools:
         result = _get_system_status_impl(
             sections="performance", run_benchmark=True
         )
-        assert "performance" in result
+        assert "performance" in result["data"]
 
     def test_health_check_valid_path(self, temp_codebase):
         """Test health check via get_system_status(sections='health')."""
@@ -450,8 +447,8 @@ class TestMonitoringTools:
             sections="health", path=temp_codebase
         )
 
-        assert "health" in result
-        health = result["health"]
+        assert "health" in result["data"]
+        health = result["data"]["health"]
         assert health["healthy"] is True
         assert health["checks"]["path_exists"] is True
         assert health["checks"]["is_directory"] is True
@@ -464,7 +461,7 @@ class TestMonitoringTools:
             sections="health", path="/nonexistent/path"
         )
 
-        health = result["health"]
+        health = result["data"]["health"]
         assert health["healthy"] is False
         assert health["checks"]["path_exists"] is False
         assert len(health["issues"]) > 0
@@ -477,7 +474,7 @@ class TestMonitoringTools:
             sections="health", path=str(file_path)
         )
 
-        health = result["health"]
+        health = result["data"]["health"]
         assert health["healthy"] is False
         assert health["checks"]["is_directory"] is False
 
@@ -507,9 +504,8 @@ def process_data(data):
 
         result = await _search_codebase_impl(query="helper")
 
-        assert "results" in result
-        assert "query" in result
-        assert result["query"] == "helper"
+        assert isinstance(result["data"], list)
+        assert result["metadata"]["query"] == "helper"
 
     async def test_search_codebase_with_type(self, temp_codebase):
         """Test search with type filter."""
@@ -517,14 +513,14 @@ def process_data(data):
 
         result = await _search_codebase_impl(query="def", search_type="text")
 
-        assert result["search_type"] == "text"
+        assert result["metadata"]["search_type"] == "text"
 
     def test_analyze_codebase(self, temp_codebase):
         """Test analyzing codebase."""
         result = _analyze_codebase_impl(path=temp_codebase)
 
-        assert "analysis" in result
-        assert result["path"] == temp_codebase
+        assert "analysis" in result["data"]
+        assert result["metadata"]["path"] == temp_codebase
 
 
 class TestToolRegistration:

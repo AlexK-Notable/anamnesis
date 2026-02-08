@@ -1,5 +1,7 @@
 """LSP navigation, editing, and convention tools."""
 
+from typing import Literal
+
 from anamnesis.mcp_server._shared import (
     _categorize_references,
     _check_names_against_convention,
@@ -7,6 +9,7 @@ from anamnesis.mcp_server._shared import (
     _get_active_context,
     _get_intelligence_service,
     _get_symbol_service,
+    _success_response,
     _with_error_handling,
     mcp,
 )
@@ -55,7 +58,7 @@ def _find_symbol_impl(
         include_info=include_info,
         substring_matching=substring_matching,
     )
-    return {"success": True, "symbols": results, "total": len(results)}
+    return _success_response(results, total=len(results))
 
 
 @_with_error_handling("get_symbols_overview")
@@ -65,9 +68,7 @@ def _get_symbols_overview_impl(
 ) -> dict:
     svc = _get_symbol_service()
     result = svc.get_overview(relative_path, depth=depth)
-    if isinstance(result, dict):
-        result["success"] = True
-    return result
+    return _success_response(result)
 
 
 @_with_error_handling("find_referencing_symbols")
@@ -81,12 +82,10 @@ def _find_referencing_symbols_impl(
     # Intelligence augmentation: categorize references
     categorized = _categorize_references(results)
 
-    return {
-        "success": True,
-        "references": results,
-        "total": len(results),
-        "categories": categorized,
-    }
+    return _success_response(
+        {"references": results, "categories": categorized},
+        total=len(results),
+    )
 
 
 @_with_error_handling("replace_symbol_body")
@@ -97,35 +96,27 @@ def _replace_symbol_body_impl(
 ) -> dict:
     svc = _get_symbol_service()
     result = svc.replace_body(name_path, relative_path, body)
-    if isinstance(result, dict):
-        result.setdefault("success", True)
-    return result
+    return _success_response(result)
 
 
-@_with_error_handling("insert_after_symbol")
-def _insert_after_symbol_impl(
+@_with_error_handling("insert_near_symbol")
+def _insert_near_symbol_impl(
     name_path: str,
     relative_path: str,
     body: str,
+    position: str = "after",
 ) -> dict:
+    """Insert code before or after a symbol's definition."""
     svc = _get_symbol_service()
-    result = svc.insert_after(name_path, relative_path, body)
-    if isinstance(result, dict):
-        result.setdefault("success", True)
-    return result
-
-
-@_with_error_handling("insert_before_symbol")
-def _insert_before_symbol_impl(
-    name_path: str,
-    relative_path: str,
-    body: str,
-) -> dict:
-    svc = _get_symbol_service()
-    result = svc.insert_before(name_path, relative_path, body)
-    if isinstance(result, dict):
-        result.setdefault("success", True)
-    return result
+    if position == "after":
+        result = svc.insert_after(name_path, relative_path, body)
+    elif position == "before":
+        result = svc.insert_before(name_path, relative_path, body)
+    else:
+        return _failure_response(
+            f"Unknown position '{position}'. Choose from: before, after"
+        )
+    return _success_response(result)
 
 
 @_with_error_handling("rename_symbol")
@@ -136,42 +127,46 @@ def _rename_symbol_impl(
 ) -> dict:
     svc = _get_symbol_service()
     result = svc.rename(name_path, relative_path, new_name)
-    if isinstance(result, dict):
-        result.setdefault("success", True)
-    return result
+    return _success_response(result)
 
 
-@_with_error_handling("enable_lsp")
-def _enable_lsp_impl(language: str = "") -> dict:
+@_with_error_handling("manage_lsp")
+def _manage_lsp_impl(action: str = "status", language: str = "") -> dict:
+    """Manage LSP servers: enable or get status.
+
+    action="status": get current LSP server status.
+    action="enable": start LSP server(s).
+    """
     mgr = _get_lsp_manager()
-    if language:
-        success = mgr.start(language)
-        if success:
-            return {"success": True, "message": f"LSP server for '{language}' started"}
+
+    if action == "status":
+        result = mgr.get_status()
+        return _success_response(result)
+    elif action == "enable":
+        if language:
+            ok = mgr.start(language)
+            if ok:
+                return _success_response(
+                    {"language": language},
+                    message=f"LSP server for '{language}' started",
+                )
+            return _failure_response(
+                f"Failed to start LSP server for '{language}'. "
+                f"Ensure the language server binary is installed."
+            )
+        # Start all available
+        results = {}
+        for lang in ["python", "go", "rust", "typescript"]:
+            results[lang] = mgr.start(lang)
+        started = [l for l, ok in results.items() if ok]
+        failed = [l for l, ok in results.items() if not ok]
+        if not started:
+            return _failure_response("No LSP servers could be started")
+        return _success_response({"started": started, "failed": failed})
+    else:
         return _failure_response(
-            f"Failed to start LSP server for '{language}'. "
-            f"Ensure the language server binary is installed."
+            f"Unknown action '{action}'. Choose from: status, enable"
         )
-    # Start all available
-    results = {}
-    for lang in ["python", "go", "rust", "typescript"]:
-        results[lang] = mgr.start(lang)
-    started = [l for l, ok in results.items() if ok]
-    failed = [l for l, ok in results.items() if not ok]
-    return {
-        "success": bool(started),
-        "started": started,
-        "failed": failed,
-    }
-
-
-@_with_error_handling("get_lsp_status")
-def _get_lsp_status_impl() -> dict:
-    mgr = _get_lsp_manager()
-    result = mgr.get_status()
-    if isinstance(result, dict):
-        result.setdefault("success", True)
-    return result
 
 
 @_with_error_handling("match_sibling_style")
@@ -183,15 +178,16 @@ def _match_sibling_style_impl(
 ) -> dict:
     """Implementation for match_sibling_style tool."""
     svc = _get_symbol_service()
-    return svc.suggest_code_pattern(
+    raw = svc.suggest_code_pattern(
         relative_path,
         symbol_kind,
         context_symbol=context_symbol or None,
         max_examples=max_examples,
     )
+    return raw if not raw.get("success", True) else _success_response(raw)
 
 
-# Raw helpers (undecorated — called by the merged analyze_code_quality dispatch)
+# Raw helpers (undecorated -- called by the merged analyze_code_quality dispatch)
 
 
 def _analyze_file_complexity_helper(relative_path: str) -> dict:
@@ -215,7 +211,7 @@ def _get_complexity_hotspots_helper(relative_path: str, min_level: str = "high")
 # Decorated _impl functions (kept for backward test compatibility)
 
 
-# TODO(cleanup): Remove this backward-compat wrapper — tests migrated to canonical function
+# TODO(cleanup): Remove this backward-compat wrapper -- tests migrated to canonical function
 @_with_error_handling("analyze_file_complexity")
 def _analyze_file_complexity_impl(relative_path: str) -> dict:
     """Implementation for analyze_file_complexity tool."""
@@ -229,66 +225,33 @@ def _investigate_symbol_impl(
 ) -> dict:
     """Implementation for investigate_symbol tool."""
     svc = _get_symbol_service()
-    return svc.investigate_symbol(name_path, relative_path)
+    raw = svc.investigate_symbol(name_path, relative_path)
+    return raw if not raw.get("success", True) else _success_response(raw)
 
 
-# TODO(cleanup): Remove this backward-compat wrapper — tests migrated to canonical function
+# TODO(cleanup): Remove this backward-compat wrapper -- tests migrated to canonical function
 @_with_error_handling("suggest_refactorings")
 def _suggest_refactorings_impl(relative_path: str, max_suggestions: int = 10) -> dict:
     """Implementation for suggest_refactorings tool."""
     return _suggest_refactorings_helper(relative_path, max_suggestions)
 
 
-# TODO(cleanup): Remove this backward-compat wrapper — tests migrated to canonical function
+# TODO(cleanup): Remove this backward-compat wrapper -- tests migrated to canonical function
 @_with_error_handling("get_complexity_hotspots")
 def _get_complexity_hotspots_impl(relative_path: str, min_level: str = "high") -> dict:
     """Implementation for get_complexity_hotspots tool."""
     return _get_complexity_hotspots_helper(relative_path, min_level)
 
 
-@_with_error_handling("analyze_code_quality")
-def _analyze_code_quality_impl(
-    relative_path: str,
-    detail_level: str = "standard",
-    min_complexity_level: str = "high",
-    max_suggestions: int = 10,
-) -> dict:
-    """Implementation for analyze_code_quality tool."""
-    if detail_level == "quick":
-        return _get_complexity_hotspots_helper(relative_path, min_complexity_level)
-    elif detail_level == "standard":
-        return _analyze_file_complexity_helper(relative_path)
-    elif detail_level == "deep":
-        complexity_result = _analyze_file_complexity_helper(relative_path)
-        if not complexity_result.get("success", True):
-            return complexity_result
-        refactoring_result = _suggest_refactorings_helper(relative_path, max_suggestions)
-        for key in ("suggestions", "suggestion_count"):
-            if key in refactoring_result:
-                complexity_result[key] = refactoring_result[key]
-        complexity_result["detail_level"] = "deep"
-        return complexity_result
-    else:
-        return _failure_response(
-            f"Unknown detail_level '{detail_level}'. Choose from: quick, standard, deep"
-        )
-
-
-@_with_error_handling("check_conventions")
-def _check_conventions_impl(
-    relative_path: str,
-) -> dict:
-    """Implementation for check_conventions tool."""
-    # Get symbols from file
+def _check_conventions_helper(relative_path: str) -> dict:
+    """Convention checking logic (no error wrapping)."""
     svc = _get_symbol_service()
     overview = svc.get_overview(relative_path, depth=1)
 
-    # Get learned conventions
     intelligence_service = _get_intelligence_service()
     profile = intelligence_service.get_developer_profile()
     conventions = profile.coding_style.get("naming_conventions", {})
 
-    # Map symbol kinds to convention keys
     kind_map = {
         "Class": conventions.get("classes", "PascalCase"),
         "Function": conventions.get("functions", "snake_case"),
@@ -300,7 +263,6 @@ def _check_conventions_impl(
     all_violations = []
     symbols_checked = 0
 
-    # overview is a dict like {"Class": [...], "Function": [...]}
     if isinstance(overview, dict):
         for kind, symbols in overview.items():
             expected = kind_map.get(kind)
@@ -316,14 +278,85 @@ def _check_conventions_impl(
             violations = _check_names_against_convention(names, expected, kind)
             all_violations.extend(violations)
 
-    return {
-        "success": True,
-        "file": relative_path,
-        "symbols_checked": symbols_checked,
-        "violations": all_violations,
-        "violation_count": len(all_violations),
-        "conventions_used": conventions,
-    }
+    return _success_response(
+        {
+            "file": relative_path,
+            "symbols_checked": symbols_checked,
+            "violations": all_violations,
+            "violation_count": len(all_violations),
+            "conventions_used": conventions,
+        },
+    )
+
+
+@_with_error_handling("analyze_code_quality")
+def _analyze_code_quality_impl(
+    relative_path: str,
+    detail_level: str = "standard",
+    min_complexity_level: str = "high",
+    max_suggestions: int = 10,
+) -> dict:
+    """Implementation for analyze_code_quality tool.
+
+    detail_level values: quick, standard, deep, conventions.
+    """
+    if detail_level == "quick":
+        raw = _get_complexity_hotspots_helper(relative_path, min_complexity_level)
+        return raw if not raw.get("success", True) else _success_response(raw)
+    elif detail_level == "standard":
+        raw = _analyze_file_complexity_helper(relative_path)
+        return raw if not raw.get("success", True) else _success_response(raw)
+    elif detail_level == "deep":
+        complexity_result = _analyze_file_complexity_helper(relative_path)
+        if not complexity_result.get("success", True):
+            return complexity_result
+        refactoring_result = _suggest_refactorings_helper(relative_path, max_suggestions)
+        for key in ("suggestions", "suggestion_count"):
+            if key in refactoring_result:
+                complexity_result[key] = refactoring_result[key]
+        complexity_result["detail_level"] = "deep"
+        return _success_response(complexity_result)
+    elif detail_level == "conventions":
+        return _check_conventions_helper(relative_path)
+    else:
+        return _failure_response(
+            f"Unknown detail_level '{detail_level}'. Choose from: quick, standard, deep, conventions"
+        )
+
+
+# Backward-compat alias for _check_conventions_impl (kept for test imports)
+@_with_error_handling("check_conventions")
+def _check_conventions_impl(relative_path: str) -> dict:
+    """Backward-compat wrapper: delegates to _check_conventions_helper."""
+    return _check_conventions_helper(relative_path)
+
+
+# Backward-compat aliases for insert_before/after (kept for test imports)
+@_with_error_handling("insert_after_symbol")
+def _insert_after_symbol_impl(name_path: str, relative_path: str, body: str) -> dict:
+    """Backward-compat wrapper: delegates to _insert_near_symbol_impl."""
+    svc = _get_symbol_service()
+    result = svc.insert_after(name_path, relative_path, body)
+    return _success_response(result)
+
+
+@_with_error_handling("insert_before_symbol")
+def _insert_before_symbol_impl(name_path: str, relative_path: str, body: str) -> dict:
+    """Backward-compat wrapper: delegates to _insert_near_symbol_impl."""
+    svc = _get_symbol_service()
+    result = svc.insert_before(name_path, relative_path, body)
+    return _success_response(result)
+
+
+# Backward-compat aliases for enable_lsp/get_lsp_status (kept for test imports)
+def _enable_lsp_impl(language: str = "") -> dict:
+    """Backward-compat wrapper: delegates to _manage_lsp_impl."""
+    return _manage_lsp_impl(action="enable", language=language)
+
+
+def _get_lsp_status_impl() -> dict:
+    """Backward-compat wrapper: delegates to _manage_lsp_impl."""
+    return _manage_lsp_impl(action="status")
 
 
 # =============================================================================
@@ -431,45 +464,27 @@ def replace_symbol_body(
 
 
 @mcp.tool
-def insert_after_symbol(
+def insert_near_symbol(
     name_path: str,
     relative_path: str,
     body: str,
+    position: Literal["before", "after"] = "after",
 ) -> dict:
-    """Insert code after a symbol's definition. Requires LSP.
+    """Insert code before or after a symbol's definition. Requires LSP.
 
-    A typical use case is adding a new method after an existing one.
+    Use position="after" to add a new method after an existing one.
+    Use position="before" to add an import or decorator before a class.
 
     Args:
-        name_path: Symbol after which to insert (e.g., "MyClass/existing_method")
+        name_path: Symbol relative to which to insert
         relative_path: File containing the symbol
-        body: Code to insert after the symbol
+        body: Code to insert
+        position: "before" or "after" the symbol (default "after")
 
     Returns:
         Success status with the insertion line number
     """
-    return _insert_after_symbol_impl(name_path, relative_path, body)
-
-
-@mcp.tool
-def insert_before_symbol(
-    name_path: str,
-    relative_path: str,
-    body: str,
-) -> dict:
-    """Insert code before a symbol's definition. Requires LSP.
-
-    A typical use case is adding an import or decorator before a class.
-
-    Args:
-        name_path: Symbol before which to insert
-        relative_path: File containing the symbol
-        body: Code to insert before the symbol
-
-    Returns:
-        Success status with the insertion line number
-    """
-    return _insert_before_symbol_impl(name_path, relative_path, body)
+    return _insert_near_symbol_impl(name_path, relative_path, body, position)
 
 
 @mcp.tool
@@ -495,41 +510,32 @@ def rename_symbol(
 
 
 @mcp.tool
-def enable_lsp(language: str = "") -> dict:
-    """Start LSP server(s) for enhanced code navigation and editing.
+def manage_lsp(action: Literal["status", "enable"] = "status", language: str = "") -> dict:
+    """Manage LSP language servers: enable or check status.
 
+    Use action="enable" to start LSP server(s) for enhanced code navigation.
     LSP provides compiler-grade accuracy for symbol lookup, references,
     and renaming. Without LSP, navigation falls back to tree-sitter.
+
+    Use action="status" to check which servers are running.
 
     Supported languages: python (Pyright), go (gopls), rust (rust-analyzer),
     typescript (typescript-language-server).
 
     Args:
+        action: "enable" to start servers, "status" to check current state
         language: Language to enable (e.g., "python"). Empty starts all available.
 
     Returns:
-        Status of which servers were started
+        Status of LSP servers or result of enable operation
     """
-    return _enable_lsp_impl(language)
-
-
-@mcp.tool
-def get_lsp_status() -> dict:
-    """Get status of LSP language servers.
-
-    Shows which languages are supported, which servers are running,
-    and the current project root.
-
-    Returns:
-        Status dict with supported languages and running servers
-    """
-    return _get_lsp_status_impl()
+    return _manage_lsp_impl(action, language)
 
 
 @mcp.tool
 def match_sibling_style(
     relative_path: str,
-    symbol_kind: str,
+    symbol_kind: Literal["function", "method", "class"],
     context_symbol: str = "",
     max_examples: int = 3,
 ) -> dict:
@@ -539,7 +545,7 @@ def match_sibling_style(
     patterns, common decorators, return type hints, and structural conventions.
     Use before writing new code to match the surrounding style.
 
-    Unlike get_pattern_recommendations which suggests project-wide design
+    Unlike get_coding_guidance which suggests project-wide design
     patterns, this focuses on the immediate file-local style.
 
     Args:
@@ -555,34 +561,16 @@ def match_sibling_style(
 
 
 @mcp.tool
-def check_conventions(
-    relative_path: str,
-) -> dict:
-    """Check symbols in a file against learned naming conventions.
-
-    Analyzes function, class, and variable names against the project's
-    established naming patterns. Reports deviations that break consistency.
-
-    Args:
-        relative_path: File to check (relative to project root)
-
-    Returns:
-        Violations with expected vs actual naming style per symbol
-    """
-    return _check_conventions_impl(relative_path)
-
-
-@mcp.tool
 def analyze_code_quality(
     relative_path: str,
-    detail_level: str = "standard",
-    min_complexity_level: str = "high",
+    detail_level: Literal["quick", "standard", "deep", "conventions"] = "standard",
+    min_complexity_level: Literal["low", "moderate", "high", "very_high"] = "high",
     max_suggestions: int = 10,
 ) -> dict:
-    """Analyze code quality with complexity metrics, hotspots, and refactoring suggestions.
+    """Analyze code quality with complexity metrics, hotspots, conventions, and refactoring suggestions.
 
-    Combines complexity analysis, hotspot detection, and refactoring suggestions
-    into a single tool with configurable depth.
+    Combines complexity analysis, hotspot detection, convention checking, and
+    refactoring suggestions into a single tool with configurable depth.
 
     Args:
         relative_path: File to analyze (relative to project root)
@@ -590,12 +578,13 @@ def analyze_code_quality(
             - "quick": Only high-complexity hotspots (fastest)
             - "standard": Full per-function complexity metrics and breakdown (default)
             - "deep": Full metrics plus refactoring suggestions with evidence
+            - "conventions": Check naming conventions against learned project style
         min_complexity_level: Minimum level for hotspots: low, moderate, high, very_high
             (default: high)
         max_suggestions: Maximum refactoring suggestions when detail_level="deep" (default 10)
 
     Returns:
-        Complexity metrics, hotspots, and optionally refactoring suggestions
+        Complexity metrics, hotspots, conventions, and optionally refactoring suggestions
     """
     return _analyze_code_quality_impl(
         relative_path, detail_level, min_complexity_level, max_suggestions

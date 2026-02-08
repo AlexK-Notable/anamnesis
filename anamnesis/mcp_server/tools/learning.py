@@ -15,6 +15,7 @@ from anamnesis.mcp_server._shared import (
     _get_learning_service,
     _get_memory_service,
     _set_current_path,
+    _success_response,
     _with_error_handling,
     mcp,
 )
@@ -51,25 +52,24 @@ def _auto_learn_if_needed_impl(
         concepts_count = len(learned_data.get("concepts", [])) if learned_data else 0
         patterns_count = len(learned_data.get("patterns", [])) if learned_data else 0
 
-        return {
-            "success": True,
-            "status": "already_learned",
-            "message": "Intelligence data already exists for this codebase",
-            "path": resolved_path,
-            "concepts_count": concepts_count,
-            "patterns_count": patterns_count,
-            "action_taken": "none",
-            "include_progress": include_progress,
-        }
+        return _success_response(
+            {
+                "status": "already_learned",
+                "concepts_count": concepts_count,
+                "patterns_count": patterns_count,
+                "action_taken": "none",
+                "include_progress": include_progress,
+            },
+            message="Intelligence data already exists for this codebase",
+            path=resolved_path,
+        )
 
     if skip_learning:
-        return {
-            "success": True,
-            "status": "skipped",
-            "message": "Learning skipped as requested",
-            "path": resolved_path,
-            "action_taken": "none",
-        }
+        return _success_response(
+            {"status": "skipped", "action_taken": "none"},
+            message="Learning skipped as requested",
+            path=resolved_path,
+        )
 
     # Perform learning
     options = LearningOptions(
@@ -98,11 +98,8 @@ def _auto_learn_if_needed_impl(
             time_elapsed_ms=result.time_elapsed_ms,
         )
 
-    response = {
-        "success": True,
+    data: dict = {
         "status": "learned",
-        "message": "Successfully learned from codebase",
-        "path": resolved_path,
         "action_taken": "learn",
         "concepts_learned": result.concepts_learned,
         "patterns_learned": result.patterns_learned,
@@ -111,10 +108,10 @@ def _auto_learn_if_needed_impl(
     }
 
     if include_progress:
-        response["insights"] = result.insights
+        data["insights"] = result.insights
 
     if include_setup_steps:
-        response["setup_steps"] = [
+        data["setup_steps"] = [
             "1. Analyzed codebase structure",
             "2. Extracted semantic concepts",
             "3. Discovered coding patterns",
@@ -143,11 +140,15 @@ def _auto_learn_if_needed_impl(
                     onboarding_msg = "project-overview memory created"
                     if symbol_data:
                         onboarding_msg += f" (enriched with symbols from {len(symbol_data)} files)"
-                    response["auto_onboarding"] = onboarding_msg
+                    data["auto_onboarding"] = onboarding_msg
         except Exception:
             logger.warning("Auto-onboarding failed for %s", resolved_path, exc_info=True)
 
-    return response
+    return _success_response(
+        data,
+        message="Successfully learned from codebase",
+        path=resolved_path,
+    )
 
 
 # =============================================================================

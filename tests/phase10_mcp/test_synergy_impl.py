@@ -57,17 +57,18 @@ class TestAnalyzeFileComplexity:
         )
 
         assert result["success"] is True
-        assert result["file"] == "src/service.py"
-        assert "function_count" in result
-        assert "class_count" in result
-        assert result["function_count"] > 0
-        assert result["class_count"] >= 1
-        assert "functions" in result
-        assert isinstance(result["functions"], list)
-        assert len(result["functions"]) == result["function_count"]
+        data = result["data"]
+        assert data["file"] == "src/service.py"
+        assert "function_count" in data
+        assert "class_count" in data
+        assert data["function_count"] > 0
+        assert data["class_count"] >= 1
+        assert "functions" in data
+        assert isinstance(data["functions"], list)
+        assert len(data["functions"]) == data["function_count"]
 
         # Each function entry has required keys
-        for func in result["functions"]:
+        for func in data["functions"]:
             assert "name" in func
             assert "cyclomatic" in func
             assert "cognitive" in func
@@ -80,7 +81,8 @@ class TestAnalyzeFileComplexity:
             _analyze_code_quality_impl("src/service.py", detail_level="standard")
         )
 
-        funcs_by_name = {f["name"]: f for f in result["functions"]}
+        data = result["data"]
+        funcs_by_name = {f["name"]: f for f in data["functions"]}
         assert "complex_handler" in funcs_by_name
         assert "simple_add" in funcs_by_name
 
@@ -112,8 +114,8 @@ class TestAnalyzeFileComplexity:
         )
 
         assert result["success"] is True
-        assert result["function_count"] == 0
-        assert result["avg_cyclomatic"] == 0
+        assert result["data"]["function_count"] == 0
+        assert result["data"]["avg_cyclomatic"] == 0
 
     def test_unicode_identifiers(self, sample_python_project):
         """Non-ASCII but valid Python identifiers should be parsed by tree-sitter.
@@ -133,7 +135,7 @@ class TestAnalyzeFileComplexity:
         )
 
         assert result["success"] is True
-        assert result["function_count"] >= 2
+        assert result["data"]["function_count"] >= 2
 
 
 # =============================================================================
@@ -155,11 +157,12 @@ class TestGetComplexityHotspots:
         )
 
         assert result["success"] is True
-        assert "hotspots" in result
-        assert isinstance(result["hotspots"], list)
-        assert "total_functions" in result
-        assert "hotspot_count" in result
-        assert result["hotspot_count"] == len(result["hotspots"])
+        data = result["data"]
+        assert "hotspots" in data
+        assert isinstance(data["hotspots"], list)
+        assert "total_functions" in data
+        assert "hotspot_count" in data
+        assert data["hotspot_count"] == len(data["hotspots"])
 
     def test_high_level_filter(self):
         """At 'high' level, only highest-complexity functions are returned."""
@@ -179,7 +182,7 @@ class TestGetComplexityHotspots:
         )
 
         assert high["success"] is True
-        assert high["hotspot_count"] <= moderate["hotspot_count"]
+        assert high["data"]["hotspot_count"] <= moderate["data"]["hotspot_count"]
 
     def test_low_complexity_file_empty(self):
         """utils.py has simple functions — no 'high' hotspots expected."""
@@ -192,8 +195,8 @@ class TestGetComplexityHotspots:
         )
 
         assert result["success"] is True
-        assert result["hotspot_count"] == 0
-        assert result["hotspots"] == []
+        assert result["data"]["hotspot_count"] == 0
+        assert result["data"]["hotspots"] == []
 
     def test_invalid_min_level(self):
         """Unknown min_level string should default to 'high' threshold, not crash.
@@ -220,7 +223,7 @@ class TestGetComplexityHotspots:
 
         assert invalid_result["success"] is True
         # Should behave identically to min_complexity_level="high"
-        assert invalid_result["hotspot_count"] == high_result["hotspot_count"]
+        assert invalid_result["data"]["hotspot_count"] == high_result["data"]["hotspot_count"]
 
 
 # =============================================================================
@@ -238,14 +241,15 @@ class TestSuggestRefactorings:
         )
 
         assert result["success"] is True
-        assert "suggestions" in result
-        assert isinstance(result["suggestions"], list)
+        data = result["data"]
+        assert "suggestions" in data
+        assert isinstance(data["suggestions"], list)
         # deep merges complexity + refactoring — complexity keys present too
-        assert "function_count" in result
-        assert result["function_count"] > 0
+        assert "function_count" in data
+        assert data["function_count"] > 0
 
         # Each suggestion has required keys
-        for s in result["suggestions"]:
+        for s in data["suggestions"]:
             assert "type" in s
             assert "title" in s
             assert "symbol" in s
@@ -260,7 +264,7 @@ class TestSuggestRefactorings:
         )
 
         assert result["success"] is True
-        assert len(result["suggestions"]) <= 1
+        assert len(result["data"]["suggestions"]) <= 1
 
     def test_simple_file_fewer_suggestions(self):
         """utils.py (simple functions) produces fewer suggestions than service.py."""
@@ -273,8 +277,8 @@ class TestSuggestRefactorings:
 
         assert complex_result["success"] is True
         assert simple_result["success"] is True
-        assert len(simple_result["suggestions"]) <= len(
-            complex_result["suggestions"]
+        assert len(simple_result["data"]["suggestions"]) <= len(
+            complex_result["data"]["suggestions"]
         )
 
     def test_unparseable_file(self, sample_python_project):
@@ -294,7 +298,7 @@ class TestSuggestRefactorings:
         )
 
         assert result["success"] is True
-        assert result["suggestions"] == []
+        assert result["data"]["suggestions"] == []
 
     def test_max_suggestions_zero(self):
         """max_suggestions=0 should return an empty list, not an error.
@@ -309,7 +313,7 @@ class TestSuggestRefactorings:
         )
 
         assert result["success"] is True
-        assert result["suggestions"] == []
+        assert result["data"]["suggestions"] == []
 
 
 # =============================================================================
@@ -327,13 +331,14 @@ class TestInvestigateSymbol:
         )
 
         assert result["success"] is True
-        assert result["symbol"] == "UserService"
-        assert result["file"] == "src/service.py"
-        assert "kind" in result
-        assert "complexity" in result
-        assert "naming_style" in result
-        assert "convention_match" in result
-        assert isinstance(result["suggestions"], list)
+        data = result["data"]
+        assert data["symbol"] == "UserService"
+        assert data["file"] == "src/service.py"
+        assert "kind" in data
+        assert "complexity" in data
+        assert "naming_style" in data
+        assert "convention_match" in data
+        assert isinstance(data["suggestions"], list)
 
     def test_investigate_function(self):
         """Investigating complex_handler returns complexity metrics."""
@@ -342,9 +347,10 @@ class TestInvestigateSymbol:
         )
 
         assert result["success"] is True
-        assert result["symbol"] == "complex_handler"
-        assert "complexity" in result
-        complexity = result["complexity"]
+        data = result["data"]
+        assert data["symbol"] == "complex_handler"
+        assert "complexity" in data
+        complexity = data["complexity"]
         assert "cyclomatic" in complexity
         assert "cognitive" in complexity
         assert complexity["cyclomatic"] > 1  # non-trivial function
@@ -381,9 +387,10 @@ class TestInvestigateSymbol:
         )
 
         assert result["success"] is True
-        assert result["symbol"] == "UserService"
-        assert "complexity" in result
-        complexity = result["complexity"]
+        data = result["data"]
+        assert data["symbol"] == "UserService"
+        assert "complexity" in data
+        complexity = data["complexity"]
         assert "cyclomatic" in complexity
         assert "cognitive" in complexity
         assert "maintainability" in complexity
@@ -405,12 +412,13 @@ class TestSuggestCodePattern:
         )
 
         assert result["success"] is True
-        assert result["symbol_kind"] == "class"
-        assert "naming_convention" in result
-        assert "examples" in result
-        assert isinstance(result["examples"], list)
-        assert "confidence" in result
-        assert result["confidence"] >= 0
+        data = result["data"]
+        assert data["symbol_kind"] == "class"
+        assert "naming_convention" in data
+        assert "examples" in data
+        assert isinstance(data["examples"], list)
+        assert "confidence" in data
+        assert data["confidence"] >= 0
 
     def test_suggest_function_pattern(self):
         """Suggesting a function pattern returns convention data."""
@@ -419,10 +427,11 @@ class TestSuggestCodePattern:
         )
 
         assert result["success"] is True
-        assert result["symbol_kind"] == "function"
-        assert "naming_convention" in result
-        assert len(result["examples"]) > 0
-        assert result["siblings_analyzed"] > 0
+        data = result["data"]
+        assert data["symbol_kind"] == "function"
+        assert "naming_convention" in data
+        assert len(data["examples"]) > 0
+        assert data["siblings_analyzed"] > 0
 
     def test_with_context_symbol(self):
         """Passing context_symbol returns a result without crashing.
@@ -454,9 +463,10 @@ class TestSuggestCodePattern:
         )
 
         assert result["success"] is True
-        assert "naming_convention" in result
-        assert result["siblings_analyzed"] > 0
-        assert len(result["examples"]) > 0
+        data = result["data"]
+        assert "naming_convention" in data
+        assert data["siblings_analyzed"] > 0
+        assert len(data["examples"]) > 0
 
     def test_constants_only_file(self, sample_python_project):
         """File with only constants (no functions/classes) returns empty pattern.
@@ -476,8 +486,8 @@ class TestSuggestCodePattern:
         )
 
         assert result["success"] is True
-        assert result["naming_convention"] == "unknown"
-        assert result["confidence"] == 0.0
+        assert result["data"]["naming_convention"] == "unknown"
+        assert result["data"]["confidence"] == 0.0
 
     def test_context_symbol_empty_string(self):
         """Passing context_symbol='' should behave like omitting it entirely.
@@ -503,8 +513,8 @@ class TestSuggestCodePattern:
         # Both should succeed and produce equivalent results
         assert without_context["success"] is True
         assert with_empty_context["success"] is True
-        assert without_context["siblings_analyzed"] == with_empty_context["siblings_analyzed"]
-        assert without_context["naming_convention"] == with_empty_context["naming_convention"]
+        assert without_context["data"]["siblings_analyzed"] == with_empty_context["data"]["siblings_analyzed"]
+        assert without_context["data"]["naming_convention"] == with_empty_context["data"]["naming_convention"]
 
 
 # =============================================================================
@@ -520,8 +530,9 @@ class TestCheckConventions:
         result = _as_dict(_check_conventions_impl("src/service.py"))
 
         assert result["success"] is True
-        assert result["symbols_checked"] > 0
-        assert isinstance(result["violations"], list)
+        data = result["data"]
+        assert data["symbols_checked"] > 0
+        assert isinstance(data["violations"], list)
 
     def test_nonexistent_file(self):
         """Nonexistent file returns success with 0 symbols or error."""
@@ -529,7 +540,7 @@ class TestCheckConventions:
 
         # Either error response or success with 0 symbols checked
         if result["success"]:
-            assert result["symbols_checked"] == 0
+            assert result["data"]["symbols_checked"] == 0
         else:
             assert "error" in result
 
@@ -543,7 +554,8 @@ class TestCheckConventions:
         result = _as_dict(_check_conventions_impl("src/service.py"))
 
         assert result["success"] is True
-        conventions = result["conventions_used"]
+        data = result["data"]
+        conventions = data["conventions_used"]
         assert isinstance(conventions, dict)
         # Default conventions for functions and classes must always be present
         assert "functions" in conventions
@@ -567,7 +579,8 @@ class TestCheckConventions:
         result = _as_dict(_check_conventions_impl("src/bad_naming.py"))
 
         assert result["success"] is True
-        assert result["symbols_checked"] > 0
+        data = result["data"]
+        assert data["symbols_checked"] > 0
         # camelCase functions in a snake_case project should be flagged
-        assert isinstance(result["violations"], list)
-        assert result["violation_count"] > 0
+        assert isinstance(data["violations"], list)
+        assert data["violation_count"] > 0

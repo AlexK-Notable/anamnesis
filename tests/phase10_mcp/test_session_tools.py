@@ -30,9 +30,8 @@ class TestStartSession:
         result = _start_session_impl(name="Test Session")
 
         assert result["success"] is True
-        assert "session" in result
-        assert result["session"]["name"] == "Test Session"
-        assert result["session"]["is_active"] is True
+        assert result["data"]["name"] == "Test Session"
+        assert result["data"]["is_active"] is True
 
     def test_start_session_with_feature_and_files(self):
         """Start session with feature and files."""
@@ -44,7 +43,7 @@ class TestStartSession:
         )
 
         assert result["success"] is True
-        session = result["session"]
+        session = result["data"]
         assert session["feature"] == "authentication"
         assert "/src/auth.py" in session["files"]
         assert "Implement login" in session["tasks"]
@@ -54,7 +53,7 @@ class TestStartSession:
         result1 = _start_session_impl(name="Session 1")
         result2 = _start_session_impl(name="Session 2")
 
-        assert result1["session"]["session_id"] != result2["session"]["session_id"]
+        assert result1["data"]["session_id"] != result2["data"]["session_id"]
 
 
 class TestEndSession:
@@ -64,15 +63,15 @@ class TestEndSession:
         """End the currently active session."""
         # Start a session
         start_result = _start_session_impl(name="Test")
-        session_id = start_result["session"]["session_id"]
+        session_id = start_result["data"]["session_id"]
 
         # End it
         result = _end_session_impl()
 
         assert result["success"] is True
-        assert result["session"]["session_id"] == session_id
-        assert result["session"]["is_active"] is False
-        assert result["session"]["ended_at"] is not None
+        assert result["data"]["session_id"] == session_id
+        assert result["data"]["is_active"] is False
+        assert result["data"]["ended_at"] is not None
 
     def test_end_specific_session(self):
         """End a specific session by ID."""
@@ -81,15 +80,15 @@ class TestEndSession:
         result2 = _start_session_impl(name="Session 2")
 
         # End the first one
-        result = _end_session_impl(session_id=result1["session"]["session_id"])
+        result = _end_session_impl(session_id=result1["data"]["session_id"])
 
         assert result["success"] is True
 
         # Second session should still be active
         list_result = _list_sessions_impl(active_only=True)
-        active_sessions = list_result["sessions"]
+        active_sessions = list_result["data"]
         assert len(active_sessions) == 1
-        assert active_sessions[0]["session_id"] == result2["session"]["session_id"]
+        assert active_sessions[0]["session_id"] == result2["data"]["session_id"]
 
     def test_end_session_without_active(self):
         """End session when no active session returns error."""
@@ -117,7 +116,7 @@ class TestRecordDecision:
         )
 
         assert result["success"] is True
-        decision = result["decision"]
+        decision = result["data"]
         assert decision["decision"] == "Use JWT for authentication"
         assert decision["context"] == "API design"
         assert decision["rationale"] == "Stateless is better for scaling"
@@ -132,14 +131,14 @@ class TestRecordDecision:
         )
 
         assert result["success"] is True
-        assert result["decision"]["session_id"] == ""
+        assert result["data"]["session_id"] == ""
 
     def test_record_decision_generates_unique_id(self):
         """Each decision gets a unique ID."""
         result1 = _record_decision_impl(decision="Decision 1")
         result2 = _record_decision_impl(decision="Decision 2")
 
-        assert result1["decision"]["decision_id"] != result2["decision"]["decision_id"]
+        assert result1["data"]["decision_id"] != result2["data"]["decision_id"]
 
 
 class TestGetSession:
@@ -158,7 +157,7 @@ class TestGetSession:
     def test_get_session_by_id(self):
         """Get a specific session by ID."""
         start_result = _start_session_impl(name="Specific")
-        session_id = start_result["session"]["session_id"]
+        session_id = start_result["data"]["session_id"]
 
         result = _get_session_impl(session_id=session_id)
 
@@ -192,20 +191,20 @@ class TestListSessions:
         result = _list_sessions_impl()
 
         assert result["success"] is True
-        assert result["total"] == 3
-        assert len(result["sessions"]) == 3
+        assert result["metadata"]["total"] == 3
+        assert len(result["data"]) == 3
 
     def test_list_active_only(self):
         """List only active sessions."""
         result1 = _start_session_impl(name="Session 1")
         _start_session_impl(name="Session 2")
-        _end_session_impl(session_id=result1["session"]["session_id"])
+        _end_session_impl(session_id=result1["data"]["session_id"])
 
         result = _list_sessions_impl(active_only=True)
 
         assert result["success"] is True
-        assert result["total"] == 1
-        assert result["sessions"][0]["name"] == "Session 2"
+        assert result["metadata"]["total"] == 1
+        assert result["data"][0]["name"] == "Session 2"
 
     def test_list_sessions_with_limit(self):
         """List sessions respects limit."""
@@ -215,7 +214,7 @@ class TestListSessions:
         result = _list_sessions_impl(limit=3)
 
         assert result["success"] is True
-        assert len(result["sessions"]) <= 3
+        assert len(result["data"]) <= 3
 
 
 class TestGetDecisions:
@@ -230,13 +229,13 @@ class TestGetDecisions:
         result = _get_decisions_impl()
 
         assert result["success"] is True
-        assert result["total"] == 3
+        assert result["metadata"]["total"] == 3
 
     def test_get_decisions_by_session(self):
         """Get decisions for a specific session."""
         # Session 1 with 2 decisions
         start_result = _start_session_impl(name="Session 1")
-        session_id = start_result["session"]["session_id"]
+        session_id = start_result["data"]["session_id"]
         _record_decision_impl(decision="S1 Decision 1")
         _record_decision_impl(decision="S1 Decision 2")
 
@@ -248,7 +247,7 @@ class TestGetDecisions:
         result = _get_decisions_impl(session_id=session_id)
 
         assert result["success"] is True
-        assert result["total"] == 2
+        assert result["metadata"]["total"] == 2
 
     def test_get_decisions_with_limit(self):
         """Get decisions respects limit."""
@@ -258,7 +257,7 @@ class TestGetDecisions:
         result = _get_decisions_impl(limit=2)
 
         assert result["success"] is True
-        assert len(result["decisions"]) <= 2
+        assert len(result["data"]) <= 2
 
 
 class TestSessionIntegration:
@@ -274,7 +273,7 @@ class TestSessionIntegration:
             tasks=["Implement login"],
         )
         assert start_result["success"] is True
-        session_id = start_result["session"]["session_id"]
+        session_id = start_result["data"]["session_id"]
 
         # Record decisions
         _record_decision_impl(
@@ -293,8 +292,8 @@ class TestSessionIntegration:
         # End session
         end_result = _end_session_impl()
         assert end_result["success"] is True
-        assert end_result["session"]["is_active"] is False
+        assert end_result["data"]["is_active"] is False
 
         # Verify decisions still accessible
         decisions_result = _get_decisions_impl(session_id=session_id)
-        assert decisions_result["total"] == 2
+        assert decisions_result["metadata"]["total"] == 2

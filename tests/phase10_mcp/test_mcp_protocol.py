@@ -193,7 +193,7 @@ class TestMCPToolListing:
         tool_names = [t["name"] for t in tools]
         assert "get_system_status" in tool_names
         assert "auto_learn_if_needed" in tool_names
-        assert "get_project_blueprint" in tool_names
+        assert "analyze_project" in tool_names
 
     def test_tool_has_schema(self, mcp_server):
         """Each tool has proper input schema."""
@@ -251,11 +251,11 @@ class TestMCPToolExecution:
         content = result["content"][0]
         assert content["type"] == "text"
 
-        # The text should be JSON with health section
+        # The text should be JSON with health section under data
         status_data = json.loads(content["text"])
-        assert "health" in status_data
-        assert status_data["health"]["healthy"] is True
-        assert "checks" in status_data["health"]
+        assert "health" in status_data["data"]
+        assert status_data["data"]["health"]["healthy"] is True
+        assert "checks" in status_data["data"]["health"]
 
     def test_auto_learn_tool(self, mcp_server, temp_project):
         """Execute auto_learn_if_needed tool via MCP."""
@@ -280,11 +280,11 @@ class TestMCPToolExecution:
         content = response["result"]["content"][0]
         learn_data = json.loads(content["text"])
 
-        assert learn_data["status"] == "learned"
-        assert "concepts_learned" in learn_data
+        assert learn_data["data"]["status"] == "learned"
+        assert "concepts_learned" in learn_data["data"]
 
-    def test_get_project_blueprint_tool(self, mcp_server, temp_project):
-        """Execute get_project_blueprint tool via MCP."""
+    def test_analyze_project_tool(self, mcp_server, temp_project):
+        """Execute analyze_project tool via MCP."""
         mcp_server.send_request(
             "initialize",
             {
@@ -306,8 +306,8 @@ class TestMCPToolExecution:
         response = mcp_server.send_request(
             "tools/call",
             {
-                "name": "get_project_blueprint",
-                "arguments": {"path": temp_project},
+                "name": "analyze_project",
+                "arguments": {"path": temp_project, "scope": "project"},
             },
         )
 
@@ -315,8 +315,8 @@ class TestMCPToolExecution:
         content = response["result"]["content"][0]
         blueprint = json.loads(content["text"])
 
-        assert "blueprint" in blueprint
-        bp = blueprint["blueprint"]
+        assert "blueprint" in blueprint["data"]
+        bp = blueprint["data"]["blueprint"]
         assert "tech_stack" in bp
         assert "learning_status" in bp
 
@@ -343,7 +343,7 @@ class TestMCPToolExecution:
         content = response["result"]["content"][0]
         data = json.loads(content["text"])
 
-        assert data["status"] in ["learned", "already_learned", "skipped"]
+        assert data["data"]["status"] in ["learned", "already_learned", "skipped"]
 
     def test_get_system_status_tool(self, mcp_server, temp_project):
         """Execute get_system_status tool via MCP."""
@@ -369,9 +369,9 @@ class TestMCPToolExecution:
         status = json.loads(content["text"])
 
         # Default sections are summary + metrics
-        assert "summary" in status
-        assert status["summary"]["status"] in ["healthy", "degraded", "unhealthy"]
-        assert "metrics" in status
+        assert "summary" in status["data"]
+        assert status["data"]["summary"]["status"] in ["healthy", "degraded", "unhealthy"]
+        assert "metrics" in status["data"]
 
 
 class TestMCPErrorHandling:
@@ -441,7 +441,7 @@ class TestMCPErrorHandling:
         assert "result" in response
         content = response["result"]["content"][0]
         data = json.loads(content["text"])
-        assert data["health"]["healthy"] is False
+        assert data["data"]["health"]["healthy"] is False
 
 
 class TestMCPProtocolCompliance:
@@ -542,14 +542,14 @@ class TestLearnQueryRecommendE2E:
             _auto_learn_if_needed_impl(path=self._project_path, force=True)
         )
         assert learn_result["success"] is True
-        assert learn_result["status"] == "learned"
-        assert "concepts_learned" in learn_result
+        assert learn_result["data"]["status"] == "learned"
+        assert "concepts_learned" in learn_result["data"]
 
         # Step 2: Query semantic insights (should find symbols from learned project)
         insights_result = as_dict(_get_semantic_insights_impl())
         assert insights_result["success"] is True
-        assert isinstance(insights_result["insights"], list)
-        assert isinstance(insights_result["total"], int)
+        assert isinstance(insights_result["data"], list)
+        assert isinstance(insights_result["metadata"]["total"], int)
 
         # Step 3: Get pattern recommendations for a task
         rec_result = as_dict(
@@ -558,9 +558,9 @@ class TestLearnQueryRecommendE2E:
             )
         )
         assert rec_result["success"] is True
-        assert "recommendations" in rec_result
-        assert isinstance(rec_result["recommendations"], list)
-        assert rec_result["problem_description"] == "add a utility function"
+        assert "recommendations" in rec_result["data"]
+        assert isinstance(rec_result["data"]["recommendations"], list)
+        assert rec_result["metadata"]["problem_description"] == "add a utility function"
 
 
 class TestMemoryCrudLifecycleE2E:
@@ -608,23 +608,23 @@ class TestMemoryCrudLifecycleE2E:
             _write_memory_impl("test-decisions", "# Architecture Decisions\n\nUse SQLite for storage.")
         )
         assert write_result["success"] is True
-        assert write_result["memory"]["name"] == "test-decisions"
+        assert write_result["data"]["name"] == "test-decisions"
 
         # Step 2: Read it back
         read_result = as_dict(_read_memory_impl("test-decisions"))
         assert read_result["success"] is True
-        assert "Architecture Decisions" in read_result["memory"]["content"]
+        assert "Architecture Decisions" in read_result["data"]["content"]
 
         # Step 3: List all memories — should include the new one
         list_result = as_dict(_list_memories_impl())
         assert list_result["success"] is True
-        names = [m["name"] for m in list_result["memories"]]
+        names = [m["name"] for m in list_result["data"]]
         assert "test-decisions" in names
 
         # Step 4: Search for the memory
         search_result = as_dict(_search_memories_impl("architecture"))
         assert search_result["success"] is True
-        assert len(search_result["results"]) > 0
+        assert len(search_result["data"]) > 0
 
         # Step 5: Delete the memory
         delete_result = as_dict(_delete_memory_impl("test-decisions"))
@@ -632,5 +632,5 @@ class TestMemoryCrudLifecycleE2E:
 
         # Step 6: Verify it's gone
         list_after = as_dict(_list_memories_impl())
-        names_after = [m["name"] for m in list_after["memories"]]
+        names_after = [m["name"] for m in list_after["data"]]
         assert "test-decisions" not in names_after

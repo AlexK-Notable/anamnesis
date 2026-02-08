@@ -39,20 +39,22 @@ class TestGetSymbolsOverview:
     def test_returns_overview_for_python_file(self):
         result = _as_dict(_get_symbols_overview_impl("src/service.py"))
         assert result["success"] is True
+        data = result["data"]
 
         # Should have classes and/or functions
         has_symbols = any(
-            key in result
+            key in data
             for key in ("Class", "Function", "classes", "functions")
         )
-        assert has_symbols or len(result) > 1  # at least success + something
+        assert has_symbols or len(data) > 0
 
     def test_overview_finds_class(self):
         result = _as_dict(_get_symbols_overview_impl("src/service.py"))
         assert result["success"] is True
+        data = result["data"]
 
         # UserService class should be present
-        classes = result.get("Class", [])
+        classes = data.get("Class", [])
         class_names = [
             c["name"] if isinstance(c, dict) else c for c in classes
         ]
@@ -61,8 +63,9 @@ class TestGetSymbolsOverview:
     def test_overview_finds_functions(self):
         result = _as_dict(_get_symbols_overview_impl("src/utils.py"))
         assert result["success"] is True
+        data = result["data"]
 
-        functions = result.get("Function", [])
+        functions = data.get("Function", [])
         func_names = [
             f["name"] if isinstance(f, dict) else f for f in functions
         ]
@@ -74,9 +77,10 @@ class TestGetSymbolsOverview:
         result = _as_dict(_get_symbols_overview_impl("src/ghost.py"))
         # Implementation logs the error but returns a valid (empty) overview
         assert result["success"] is True
+        data = result["data"]
         # Should not contain actual symbols
-        classes = result.get("Class", [])
-        functions = result.get("Function", [])
+        classes = data.get("Class", [])
+        functions = data.get("Function", [])
         assert len(classes) == 0
         assert len(functions) == 0
 
@@ -86,9 +90,10 @@ class TestGetSymbolsOverview:
             _get_symbols_overview_impl("src/service.py", depth=1)
         )
         assert result["success"] is True
+        data = result["data"]
 
         # With depth=1, classes should have children as a flat list
-        classes = result.get("Class", [])
+        classes = data.get("Class", [])
         for cls in classes:
             if isinstance(cls, dict) and cls.get("name") == "UserService":
                 children = cls.get("children", [])
@@ -114,10 +119,10 @@ class TestFindSymbol:
             _find_symbol_impl("UserService", relative_path="src/service.py")
         )
         assert result["success"] is True
-        assert result["total"] >= 1
+        assert result["metadata"]["total"] >= 1
         assert any(
             s.get("name") == "UserService" or "UserService" in str(s)
-            for s in result["symbols"]
+            for s in result["data"]
         )
 
     def test_find_function_by_name(self):
@@ -125,7 +130,7 @@ class TestFindSymbol:
             _find_symbol_impl("helper_func", relative_path="src/utils.py")
         )
         assert result["success"] is True
-        assert result["total"] >= 1
+        assert result["metadata"]["total"] >= 1
 
     def test_find_with_include_body(self):
         result = _as_dict(
@@ -136,10 +141,10 @@ class TestFindSymbol:
             )
         )
         assert result["success"] is True
-        assert result["total"] >= 1
+        assert result["metadata"]["total"] >= 1
 
         # At least one symbol should have body content
-        symbol = result["symbols"][0]
+        symbol = result["data"][0]
         body = symbol.get("body") or symbol.get("source") or ""
         assert len(body) > 0
 
@@ -151,7 +156,7 @@ class TestFindSymbol:
             )
         )
         assert result["success"] is True
-        assert result["total"] == 0
+        assert result["metadata"]["total"] == 0
 
     def test_find_with_substring_matching(self):
         """substring_matching=True should find partial matches."""
@@ -164,7 +169,7 @@ class TestFindSymbol:
         )
         assert result["success"] is True
         # Should find complex_handler
-        assert result["total"] >= 1
+        assert result["metadata"]["total"] >= 1
 
     def test_find_method_with_path(self):
         """UserService/get_user should find the method."""
@@ -175,7 +180,7 @@ class TestFindSymbol:
             )
         )
         assert result["success"] is True
-        assert result["total"] >= 1
+        assert result["metadata"]["total"] >= 1
 
     def test_find_across_codebase_without_relative_path(self):
         """Searching without relative_path searches entire project."""
@@ -183,4 +188,4 @@ class TestFindSymbol:
             _find_symbol_impl("UserService")
         )
         assert result["success"] is True
-        assert result["total"] >= 1
+        assert result["metadata"]["total"] >= 1

@@ -78,7 +78,7 @@ class TestHealthCheckSanitizesPathIssues:
 
     def test_nonexistent_path_is_sanitized(self):
         result = _call_health_impl(path="/home/testuser/projects/nonexistent")
-        issues = result["health"]["issues"]
+        issues = result["data"]["health"]["issues"]
 
         assert len(issues) >= 1
         for issue in issues:
@@ -88,7 +88,7 @@ class TestHealthCheckSanitizesPathIssues:
 
     def test_nonexistent_path_retains_useful_context(self):
         result = _call_health_impl(path="/home/testuser/projects/nonexistent")
-        issues = result["health"]["issues"]
+        issues = result["data"]["health"]["issues"]
 
         path_issues = [i for i in issues if "does not exist" in i.lower()]
         assert len(path_issues) >= 1
@@ -98,7 +98,7 @@ class TestHealthCheckSanitizesPathIssues:
         test_file = tmp_path / "not_a_dir.txt"
         test_file.write_text("content")
         result = _call_health_impl(path=str(test_file))
-        issues = result["health"]["issues"]
+        issues = result["data"]["health"]["issues"]
 
         for issue in issues:
             assert "/tmp/pytest" not in issue, (
@@ -119,7 +119,7 @@ class TestHealthCheckSanitizesServiceErrors:
             "Cannot initialize: /home/testuser/repos/anamnesis/data.db is locked"
         )
         result = _call_health_impl(learning_service_error=err)
-        issues = result["health"]["issues"]
+        issues = result["data"]["health"]["issues"]
 
         learning_issues = [i for i in issues if "Learning service error" in i]
         assert len(learning_issues) == 1
@@ -130,7 +130,7 @@ class TestHealthCheckSanitizesServiceErrors:
             "Failed to load /home/testuser/repos/anamnesis/models/encoder.bin"
         )
         result = _call_health_impl(intelligence_service_error=err)
-        issues = result["health"]["issues"]
+        issues = result["data"]["health"]["issues"]
 
         intel_issues = [i for i in issues if "Intelligence service error" in i]
         assert len(intel_issues) == 1
@@ -141,7 +141,7 @@ class TestHealthCheckSanitizesServiceErrors:
             "/var/lib/anamnesis/index.db: no such file or directory"
         )
         result = _call_health_impl(codebase_service_error=err)
-        issues = result["health"]["issues"]
+        issues = result["data"]["health"]["issues"]
 
         codebase_issues = [i for i in issues if "Codebase service error" in i]
         assert len(codebase_issues) == 1
@@ -158,7 +158,7 @@ class TestHealthCheckSanitizesServiceErrors:
                 "/etc/anamnesis/config.yaml"
             ),
         )
-        issues = result["health"]["issues"]
+        issues = result["data"]["health"]["issues"]
 
         for issue in issues:
             assert "/home/user" not in issue, f"Path leaked: {issue}"
@@ -176,7 +176,7 @@ class TestHealthCheckNoIssues:
 
     def test_healthy_path_produces_no_issues(self, tmp_path):
         result = _call_health_impl(path=str(tmp_path))
-        health = result["health"]
+        health = result["data"]["health"]
 
         assert health["healthy"] is True
         assert health["issues"] == []

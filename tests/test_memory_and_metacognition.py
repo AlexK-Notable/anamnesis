@@ -350,10 +350,10 @@ class TestMetacognitionTools:
 
         result = _reflect_impl(focus="collected_information")
         assert result["success"] is True
-        assert "prompt" in result
-        assert "Completeness" in result["prompt"]
-        assert "Relevance" in result["prompt"]
-        assert "Confidence" in result["prompt"]
+        assert "prompt" in result["data"]
+        assert "Completeness" in result["data"]["prompt"]
+        assert "Relevance" in result["data"]["prompt"]
+        assert "Confidence" in result["data"]["prompt"]
 
     def test_reflect_task_adherence(self):
         """reflect(focus='task_adherence') returns a prompt."""
@@ -361,10 +361,10 @@ class TestMetacognitionTools:
 
         result = _reflect_impl(focus="task_adherence")
         assert result["success"] is True
-        assert "prompt" in result
-        assert "Original goal" in result["prompt"]
-        assert "Scope" in result["prompt"]
-        assert "Progress" in result["prompt"]
+        assert "prompt" in result["data"]
+        assert "Original goal" in result["data"]["prompt"]
+        assert "Scope" in result["data"]["prompt"]
+        assert "Progress" in result["data"]["prompt"]
 
     def test_reflect_whether_done(self):
         """reflect(focus='whether_done') returns a prompt."""
@@ -372,10 +372,10 @@ class TestMetacognitionTools:
 
         result = _reflect_impl(focus="whether_done")
         assert result["success"] is True
-        assert "prompt" in result
-        assert "Completeness" in result["prompt"]
-        assert "Quality" in result["prompt"]
-        assert "Communication" in result["prompt"]
+        assert "prompt" in result["data"]
+        assert "Completeness" in result["data"]["prompt"]
+        assert "Quality" in result["data"]["prompt"]
+        assert "Communication" in result["data"]["prompt"]
 
 
 # =============================================================================
@@ -408,8 +408,8 @@ class TestWriteMemoryTool:
 
         result = _write_memory_impl("test-note", "# Test\nContent here.")
         assert result["success"] is True
-        assert result["memory"]["name"] == "test-note"
-        assert result["memory"]["content"] == "# Test\nContent here."
+        assert result["data"]["name"] == "test-note"
+        assert result["data"]["content"] == "# Test\nContent here."
 
     def test_write_invalid_name_returns_error(self):
         """write_memory with invalid name returns error."""
@@ -432,7 +432,7 @@ class TestReadMemoryTool:
         _write_memory_impl("readable", "the content")
         result = _read_memory_impl("readable")
         assert result["success"] is True
-        assert result["memory"]["content"] == "the content"
+        assert result["data"]["content"] == "the content"
 
     def test_read_nonexistent(self):
         """read_memory returns error for nonexistent memory."""
@@ -452,8 +452,8 @@ class TestListMemoriesTool:
 
         result = _list_memories_impl()
         assert result["success"] is True
-        assert result["total"] == 0
-        assert result["memories"] == []
+        assert result["metadata"]["total"] == 0
+        assert result["data"] == []
 
     def test_list_after_writes(self):
         """list_memories returns entries after writing."""
@@ -467,7 +467,7 @@ class TestListMemoriesTool:
 
         result = _list_memories_impl()
         assert result["success"] is True
-        assert result["total"] == 2
+        assert result["metadata"]["total"] == 2
 
 
 class TestDeleteMemoryTool:
@@ -483,7 +483,7 @@ class TestDeleteMemoryTool:
         _write_memory_impl("temp", "temporary")
         result = _delete_memory_impl("temp")
         assert result["success"] is True
-        assert result["deleted"] == "temp"
+        assert result["data"]["deleted"] == "temp"
 
     def test_delete_nonexistent(self):
         """delete_memory returns error for nonexistent memory."""
@@ -506,7 +506,7 @@ class TestEditMemoryTool:
         _write_memory_impl("editable", "Hello World!")
         result = _edit_memory_impl("editable", "World", "Universe")
         assert result["success"] is True
-        assert result["memory"]["content"] == "Hello Universe!"
+        assert result["data"]["content"] == "Hello Universe!"
 
     def test_edit_nonexistent(self):
         """edit_memory returns error for nonexistent memory."""
@@ -543,13 +543,13 @@ class TestToolRegistration:
         assert "reflect" in tool_names
 
     def test_memory_tools_registered(self):
-        """All 5 memory tools are registered."""
+        """Memory tools are registered (list_memories merged into search_memories)."""
         from anamnesis.mcp_server.server import mcp
 
         tool_names = set(mcp._tool_manager._tools.keys())
         assert "write_memory" in tool_names
         assert "read_memory" in tool_names
-        assert "list_memories" in tool_names
+        assert "search_memories" in tool_names
         assert "delete_memory" in tool_names
         assert "edit_memory" in tool_names
 
@@ -558,8 +558,5 @@ class TestToolRegistration:
         from anamnesis.mcp_server.server import mcp
 
         tool_count = len(mcp._tool_manager._tools)
-        # 41 → 37: merged 3 complexity tools → analyze_code_quality (-2),
-        # merged 3 project tools → manage_project (-2),
-        # renamed get_semantic_insights → get_learned_concepts,
-        # renamed suggest_code_pattern → match_sibling_style
-        assert tool_count == 37
+        # 37 → 28: 9 merges reducing tool count
+        assert tool_count == 28

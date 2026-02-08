@@ -6,12 +6,16 @@ registration on the shared `mcp` FastMCP instance from _shared.py.
 """
 
 from anamnesis.mcp_server.tools.intelligence import (  # noqa: F401
+    _analyze_codebase_impl,
     _contribute_insights_impl,
+    _get_coding_guidance_impl,
     _get_developer_profile_impl,
     _get_pattern_recommendations_impl,
     _get_project_blueprint_impl,
     _get_semantic_insights_impl,
+    _manage_concepts_impl,
     _predict_coding_approach_impl,
+    _analyze_project_impl,
 )
 from anamnesis.mcp_server.tools.learning import (  # noqa: F401
     _auto_learn_if_needed_impl,
@@ -29,6 +33,8 @@ from anamnesis.mcp_server.tools.lsp import (  # noqa: F401
     _get_symbols_overview_impl,
     _insert_after_symbol_impl,
     _insert_before_symbol_impl,
+    _insert_near_symbol_impl,
+    _manage_lsp_impl,
     _rename_symbol_impl,
     _replace_symbol_body_impl,
 )
@@ -51,14 +57,15 @@ from anamnesis.mcp_server.tools.project import (  # noqa: F401
     _manage_project_impl,
 )
 from anamnesis.mcp_server.tools.search import (  # noqa: F401
-    _analyze_codebase_impl,
     _search_codebase_impl,
 )
 from anamnesis.mcp_server.tools.session import (  # noqa: F401
     _end_session_impl,
     _get_decisions_impl,
     _get_session_impl,
+    _get_sessions_impl,
     _list_sessions_impl,
+    _manage_decisions_impl,
     _record_decision_impl,
     _start_session_impl,
 )

@@ -351,88 +351,14 @@ def _collect_key_symbols(
 ) -> dict[str, list[dict[str, str]]] | None:
     """Collect top-level symbols from key project files via tree-sitter.
 
-    Uses the fast tree-sitter backend (no LSP startup required) to extract
-    classes and functions from entry point files identified in the blueprint.
-    Returns None on any failure — callers should treat this as optional
-    enrichment.
-
-    Args:
-        blueprint: Project blueprint with ``entry_points`` and ``feature_map``.
-        project_path: Absolute path to the project root.
-        max_files: Maximum number of files to scan.
-        max_symbols_per_file: Maximum symbols to include per file.
-
-    Returns:
-        Dict mapping relative file paths to lists of ``{name, kind}`` dicts,
-        or None if extraction fails or no symbols found.
+    Thin delegation wrapper — routes to CodebaseService.collect_key_symbols().
+    Returns None on any failure so callers can treat this as optional enrichment.
     """
-    import os
-
-    from anamnesis.extraction.backends import get_shared_tree_sitter
-    from anamnesis.extraction.types import SymbolKind
-    from anamnesis.lsp.utils import safe_join
-    from anamnesis.utils.language_registry import detect_language
-
-    # Gather candidate files from entry points and feature map
-    candidates: list[str] = []
-    for _etype, epath in blueprint.get("entry_points", {}).items():
-        if epath and isinstance(epath, str):
-            candidates.append(epath)
-    for _feature, files in blueprint.get("feature_map", {}).items():
-        if isinstance(files, list):
-            candidates.extend(f for f in files if isinstance(f, str))
-
-    # Deduplicate and limit
-    seen: set[str] = set()
-    unique: list[str] = []
-    for c in candidates:
-        if c not in seen:
-            seen.add(c)
-            unique.append(c)
-    unique = unique[:max_files]
-
-    if not unique:
+    try:
+        svc = _get_codebase_service()
+        return svc.collect_key_symbols(blueprint, project_path, max_files, max_symbols_per_file)
+    except Exception:
         return None
-
-    backend = get_shared_tree_sitter()
-    symbol_data: dict[str, list[dict[str, str]]] = {}
-    _TOP_LEVEL_KINDS = {SymbolKind.CLASS, SymbolKind.FUNCTION, SymbolKind.INTERFACE}
-
-    for rel_path in unique:
-        try:
-            abs_path = safe_join(project_path, rel_path)
-        except ValueError:
-            logger.debug("Path traversal blocked in _collect_key_symbols: %s", rel_path)
-            continue
-        if not os.path.isfile(abs_path):
-            continue
-
-        lang = detect_language(rel_path)
-        if lang == "unknown" or not backend.supports_language(lang):
-            continue
-
-        try:
-            with open(abs_path, encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            result = backend.extract_all(content, rel_path, lang)
-        except Exception:
-            logger.debug("Symbol extraction failed for %s", rel_path, exc_info=True)
-            continue
-
-        file_symbols: list[dict[str, str]] = []
-        for sym in result.symbols:
-            if sym.kind in _TOP_LEVEL_KINDS:
-                file_symbols.append({
-                    "name": sym.name,
-                    "kind": str(sym.kind),
-                })
-            if len(file_symbols) >= max_symbols_per_file:
-                break
-
-        if file_symbols:
-            symbol_data[rel_path] = file_symbols
-
-    return symbol_data if symbol_data else None
 
 
 def _categorize_references(references: list[dict]) -> dict[str, list[dict]]:
@@ -486,6 +412,23 @@ def _sanitize_error_message(error_msg: str) -> str:
     sanitized = _RE_FILE_URI.sub("<file-uri>", sanitized)
     sanitized = _RE_DOTDOT.sub("<redacted-path>", sanitized)
     return sanitized
+
+
+def _success_response(data: object, **metadata: object) -> dict:
+    """Build a standard success response envelope.
+
+    All MCP tool successes use this for a single, predictable structure:
+    ``{"success": True, "data": ..., "metadata": {...}}``.
+
+    Args:
+        data: Primary payload (dict, list, or scalar).
+        **metadata: Contextual info about the response (e.g. total, query,
+            message).  Omitted from the envelope when empty.
+    """
+    result: dict = {"success": True, "data": data}
+    if metadata:
+        result["metadata"] = metadata
+    return result
 
 
 def _failure_response(

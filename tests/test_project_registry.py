@@ -402,7 +402,7 @@ class TestMCPProjectTools:
 
         result = _activate_project_impl(path=project_a)
         assert result["success"] is True
-        assert result["activated"]["name"] == "project_a"
+        assert result["data"]["activated"]["name"] == "project_a"
 
     def test_activate_project_invalid_path(self):
         from anamnesis.mcp_server.server import _activate_project_impl
@@ -416,7 +416,7 @@ class TestMCPProjectTools:
 
         result = _get_project_config_impl()
         assert result["success"] is True
-        assert result["registry"]["project_count"] == 0
+        assert result["data"]["registry"]["project_count"] == 0
 
     def test_get_current_config_with_projects(self, project_a, project_b):
         from anamnesis.mcp_server.server import (
@@ -428,8 +428,8 @@ class TestMCPProjectTools:
         _activate_project_impl(path=project_b)
 
         result = _get_project_config_impl()
-        assert result["registry"]["project_count"] == 2
-        assert result["registry"]["active_project"] == "project_b"
+        assert result["data"]["registry"]["project_count"] == 2
+        assert result["data"]["registry"]["active_project"] == "project_b"
 
     def test_list_projects_tool(self, project_a, project_b):
         from anamnesis.mcp_server.server import (
@@ -442,7 +442,7 @@ class TestMCPProjectTools:
 
         result = _list_projects_impl()
         assert result["success"] is True
-        assert result["total"] == 2
+        assert result["metadata"]["total"] == 2
 
     def test_project_switch_affects_services(self, project_a, project_b):
         """Switching active project changes which services are returned."""

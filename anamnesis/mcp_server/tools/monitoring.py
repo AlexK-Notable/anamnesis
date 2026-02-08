@@ -14,6 +14,7 @@ from anamnesis.mcp_server._shared import (
     _get_learning_service,
     _sanitize_error_message,
     _server_start_time,
+    _success_response,
     _with_error_handling,
     mcp,
 )
@@ -46,14 +47,14 @@ def _get_system_status_impl(
     has_intel = learning_service.has_intelligence(current_path)
     learned_data = learning_service.get_learned_data(current_path) if has_intel else None
 
-    result: dict = {"success": True, "current_path": current_path}
+    data: dict = {}
 
     # --- summary section ---
     if "summary" in requested:
         concepts_count = len(learned_data.get("concepts", [])) if learned_data else 0
         patterns_count = len(learned_data.get("patterns", [])) if learned_data else 0
         learned_at = learned_data.get("learned_at") if learned_data else None
-        result["summary"] = {
+        data["summary"] = {
             "status": "healthy",
             "intelligence": {
                 "has_data": has_intel,
@@ -79,7 +80,7 @@ def _get_system_status_impl(
         except (ImportError, AttributeError):
             mem_mb = 0
         from anamnesis.utils.model_registry import get_model_cache_stats
-        result["metrics"] = {
+        data["metrics"] = {
             "memory_mb": round(mem_mb, 1),
             "python_objects": len(gc.get_objects()),
             "gc_collections": collected_total,
@@ -114,7 +115,7 @@ def _get_system_status_impl(
                 "avg_concept_confidence": sum(concept_confidences) / len(concept_confidences) if concept_confidences else 0,
                 "avg_pattern_confidence": sum(pattern_confidences) / len(pattern_confidences) if pattern_confidences else 0,
             }
-        result["intelligence"] = intel_data
+        data["intelligence"] = intel_data
 
     # --- performance section ---
     if "performance" in requested:
@@ -133,7 +134,7 @@ def _get_system_status_impl(
                 "intelligence_check_ms": elapsed,
                 "timestamp": utcnow().isoformat(),
             }
-        result["performance"] = perf
+        data["performance"] = perf
 
     # --- health section ---
     if "health" in requested:
@@ -165,14 +166,14 @@ def _get_system_status_impl(
             checks["codebase_service"] = False
             issues.append(f"Codebase service error: {_sanitize_error_message(str(e))}")
         checks["has_intelligence"] = has_intel
-        result["health"] = {
+        data["health"] = {
             "healthy": len(issues) == 0,
             "checks": checks,
             "issues": issues,
             "timestamp": utcnow().isoformat(),
         }
 
-    return result
+    return _success_response(data, current_path=current_path)
 
 
 # =============================================================================

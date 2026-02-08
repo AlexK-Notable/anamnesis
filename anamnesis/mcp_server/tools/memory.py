@@ -1,10 +1,12 @@
 """Memory and metacognition tools — CRUD for project memories + reflect."""
 
+from typing import Literal, Optional
 
 from anamnesis.mcp_server._shared import (
     _failure_response,
     _get_memory_service,
     _REFLECT_PROMPTS,
+    _success_response,
     _with_error_handling,
     mcp,
 )
@@ -17,91 +19,82 @@ from anamnesis.mcp_server._shared import (
 
 @_with_error_handling("write_memory")
 def _write_memory_impl(
-    memory_file_name: str,
+    name: str,
     content: str,
 ) -> dict:
     """Implementation for write_memory tool."""
     memory_service = _get_memory_service()
-    result = memory_service.write_memory(memory_file_name, content)
-    return {
-        "success": True,
-        "memory": result.to_dict(),
-    }
+    result = memory_service.write_memory(name, content)
+    return _success_response(result.to_dict())
 
 
 @_with_error_handling("read_memory")
 def _read_memory_impl(
-    memory_file_name: str,
+    name: str,
 ) -> dict:
     """Implementation for read_memory tool."""
     memory_service = _get_memory_service()
-    result = memory_service.read_memory(memory_file_name)
+    result = memory_service.read_memory(name)
     if result is None:
-        return _failure_response(f"Memory '{memory_file_name}' not found")
-    return {
-        "success": True,
-        "memory": result.to_dict(),
-    }
-
-
-@_with_error_handling("list_memories")
-def _list_memories_impl() -> dict:
-    """Implementation for list_memories tool."""
-    memory_service = _get_memory_service()
-    memories = memory_service.list_memories()
-    return {
-        "success": True,
-        "memories": [m.to_dict() for m in memories],
-        "total": len(memories),
-    }
+        return _failure_response(f"Memory '{name}' not found")
+    return _success_response(result.to_dict())
 
 
 @_with_error_handling("delete_memory")
 def _delete_memory_impl(
-    memory_file_name: str,
+    name: str,
 ) -> dict:
     """Implementation for delete_memory tool."""
     memory_service = _get_memory_service()
-    deleted = memory_service.delete_memory(memory_file_name)
+    deleted = memory_service.delete_memory(name)
     if not deleted:
-        return _failure_response(f"Memory '{memory_file_name}' not found")
-    return {
-        "success": True,
-        "deleted": memory_file_name,
-    }
+        return _failure_response(f"Memory '{name}' not found")
+    return _success_response({"deleted": name})
 
 
 @_with_error_handling("edit_memory")
 def _edit_memory_impl(
-    memory_file_name: str,
+    name: str,
     old_text: str,
     new_text: str,
 ) -> dict:
     """Implementation for edit_memory tool."""
     memory_service = _get_memory_service()
-    result = memory_service.edit_memory(memory_file_name, old_text, new_text)
+    result = memory_service.edit_memory(name, old_text, new_text)
     if result is None:
-        return _failure_response(f"Memory '{memory_file_name}' not found")
-    return {
-        "success": True,
-        "memory": result.to_dict(),
-    }
+        return _failure_response(f"Memory '{name}' not found")
+    return _success_response(result.to_dict())
 
 
 @_with_error_handling("search_memories")
 def _search_memories_impl(
-    query: str,
+    query: Optional[str] = None,
     limit: int = 5,
 ) -> dict:
-    """Implementation for search_memories tool."""
+    """Implementation for search_memories tool.
+
+    When query is None or empty, lists all memories instead of searching.
+    """
     memory_service = _get_memory_service()
+    if not query:
+        # List all memories (replaces former list_memories tool)
+        memories = memory_service.list_memories()
+        return _success_response(
+            [m.to_dict() for m in memories],
+            total=len(memories),
+        )
     results = memory_service.search_memories(query, limit=limit)
-    return {
-        "success": True,
-        "results": results,
-        "query": query,
-        "total": len(results),
-    }
+    return _success_response(
+        results,
+        query=query,
+        total=len(results),
+    )
+
+
+# Backward-compat alias for tests that import _list_memories_impl
+def _list_memories_impl() -> dict:
+    """Backward-compat wrapper: delegates to _search_memories_impl(query=None)."""
+    return _search_memories_impl()
 
 
 # =============================================================================
@@ -115,11 +108,9 @@ def _reflect_impl(focus: str = "collected_information") -> dict:
     prompt = _REFLECT_PROMPTS.get(focus)
     if prompt is None:
         return _failure_response(f"Unknown focus '{focus}'. Choose from: {', '.join(_REFLECT_PROMPTS.keys())}")
-    return {
-        "success": True,
-        "focus": focus,
-        "prompt": prompt,
-    }
+    return _success_response(
+        {"focus": focus, "prompt": prompt},
+    )
 
 
 # =============================================================================
@@ -129,7 +120,7 @@ def _reflect_impl(focus: str = "collected_information") -> dict:
 
 @mcp.tool
 def write_memory(
-    memory_file_name: str,
+    name: str,
     content: str,
 ) -> dict:
     """Write information about this project that can be useful for future tasks.
@@ -138,19 +129,19 @@ def write_memory(
     The memory name should be meaningful and descriptive.
 
     Args:
-        memory_file_name: Name for the memory (e.g., "architecture-decisions",
+        name: Name for the memory (e.g., "architecture-decisions",
             "api-patterns"). Letters, numbers, hyphens, underscores, dots only.
         content: The content to write (markdown format recommended)
 
     Returns:
         Result with the written memory details
     """
-    return _write_memory_impl(memory_file_name, content)
+    return _write_memory_impl(name, content)
 
 
 @mcp.tool
 def read_memory(
-    memory_file_name: str,
+    name: str,
 ) -> dict:
     """Read the content of a memory file.
 
@@ -158,48 +149,34 @@ def read_memory(
     memories that are relevant to the current task.
 
     Args:
-        memory_file_name: Name of the memory to read
+        name: Name of the memory to read
 
     Returns:
         Memory content and metadata, or error if not found
     """
-    return _read_memory_impl(memory_file_name)
-
-
-@mcp.tool
-def list_memories() -> dict:
-    """List available memories for this project.
-
-    Returns names and metadata for all stored memories. Use this to
-    discover what project knowledge is available before reading specific
-    memories.
-
-    Returns:
-        List of memory entries with names, sizes, and timestamps
-    """
-    return _list_memories_impl()
+    return _read_memory_impl(name)
 
 
 @mcp.tool
 def delete_memory(
-    memory_file_name: str,
+    name: str,
 ) -> dict:
     """Delete a memory file.
 
     Remove a memory that is no longer relevant or correct.
 
     Args:
-        memory_file_name: Name of the memory to delete
+        name: Name of the memory to delete
 
     Returns:
         Success status
     """
-    return _delete_memory_impl(memory_file_name)
+    return _delete_memory_impl(name)
 
 
 @mcp.tool
 def edit_memory(
-    memory_file_name: str,
+    name: str,
     old_text: str,
     new_text: str,
 ) -> dict:
@@ -209,32 +186,34 @@ def edit_memory(
     the entire content.
 
     Args:
-        memory_file_name: Name of the memory to edit
+        name: Name of the memory to edit
         old_text: The exact text to find and replace
         new_text: The replacement text
 
     Returns:
         Updated memory content and metadata
     """
-    return _edit_memory_impl(memory_file_name, old_text, new_text)
+    return _edit_memory_impl(name, old_text, new_text)
 
 
 @mcp.tool
 def search_memories(
-    query: str,
+    query: Optional[str] = None,
     limit: int = 5,
 ) -> dict:
-    """Search project memories by semantic similarity.
+    """Search project memories or list all memories.
 
-    Finds memories relevant to a natural language query. Uses embedding-based
-    search when available, falls back to substring matching.
+    When a query is provided, finds memories relevant to the natural language
+    query using embedding-based search (falls back to substring matching).
+    When query is omitted, lists all available memories with metadata.
 
     Args:
-        query: What you're looking for (e.g., "authentication decisions")
-        limit: Maximum results to return (default 5)
+        query: What you're looking for (e.g., "authentication decisions").
+            Omit to list all memories.
+        limit: Maximum results to return (default 5, applies to search only)
 
     Returns:
-        Matching memories ranked by relevance with snippets
+        Matching memories ranked by relevance, or all memories if no query
     """
     return _search_memories_impl(query, limit)
 
@@ -246,7 +225,7 @@ def search_memories(
 
 @mcp.tool
 def reflect(
-    focus: str = "collected_information",
+    focus: Literal["collected_information", "task_adherence", "whether_done"] = "collected_information",
 ) -> dict:
     """Reflect on your current work with metacognitive prompts.
 

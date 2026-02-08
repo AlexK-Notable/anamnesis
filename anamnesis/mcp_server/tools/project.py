@@ -1,8 +1,11 @@
 """Project management tools — config, activation, and project listing."""
 
+from typing import Literal
+
 from anamnesis.mcp_server._shared import (
     _failure_response,
     _registry,
+    _success_response,
     _with_error_handling,
     mcp,
 )
@@ -14,31 +17,25 @@ from anamnesis.mcp_server._shared import (
 
 def _get_project_config_helper() -> dict:
     """Return current project config (no error wrapping)."""
-    return {
-        "success": True,
-        "registry": _registry.to_dict(),
-    }
+    return _success_response({"registry": _registry.to_dict()})
 
 
 def _activate_project_helper(path: str) -> dict:
     """Activate a project by path (no error wrapping)."""
     ctx = _registry.activate(path)
-    return {
-        "success": True,
-        "activated": ctx.to_dict(),
-        "registry": _registry.to_dict(),
-    }
+    return _success_response(
+        {"activated": ctx.to_dict(), "registry": _registry.to_dict()},
+    )
 
 
 def _list_projects_helper() -> dict:
     """List all known projects (no error wrapping)."""
     projects = _registry.list_projects()
-    return {
-        "success": True,
-        "projects": [p.to_dict() for p in projects],
-        "total": len(projects),
-        "active_path": _registry.active_path,
-    }
+    return _success_response(
+        [p.to_dict() for p in projects],
+        total=len(projects),
+        active_path=_registry.active_path,
+    )
 
 
 # =============================================================================
@@ -78,13 +75,17 @@ def _manage_project_impl(action: str = "status", path: str = "") -> dict:
     if action == "status":
         config = _get_project_config_helper()
         projects = _list_projects_helper()
-        return {
-            "success": True,
-            "registry": config.get("registry"),
-            "projects": projects.get("projects", []),
-            "total": projects.get("total", 0),
-            "active_path": projects.get("active_path"),
-        }
+        config_data = config.get("data", {})
+        projects_data = projects.get("data", [])
+        projects_meta = projects.get("metadata", {})
+        return _success_response(
+            {
+                "registry": config_data.get("registry"),
+                "projects": projects_data,
+            },
+            total=projects_meta.get("total", 0),
+            active_path=projects_meta.get("active_path"),
+        )
     elif action == "activate":
         if not path:
             return _failure_response(
@@ -104,7 +105,7 @@ def _manage_project_impl(action: str = "status", path: str = "") -> dict:
 
 @mcp.tool
 def manage_project(
-    action: str = "status",
+    action: Literal["status", "activate"] = "status",
     path: str = "",
 ) -> dict:
     """Manage project context — view status or switch active project.

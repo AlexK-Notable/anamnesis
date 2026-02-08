@@ -36,14 +36,13 @@ class TestWriteMemory:
     def test_write_returns_success(self):
         result = _as_dict(_write_memory_impl("test-mem", "hello world"))
         assert result["success"] is True
-        assert "memory" in result
-        assert result["memory"]["name"] == "test-mem"
+        assert result["data"]["name"] == "test-mem"
 
     def test_write_stores_content(self):
         _write_memory_impl("arch-notes", "# Architecture\nService layer pattern")
         result = _as_dict(_read_memory_impl("arch-notes"))
         assert result["success"] is True
-        assert "Service layer pattern" in result["memory"]["content"]
+        assert "Service layer pattern" in result["data"]["content"]
 
 
 # =============================================================================
@@ -58,7 +57,7 @@ class TestReadMemory:
         _write_memory_impl("read-test", "content here")
         result = _as_dict(_read_memory_impl("read-test"))
         assert result["success"] is True
-        assert result["memory"]["content"] == "content here"
+        assert result["data"]["content"] == "content here"
 
     def test_read_nonexistent_returns_failure(self):
         result = _as_dict(_read_memory_impl("does-not-exist"))
@@ -77,16 +76,16 @@ class TestListMemories:
     def test_empty_project_returns_empty_list(self):
         result = _as_dict(_list_memories_impl())
         assert result["success"] is True
-        assert result["total"] == 0
-        assert result["memories"] == []
+        assert result["metadata"]["total"] == 0
+        assert result["data"] == []
 
     def test_lists_written_memories(self):
         _write_memory_impl("mem-a", "content a")
         _write_memory_impl("mem-b", "content b")
         result = _as_dict(_list_memories_impl())
         assert result["success"] is True
-        assert result["total"] == 2
-        names = {m["name"] for m in result["memories"]}
+        assert result["metadata"]["total"] == 2
+        names = {m["name"] for m in result["data"]}
         assert names == {"mem-a", "mem-b"}
 
 
@@ -102,7 +101,7 @@ class TestDeleteMemory:
         _write_memory_impl("to-delete", "ephemeral")
         result = _as_dict(_delete_memory_impl("to-delete"))
         assert result["success"] is True
-        assert result["deleted"] == "to-delete"
+        assert result["data"]["deleted"] == "to-delete"
 
         # Verify gone
         read_result = _as_dict(_read_memory_impl("to-delete"))
@@ -126,8 +125,8 @@ class TestEditMemory:
         _write_memory_impl("editable", "hello world")
         result = _as_dict(_edit_memory_impl("editable", "world", "universe"))
         assert result["success"] is True
-        assert "universe" in result["memory"]["content"]
-        assert "world" not in result["memory"]["content"]
+        assert "universe" in result["data"]["content"]
+        assert "world" not in result["data"]["content"]
 
     def test_edit_nonexistent_returns_failure(self):
         result = _as_dict(_edit_memory_impl("nope", "a", "b"))
@@ -147,9 +146,9 @@ class TestSearchMemories:
         _write_memory_impl("auth-patterns", "JWT token authentication flow")
         result = _as_dict(_search_memories_impl("authentication"))
         assert result["success"] is True
-        assert "results" in result
-        assert result["query"] == "authentication"
-        assert isinstance(result["total"], int)
+        assert isinstance(result["data"], list)
+        assert result["metadata"]["query"] == "authentication"
+        assert isinstance(result["metadata"]["total"], int)
 
     def test_search_finds_relevant_memory(self):
         _write_memory_impl("db-notes", "PostgreSQL connection pooling")
@@ -157,19 +156,19 @@ class TestSearchMemories:
         result = _as_dict(_search_memories_impl("database"))
         assert result["success"] is True
         # Should find at least the db-notes memory
-        assert result["total"] >= 1
+        assert result["metadata"]["total"] >= 1
 
     def test_search_empty_project(self):
         result = _as_dict(_search_memories_impl("anything"))
         assert result["success"] is True
-        assert result["total"] == 0
+        assert result["metadata"]["total"] == 0
 
     def test_search_respects_limit(self):
         for i in range(5):
             _write_memory_impl(f"note-{i}", f"content about topic {i}")
         result = _as_dict(_search_memories_impl("topic", limit=2))
         assert result["success"] is True
-        assert result["total"] <= 2
+        assert result["metadata"]["total"] <= 2
 
 
 # =============================================================================
@@ -183,18 +182,18 @@ class TestReflect:
     def test_collected_information(self):
         result = _reflect_impl("collected_information")
         assert result["success"] is True
-        assert result["focus"] == "collected_information"
-        assert len(result["prompt"]) > 0
+        assert result["data"]["focus"] == "collected_information"
+        assert len(result["data"]["prompt"]) > 0
 
     def test_task_adherence(self):
         result = _reflect_impl("task_adherence")
         assert result["success"] is True
-        assert result["focus"] == "task_adherence"
+        assert result["data"]["focus"] == "task_adherence"
 
     def test_whether_done(self):
         result = _reflect_impl("whether_done")
         assert result["success"] is True
-        assert result["focus"] == "whether_done"
+        assert result["data"]["focus"] == "whether_done"
 
     def test_unknown_focus_returns_failure(self):
         result = _reflect_impl("invalid_focus")
@@ -218,35 +217,35 @@ class TestMemoryCRUDLifecycle:
         # Step 1: Write a new memory
         write_result = _as_dict(_write_memory_impl("lifecycle-test", "initial content about databases"))
         assert write_result["success"] is True
-        assert write_result["memory"]["name"] == "lifecycle-test"
+        assert write_result["data"]["name"] == "lifecycle-test"
 
         # Step 2: Read it back and verify content matches
         read_result = _as_dict(_read_memory_impl("lifecycle-test"))
         assert read_result["success"] is True
-        assert read_result["memory"]["content"] == "initial content about databases"
+        assert read_result["data"]["content"] == "initial content about databases"
 
         # Step 3: Edit the memory (replace a substring)
         edit_result = _as_dict(_edit_memory_impl("lifecycle-test", "databases", "microservices"))
         assert edit_result["success"] is True
-        assert "microservices" in edit_result["memory"]["content"]
-        assert "databases" not in edit_result["memory"]["content"]
+        assert "microservices" in edit_result["data"]["content"]
+        assert "databases" not in edit_result["data"]["content"]
 
         # Step 4: Read again to confirm the edit persisted
         read_updated = _as_dict(_read_memory_impl("lifecycle-test"))
         assert read_updated["success"] is True
-        assert "microservices" in read_updated["memory"]["content"]
+        assert "microservices" in read_updated["data"]["content"]
 
         # Step 5: Search for the memory by its content
         search_result = _as_dict(_search_memories_impl("microservices"))
         assert search_result["success"] is True
-        assert search_result["total"] >= 1
-        found_names = [m["name"] for m in search_result["results"]]
+        assert search_result["metadata"]["total"] >= 1
+        found_names = [m["name"] for m in search_result["data"]]
         assert "lifecycle-test" in found_names
 
         # Step 6: Delete the memory
         delete_result = _as_dict(_delete_memory_impl("lifecycle-test"))
         assert delete_result["success"] is True
-        assert delete_result["deleted"] == "lifecycle-test"
+        assert delete_result["data"]["deleted"] == "lifecycle-test"
 
         # Step 7: Read again to confirm it is gone
         read_gone = _as_dict(_read_memory_impl("lifecycle-test"))

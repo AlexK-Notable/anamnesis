@@ -5,10 +5,10 @@ modules (triggering @mcp.tool registration) and re-exports _impl names
 for backward test compatibility.
 
 Architecture:
-    _shared.py      — FastMCP instance, service accessors, error handling, helpers
-    tools/          — _impl functions + @mcp.tool registrations per domain
-    server.py       — this file: coordinator + create_server()
-    __init__.py     — public API: create_server, mcp
+    _shared.py      -- FastMCP instance, service accessors, error handling, helpers
+    tools/          -- _impl functions + @mcp.tool registrations per domain
+    server.py       -- this file: coordinator + create_server()
+    __init__.py     -- public API: create_server, mcp
 """
 
 from fastmcp import FastMCP
@@ -31,39 +31,45 @@ from anamnesis.mcp_server._shared import (  # noqa: F401
     _server_start_time,
     _set_current_path,
     _get_symbol_service,
+    _success_response,
     _toon_encoder,
     _with_error_handling,
     _ensure_semantic_search,
     mcp,
 )
 
-# Import all tool modules — this triggers @mcp.tool registration on the
+# Import all tool modules -- this triggers @mcp.tool registration on the
 # shared `mcp` instance.  The _impl re-exports below are backward-compat
-# shims — tests have been migrated to import from tools/<module>.py and
+# shims -- tests have been migrated to import from tools/<module>.py and
 # _shared.py directly.
 # TODO(cleanup): Remove these re-exports once all external consumers are migrated.
 from anamnesis.mcp_server.tools import (  # noqa: F401
-    # intelligence
+    # intelligence (merged)
     _get_semantic_insights_impl,
     _get_pattern_recommendations_impl,
     _predict_coding_approach_impl,
     _get_developer_profile_impl,
     _contribute_insights_impl,
     _get_project_blueprint_impl,
+    _manage_concepts_impl,
+    _get_coding_guidance_impl,
+    _analyze_project_impl,
+    _analyze_codebase_impl,
     # learning
     _auto_learn_if_needed_impl,
     # monitoring
     _get_system_status_impl,
     # search
     _search_codebase_impl,
-    _analyze_codebase_impl,
-    # session
+    # session (merged)
     _start_session_impl,
     _end_session_impl,
     _record_decision_impl,
     _get_session_impl,
     _list_sessions_impl,
     _get_decisions_impl,
+    _get_sessions_impl,
+    _manage_decisions_impl,
     # project
     _activate_project_impl,
     _get_project_config_impl,
@@ -76,7 +82,7 @@ from anamnesis.mcp_server.tools import (  # noqa: F401
     _edit_memory_impl,
     _search_memories_impl,
     _reflect_impl,
-    # lsp
+    # lsp (merged)
     _get_lsp_manager,
     _get_symbol_retriever,
     _get_code_editor,
@@ -86,6 +92,8 @@ from anamnesis.mcp_server.tools import (  # noqa: F401
     _replace_symbol_body_impl,
     _insert_after_symbol_impl,
     _insert_before_symbol_impl,
+    _insert_near_symbol_impl,
+    _manage_lsp_impl,
     _rename_symbol_impl,
     _enable_lsp_impl,
     _get_lsp_status_impl,

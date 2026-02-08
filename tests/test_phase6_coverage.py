@@ -445,12 +445,14 @@ class TestManageProjectDispatch:
     @patch("anamnesis.mcp_server.tools.project._list_projects_helper")
     @patch("anamnesis.mcp_server.tools.project._get_project_config_helper")
     def test_manage_project_status_dispatches_to_config_and_list(self, mock_config, mock_list):
-        mock_config.return_value = {"success": True, "registry": {"active": "x"}}
+        mock_config.return_value = {
+            "success": True,
+            "data": {"registry": {"active": "x"}},
+        }
         mock_list.return_value = {
             "success": True,
-            "projects": [],
-            "total": 0,
-            "active_path": "/x",
+            "data": [],
+            "metadata": {"total": 0, "active_path": "/x"},
         }
         result = self._call_impl("status")
         mock_config.assert_called_once()
@@ -459,7 +461,10 @@ class TestManageProjectDispatch:
 
     @patch("anamnesis.mcp_server.tools.project._activate_project_helper")
     def test_manage_project_activate_dispatches_with_path(self, mock_helper):
-        mock_helper.return_value = {"success": True, "activated": {}, "registry": {}}
+        mock_helper.return_value = {
+            "success": True,
+            "data": {"activated": {}, "registry": {}},
+        }
         result = self._call_impl("activate", path="/some/path")
         mock_helper.assert_called_once_with("/some/path")
         assert result["success"] is True

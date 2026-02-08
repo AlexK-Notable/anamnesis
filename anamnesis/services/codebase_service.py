@@ -292,6 +292,7 @@ class CodebaseService:
         max_cognitive = 0
         file_count = 0
         hotspots: list[str] = []
+        mi_values: list[float] = []
 
         extensions = get_code_extensions()
 
@@ -310,6 +311,7 @@ class CodebaseService:
                         max_cyclomatic = max(max_cyclomatic, metrics.max_cyclomatic)
                         max_cognitive = max(max_cognitive, metrics.max_cognitive)
                         hotspots.extend(metrics.hotspots)
+                        mi_values.append(metrics.maintainability.value)
                         file_count += 1
 
                 except (OSError, IOError) as e:
@@ -329,6 +331,7 @@ class CodebaseService:
 
         avg_cyclomatic = total_cyclomatic / file_count if file_count > 0 else 0.0
         avg_cognitive = total_cognitive / file_count if file_count > 0 else 0.0
+        avg_mi = sum(mi_values) / len(mi_values) if mi_values else 100.0
 
         return FileComplexity(
             file_path=str(path),
@@ -339,7 +342,7 @@ class CodebaseService:
             max_cyclomatic=max_cyclomatic,
             max_cognitive=max_cognitive,
             loc=LinesOfCode(total=total_lines, code=total_lines),
-            maintainability=MaintainabilityIndex(100.0),  # Will be calculated
+            maintainability=MaintainabilityIndex(avg_mi),
             function_count=total_functions,
             class_count=total_classes,
             hotspots=hotspots[:10],  # Top 10 hotspots
@@ -474,6 +477,146 @@ class CodebaseService:
     def _elapsed_ms(self, start_time: datetime) -> int:
         """Calculate elapsed milliseconds."""
         return int((utcnow() - start_time).total_seconds() * 1000)
+
+    def collect_key_symbols(
+        self,
+        blueprint: dict,
+        project_path: str | Path,
+        max_files: int = 10,
+        max_symbols_per_file: int = 20,
+    ) -> dict[str, list[dict[str, str]]] | None:
+        """Extract top-level symbols from key project files via tree-sitter.
+
+        Uses the fast tree-sitter backend (no LSP startup required) to extract
+        classes and functions from entry point files identified in the blueprint.
+        Returns None on any failure -- callers should treat this as optional
+        enrichment.
+
+        Args:
+            blueprint: Project blueprint with ``entry_points`` and ``feature_map``.
+            project_path: Absolute path to the project root.
+            max_files: Maximum number of files to scan.
+            max_symbols_per_file: Maximum symbols to include per file.
+
+        Returns:
+            Dict mapping relative file paths to lists of ``{name, kind}`` dicts,
+            or None if extraction fails or no symbols found.
+        """
+        import os
+
+        from anamnesis.extraction.backends import get_shared_tree_sitter
+        from anamnesis.extraction.types import SymbolKind
+        from anamnesis.lsp.utils import safe_join
+        from anamnesis.utils.language_registry import detect_language
+
+        project_path = str(project_path)
+
+        # Gather candidate files from entry points and feature map
+        candidates: list[str] = []
+        for _etype, epath in blueprint.get("entry_points", {}).items():
+            if epath and isinstance(epath, str):
+                candidates.append(epath)
+        for _feature, files in blueprint.get("feature_map", {}).items():
+            if isinstance(files, list):
+                candidates.extend(f for f in files if isinstance(f, str))
+
+        # Deduplicate and limit
+        seen: set[str] = set()
+        unique: list[str] = []
+        for c in candidates:
+            if c not in seen:
+                seen.add(c)
+                unique.append(c)
+        unique = unique[:max_files]
+
+        if not unique:
+            return None
+
+        backend = get_shared_tree_sitter()
+        symbol_data: dict[str, list[dict[str, str]]] = {}
+        _TOP_LEVEL_KINDS = {SymbolKind.CLASS, SymbolKind.FUNCTION, SymbolKind.INTERFACE}
+
+        for rel_path in unique:
+            try:
+                abs_path = safe_join(project_path, rel_path)
+            except ValueError:
+                logger.debug(
+                    "Path traversal blocked in collect_key_symbols: %s", rel_path
+                )
+                continue
+            if not os.path.isfile(abs_path):
+                continue
+
+            lang = detect_language(rel_path)
+            if lang == "unknown" or not backend.supports_language(lang):
+                continue
+
+            try:
+                with open(abs_path, encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                result = backend.extract_all(content, rel_path, lang)
+            except Exception:
+                logger.debug(
+                    "Symbol extraction failed for %s", rel_path, exc_info=True
+                )
+                continue
+
+            file_symbols: list[dict[str, str]] = []
+            for sym in result.symbols:
+                if sym.kind in _TOP_LEVEL_KINDS:
+                    file_symbols.append({
+                        "name": sym.name,
+                        "kind": str(sym.kind),
+                    })
+                if len(file_symbols) >= max_symbols_per_file:
+                    break
+
+            if file_symbols:
+                symbol_data[rel_path] = file_symbols
+
+        return symbol_data if symbol_data else None
+
+    def read_file_content(
+        self,
+        path: str,
+        project_root: str,
+        max_size: int = 50000,
+    ) -> str | None:
+        """Read file content with security and size checks.
+
+        Validates the file exists, is within the project root, is not a
+        sensitive file, and does not exceed the size limit before reading.
+
+        Args:
+            path: Absolute path to the file to read.
+            project_root: Absolute path to the project root for containment check.
+            max_size: Maximum number of characters to return (default 50000).
+
+        Returns:
+            File content string (truncated to *max_size*), or None if the file
+            cannot or should not be read.
+        """
+        from anamnesis.constants import MAX_FILE_SIZE
+        from anamnesis.utils.security import is_sensitive_file
+
+        target = Path(path).resolve()
+        root = Path(project_root).resolve()
+
+        if not target.is_file():
+            return None
+        # Check path is within project
+        try:
+            target.relative_to(root)
+        except ValueError:
+            return None
+        if is_sensitive_file(str(target)):
+            return None
+        if target.stat().st_size > min(max_size, MAX_FILE_SIZE):
+            return None
+        try:
+            return target.read_text(encoding="utf-8", errors="replace")[:max_size]
+        except OSError:
+            return None
 
     def get_file_stats(self, path: str | Path) -> dict[str, int]:
         """Get file statistics for a codebase.

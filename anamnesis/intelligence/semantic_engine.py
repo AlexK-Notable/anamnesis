@@ -10,6 +10,7 @@ Provides semantic analysis capabilities:
 from __future__ import annotations
 
 import re
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -174,15 +175,16 @@ class ProjectBlueprint:
 class SemanticEngine:
     """Engine for semantic analysis of codebases."""
 
-    def __init__(self, storage: Any | None = None) -> None:
+    def __init__(self, storage: Any | None = None, cache_size: int = 16) -> None:
         """Initialize the semantic engine.
 
         Args:
             storage: Optional storage backend for caching.
+            cache_size: Maximum number of codebase analyses to cache (LRU eviction).
         """
         self.storage = storage
-        self._analysis_cache: dict[str, CodebaseAnalysis] = {}
-        self._concept_index: dict[str, list[SemanticConcept]] = {}
+        self._analysis_cache: OrderedDict[str, CodebaseAnalysis] = OrderedDict()
+        self._CACHE_MAX_SIZE = cache_size
 
         # Language detection by extension
         self._language_extensions: dict[str, str] = {
@@ -276,6 +278,33 @@ class SemanticEngine:
             "utils": ["utils", "helpers", "common", "shared"],
         }
 
+    def _collect_files(
+        self,
+        directory: str | Path,
+        ignore_dirs: set[str] | None = None,
+    ) -> list[Path]:
+        """Collect all files in a directory with a single rglob walk.
+
+        Args:
+            directory: Root directory to walk.
+            ignore_dirs: Set of directory names to skip.
+
+        Returns:
+            List of file Paths (no directories), filtered by ignore_dirs.
+        """
+        if ignore_dirs is None:
+            ignore_dirs = DEFAULT_IGNORE_DIRS | {"dist", "build", "target", ".tox"}
+
+        dir_path = Path(directory)
+        if not dir_path.exists():
+            return []
+
+        return [
+            p
+            for p in dir_path.rglob("*")
+            if p.is_file() and not any(part in ignore_dirs for part in p.parts)
+        ]
+
     def detect_language(self, file_path: str | Path) -> str | None:
         """Detect the programming language of a file.
 
@@ -294,33 +323,38 @@ class SemanticEngine:
         self,
         directory: str | Path,
         ignore_dirs: set[str] | None = None,
+        files: list[Path] | None = None,
     ) -> dict[str, int]:
         """Detect languages used in a directory.
 
         Args:
             directory: Path to the directory.
             ignore_dirs: Set of directory names to ignore.
+            files: Pre-collected file list to iterate instead of rglob.
 
         Returns:
             Dictionary mapping languages to file counts.
         """
-        ignore_dirs = ignore_dirs or DEFAULT_IGNORE_DIRS | {"dist", "build", "target", ".tox"}
-
         language_counts: dict[str, int] = {}
-        dir_path = Path(directory)
 
-        if not dir_path.exists():
-            return language_counts
+        if files is None:
+            ignore_dirs = ignore_dirs or DEFAULT_IGNORE_DIRS | {"dist", "build", "target", ".tox"}
+            dir_path = Path(directory)
 
-        for file_path in dir_path.rglob("*"):
-            # Skip ignored directories
-            if any(ignored in file_path.parts for ignored in ignore_dirs):
-                continue
+            if not dir_path.exists():
+                return language_counts
 
-            if file_path.is_file():
-                lang = self.detect_language(file_path)
-                if lang:
-                    language_counts[lang] = language_counts.get(lang, 0) + 1
+            file_iter = (
+                fp for fp in dir_path.rglob("*")
+                if fp.is_file() and not any(ignored in fp.parts for ignored in ignore_dirs)
+            )
+        else:
+            file_iter = iter(files)
+
+        for file_path in file_iter:
+            lang = self.detect_language(file_path)
+            if lang:
+                language_counts[lang] = language_counts.get(lang, 0) + 1
 
         return language_counts
 
@@ -328,32 +362,35 @@ class SemanticEngine:
         self,
         directory: str | Path,
         languages: list[str] | None = None,
+        files: list[Path] | None = None,
     ) -> list[str]:
         """Detect frameworks used in the codebase.
 
         Args:
             directory: Path to the directory.
             languages: Optional list of languages to check (auto-detect if None).
+            files: Pre-collected file list to iterate instead of rglob.
 
         Returns:
             List of detected framework names.
         """
         dir_path = Path(directory)
-        if not dir_path.exists():
+        if files is None and not dir_path.exists():
             return []
 
         # Auto-detect languages if not provided
         if languages is None:
-            lang_counts = self.detect_languages_in_directory(dir_path)
+            lang_counts = self.detect_languages_in_directory(dir_path, files=files)
             languages = list(lang_counts.keys())
 
         detected_frameworks: set[str] = set()
 
-        # Read some sample files
-        for file_path in dir_path.rglob("*"):
-            if not file_path.is_file():
-                continue
+        if files is None:
+            file_iter = (fp for fp in dir_path.rglob("*") if fp.is_file())
+        else:
+            file_iter = iter(files)
 
+        for file_path in file_iter:
             lang = self.detect_language(file_path)
             if lang not in languages:
                 continue
@@ -448,11 +485,13 @@ class SemanticEngine:
     def detect_entry_points(
         self,
         directory: str | Path,
+        files: list[Path] | None = None,
     ) -> list[EntryPoint]:
         """Detect entry points in the codebase.
 
         Args:
             directory: Path to the directory.
+            files: Pre-collected file list to iterate instead of rglob.
 
         Returns:
             List of detected entry points.
@@ -460,11 +499,11 @@ class SemanticEngine:
         entry_points: list[EntryPoint] = []
         dir_path = Path(directory)
 
-        if not dir_path.exists():
+        if files is None and not dir_path.exists():
             return entry_points
 
         # Check common entry point files
-        entry_files = [
+        entry_files = {
             "main.py",
             "__main__.py",
             "app.py",
@@ -474,12 +513,14 @@ class SemanticEngine:
             "index.js",
             "main.go",
             "main.rs",
-        ]
+        }
 
-        for file_path in dir_path.rglob("*"):
-            if not file_path.is_file():
-                continue
+        if files is None:
+            file_iter = (fp for fp in dir_path.rglob("*") if fp.is_file())
+        else:
+            file_iter = iter(files)
 
+        for file_path in file_iter:
             # Check if it's a known entry point file
             if file_path.name in entry_files:
                 entry_type = "main"
@@ -518,11 +559,13 @@ class SemanticEngine:
     def map_key_directories(
         self,
         directory: str | Path,
+        files: list[Path] | None = None,
     ) -> list[KeyDirectory]:
         """Map key directories in the project.
 
         Args:
             directory: Path to the project root.
+            files: Pre-collected file list to compute per-directory counts by grouping.
 
         Returns:
             List of key directories with their types.
@@ -533,35 +576,68 @@ class SemanticEngine:
         if not dir_path.exists():
             return key_dirs
 
-        for subdir in dir_path.iterdir():
-            if not subdir.is_dir():
-                continue
+        skip_dirs = DEFAULT_IGNORE_DIRS | {"dist", "build", "target"}
 
-            subdir_name = subdir.name.lower()
+        if files is not None:
+            # Group file counts by top-level subdirectory
+            dir_file_counts: dict[str, int] = {}
+            for fp in files:
+                try:
+                    rel = fp.relative_to(dir_path)
+                except ValueError:
+                    continue
+                if len(rel.parts) >= 2:
+                    top_dir = rel.parts[0]
+                    dir_file_counts[top_dir] = dir_file_counts.get(top_dir, 0) + 1
 
-            # Skip hidden and common non-code directories
-            if subdir_name.startswith(".") or subdir_name in (DEFAULT_IGNORE_DIRS | {"dist", "build", "target"}):
-                continue
+            for subdir_name, file_count in sorted(dir_file_counts.items()):
+                subdir_lower = subdir_name.lower()
+                if subdir_lower.startswith(".") or subdir_lower in skip_dirs:
+                    continue
 
-            # Determine directory type
-            dir_type = "other"
-            description = None
-            for dtype, patterns in self._directory_patterns.items():
-                if subdir_name in patterns:
-                    dir_type = dtype
-                    break
+                dir_type = "other"
+                for dtype, patterns in self._directory_patterns.items():
+                    if subdir_lower in patterns:
+                        dir_type = dtype
+                        break
 
-            # Count files
-            file_count = sum(1 for _ in subdir.rglob("*") if _.is_file())
-
-            key_dirs.append(
-                KeyDirectory(
-                    path=subdir.name,
-                    directory_type=dir_type,
-                    file_count=file_count,
-                    description=description,
+                key_dirs.append(
+                    KeyDirectory(
+                        path=subdir_name,
+                        directory_type=dir_type,
+                        file_count=file_count,
+                        description=None,
+                    )
                 )
-            )
+        else:
+            for subdir in dir_path.iterdir():
+                if not subdir.is_dir():
+                    continue
+
+                subdir_name = subdir.name.lower()
+
+                # Skip hidden and common non-code directories
+                if subdir_name.startswith(".") or subdir_name in skip_dirs:
+                    continue
+
+                # Determine directory type
+                dir_type = "other"
+                for dtype, patterns in self._directory_patterns.items():
+                    if subdir_name in patterns:
+                        dir_type = dtype
+                        break
+
+                # Count files
+                file_count = sum(1 for _ in subdir.rglob("*") if _.is_file())
+
+                key_dirs.append(
+                    KeyDirectory(
+                        path=subdir.name,
+                        directory_type=dir_type,
+                        file_count=file_count,
+                        description=None,
+                    )
+                )
 
         return key_dirs
 
@@ -582,39 +658,36 @@ class SemanticEngine:
         dir_path = Path(directory)
         str_path = str(dir_path)
 
-        # Check cache
+        # Check cache (LRU: move to end on hit)
         if str_path in self._analysis_cache:
+            self._analysis_cache.move_to_end(str_path)
             return self._analysis_cache[str_path]
 
+        # Single directory walk for all sub-methods
+        all_files = self._collect_files(dir_path)
+
         # Detect languages
-        lang_counts = self.detect_languages_in_directory(dir_path)
+        lang_counts = self.detect_languages_in_directory(dir_path, files=all_files)
         languages = sorted(lang_counts.keys(), key=lambda x: lang_counts[x], reverse=True)
 
         # Detect frameworks
-        frameworks = self.detect_frameworks(dir_path, languages)
+        frameworks = self.detect_frameworks(dir_path, languages, files=all_files)
 
         # Detect entry points
-        entry_points = self.detect_entry_points(dir_path)
+        entry_points = self.detect_entry_points(dir_path, files=all_files)
 
         # Map key directories
-        key_directories = self.map_key_directories(dir_path)
+        key_directories = self.map_key_directories(dir_path, files=all_files)
 
-        # Extract concepts from files
+        # Extract concepts from pre-collected files
         concepts: list[SemanticConcept] = []
         total_files = 0
         total_lines = 0
 
-        for file_path in dir_path.rglob("*"):
-            if not file_path.is_file():
-                continue
-
+        for file_path in all_files:
             # Skip non-code files
             lang = self.detect_language(file_path)
             if not lang:
-                continue
-
-            # Skip ignored directories
-            if any(part in DEFAULT_IGNORE_DIRS for part in file_path.parts):
                 continue
 
             total_files += 1
@@ -644,8 +717,10 @@ class SemanticEngine:
             total_lines=total_lines,
         )
 
-        # Cache result
+        # Cache result (LRU eviction if over limit)
         self._analysis_cache[str_path] = analysis
+        if len(self._analysis_cache) > self._CACHE_MAX_SIZE:
+            self._analysis_cache.popitem(last=False)
 
         return analysis
 
@@ -803,4 +878,3 @@ class SemanticEngine:
     def clear_cache(self) -> None:
         """Clear the analysis cache."""
         self._analysis_cache.clear()
-        self._concept_index.clear()
