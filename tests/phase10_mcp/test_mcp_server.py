@@ -32,17 +32,14 @@ from anamnesis.mcp_server._shared import (
 )
 from anamnesis.mcp_server.server import create_server
 from anamnesis.mcp_server.tools.intelligence import (
-    _contribute_insights_impl,
+    _analyze_project_impl,
+    _get_coding_guidance_impl,
     _get_developer_profile_impl,
-    _get_pattern_recommendations_impl,
-    _get_project_blueprint_impl,
-    _get_semantic_insights_impl,
-    _predict_coding_approach_impl,
+    _manage_concepts_impl,
 )
 from anamnesis.mcp_server.tools.learning import _auto_learn_if_needed_impl
 from anamnesis.mcp_server.tools.monitoring import _get_system_status_impl
 from anamnesis.mcp_server.tools.search import (
-    _analyze_codebase_impl,
     _search_codebase_impl,
 )
 
@@ -178,7 +175,7 @@ class UserService:
         service = _get_intelligence_service()
         service.clear()
 
-        result = _as_dict(_get_semantic_insights_impl())
+        result = _as_dict(_manage_concepts_impl(action="query"))
         assert isinstance(result["data"], list)
         assert "total" in result["metadata"]
 
@@ -186,7 +183,7 @@ class UserService:
         """Test getting insights after learning."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _as_dict(_get_semantic_insights_impl())
+        result = _as_dict(_manage_concepts_impl(action="query"))
         assert result["metadata"]["total"] > 0
         assert len(result["data"]) > 0
 
@@ -194,7 +191,7 @@ class UserService:
         """Test getting insights with query filter."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _as_dict(_get_semantic_insights_impl(query="Service"))
+        result = _as_dict(_manage_concepts_impl(action="query", query="Service"))
         assert isinstance(result["data"], list)
         # May or may not have matches depending on extraction
 
@@ -202,15 +199,17 @@ class UserService:
         """Test getting insights with type filter."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _as_dict(_get_semantic_insights_impl(concept_type="class"))
+        result = _as_dict(_manage_concepts_impl(action="query", concept_type="class"))
         assert isinstance(result["data"], list)
 
     def test_get_pattern_recommendations(self, temp_codebase):
         """Test getting pattern recommendations."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _as_dict(_get_pattern_recommendations_impl(
-            problem_description="create a new service class"
+        result = _as_dict(_get_coding_guidance_impl(
+            problem_description="create a new service class",
+            include_patterns=True,
+            include_file_routing=False,
         ))
 
         assert "recommendations" in result["data"]
@@ -221,11 +220,13 @@ class UserService:
         """Test predicting coding approach."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _as_dict(_predict_coding_approach_impl(
-            problem_description="add user authentication"
+        result = _as_dict(_get_coding_guidance_impl(
+            problem_description="add user authentication",
+            include_patterns=False,
+            include_file_routing=True,
         ))
 
-        prediction = result["data"]
+        prediction = result["data"]["prediction"]
         assert "approach" in prediction
         assert "confidence" in prediction
         assert "reasoning" in prediction
@@ -256,7 +257,8 @@ class UserService:
         """Test contributing insights."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _contribute_insights_impl(
+        result = _manage_concepts_impl(
+            action="contribute",
             insight_type="bug_pattern",
             content={"pattern": "null_check_missing"},
             confidence=0.85,
@@ -271,7 +273,8 @@ class UserService:
         """Test contributing with session update."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _contribute_insights_impl(
+        result = _manage_concepts_impl(
+            action="contribute",
             insight_type="optimization",
             content={"suggestion": "use caching"},
             confidence=0.75,
@@ -289,7 +292,7 @@ class UserService:
         """Test getting project blueprint."""
         _auto_learn_if_needed_impl(path=temp_codebase, force=True)
 
-        result = _as_dict(_get_project_blueprint_impl(path=temp_codebase))
+        result = _as_dict(_analyze_project_impl(path=temp_codebase, scope="project"))
 
         blueprint = result["data"]["blueprint"]
         assert "tech_stack" in blueprint
@@ -517,7 +520,7 @@ def process_data(data):
 
     def test_analyze_codebase(self, temp_codebase):
         """Test analyzing codebase."""
-        result = _analyze_codebase_impl(path=temp_codebase)
+        result = _analyze_project_impl(path=temp_codebase, scope="file")
 
         assert "analysis" in result["data"]
         assert result["metadata"]["path"] == temp_codebase

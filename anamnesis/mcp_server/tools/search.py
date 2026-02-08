@@ -15,11 +15,6 @@ from anamnesis.mcp_server._shared import (
     mcp,
 )
 
-# Re-export _analyze_codebase_impl from intelligence (where it was merged)
-# for backward compatibility with tests that import from search.py
-from anamnesis.mcp_server.tools.intelligence import _analyze_codebase_impl  # noqa: F401
-
-
 # =============================================================================
 # Implementations
 # =============================================================================

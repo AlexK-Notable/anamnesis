@@ -8,10 +8,8 @@ import pytest
 
 from anamnesis.mcp_server.server import (
     _end_session_impl,
-    _get_decisions_impl,
-    _get_session_impl,
-    _list_sessions_impl,
-    _record_decision_impl,
+    _get_sessions_impl,
+    _manage_decisions_impl,
     _start_session_impl,
 )
 
@@ -85,7 +83,7 @@ class TestEndSession:
         assert result["success"] is True
 
         # Second session should still be active
-        list_result = _list_sessions_impl(active_only=True)
+        list_result = _get_sessions_impl(active_only=True)
         active_sessions = list_result["data"]
         assert len(active_sessions) == 1
         assert active_sessions[0]["session_id"] == result2["data"]["session_id"]
@@ -107,7 +105,8 @@ class TestRecordDecision:
         _start_session_impl(name="Test Session")
 
         # Record a decision
-        result = _record_decision_impl(
+        result = _manage_decisions_impl(
+            action="record",
             decision="Use JWT for authentication",
             context="API design",
             rationale="Stateless is better for scaling",
@@ -125,7 +124,8 @@ class TestRecordDecision:
 
     def test_record_decision_without_session(self):
         """Record decision without active session (standalone)."""
-        result = _record_decision_impl(
+        result = _manage_decisions_impl(
+            action="record",
             decision="Use PostgreSQL",
             rationale="Better for complex queries",
         )
@@ -135,48 +135,49 @@ class TestRecordDecision:
 
     def test_record_decision_generates_unique_id(self):
         """Each decision gets a unique ID."""
-        result1 = _record_decision_impl(decision="Decision 1")
-        result2 = _record_decision_impl(decision="Decision 2")
+        result1 = _manage_decisions_impl(action="record", decision="Decision 1")
+        result2 = _manage_decisions_impl(action="record", decision="Decision 2")
 
         assert result1["data"]["decision_id"] != result2["data"]["decision_id"]
 
 
 class TestGetSession:
-    """Tests for get_session tool."""
+    """Tests for get_sessions tool (single-session lookup)."""
 
     def test_get_active_session(self):
         """Get the currently active session."""
         _start_session_impl(name="Active Session", feature="test")
 
-        result = _get_session_impl()
+        # get_sessions with no args returns recent sessions; find active one
+        result = _get_sessions_impl(active_only=True)
 
         assert result["success"] is True
-        assert result["session"]["name"] == "Active Session"
-        assert result["session"]["feature"] == "test"
+        assert result["data"][0]["name"] == "Active Session"
+        assert result["data"][0]["feature"] == "test"
 
     def test_get_session_by_id(self):
         """Get a specific session by ID."""
         start_result = _start_session_impl(name="Specific")
         session_id = start_result["data"]["session_id"]
 
-        result = _get_session_impl(session_id=session_id)
+        result = _get_sessions_impl(session_id=session_id)
 
         assert result["success"] is True
-        assert result["session"]["session_id"] == session_id
+        assert result["data"][0]["session_id"] == session_id
 
     def test_get_session_not_found(self):
         """Get non-existent session returns error."""
-        result = _get_session_impl(session_id="nonexistent")
+        result = _get_sessions_impl(session_id="nonexistent")
 
         assert result["success"] is False
         assert "not found" in result["error"]
 
     def test_get_session_no_active(self):
-        """Get session when none active returns error."""
-        result = _get_session_impl()
+        """Get sessions when none active returns empty list."""
+        result = _get_sessions_impl(active_only=True)
 
-        assert result["success"] is False
-        assert "No active session" in result["error"]
+        assert result["success"] is True
+        assert result["metadata"]["total"] == 0
 
 
 class TestListSessions:
@@ -188,7 +189,7 @@ class TestListSessions:
         _start_session_impl(name="Session 2")
         _start_session_impl(name="Session 3")
 
-        result = _list_sessions_impl()
+        result = _get_sessions_impl()
 
         assert result["success"] is True
         assert result["metadata"]["total"] == 3
@@ -200,7 +201,7 @@ class TestListSessions:
         _start_session_impl(name="Session 2")
         _end_session_impl(session_id=result1["data"]["session_id"])
 
-        result = _list_sessions_impl(active_only=True)
+        result = _get_sessions_impl(active_only=True)
 
         assert result["success"] is True
         assert result["metadata"]["total"] == 1
@@ -211,22 +212,22 @@ class TestListSessions:
         for i in range(5):
             _start_session_impl(name=f"Session {i}")
 
-        result = _list_sessions_impl(limit=3)
+        result = _get_sessions_impl(limit=3)
 
         assert result["success"] is True
         assert len(result["data"]) <= 3
 
 
 class TestGetDecisions:
-    """Tests for get_decisions tool."""
+    """Tests for manage_decisions tool (list action)."""
 
     def test_get_recent_decisions(self):
         """Get recent decisions across all sessions."""
-        _record_decision_impl(decision="Decision 1")
-        _record_decision_impl(decision="Decision 2")
-        _record_decision_impl(decision="Decision 3")
+        _manage_decisions_impl(action="record", decision="Decision 1")
+        _manage_decisions_impl(action="record", decision="Decision 2")
+        _manage_decisions_impl(action="record", decision="Decision 3")
 
-        result = _get_decisions_impl()
+        result = _manage_decisions_impl(action="list")
 
         assert result["success"] is True
         assert result["metadata"]["total"] == 3
@@ -236,15 +237,15 @@ class TestGetDecisions:
         # Session 1 with 2 decisions
         start_result = _start_session_impl(name="Session 1")
         session_id = start_result["data"]["session_id"]
-        _record_decision_impl(decision="S1 Decision 1")
-        _record_decision_impl(decision="S1 Decision 2")
+        _manage_decisions_impl(action="record", decision="S1 Decision 1")
+        _manage_decisions_impl(action="record", decision="S1 Decision 2")
 
         # Session 2 with 1 decision
         _start_session_impl(name="Session 2")
-        _record_decision_impl(decision="S2 Decision 1")
+        _manage_decisions_impl(action="record", decision="S2 Decision 1")
 
         # Get only Session 1 decisions
-        result = _get_decisions_impl(session_id=session_id)
+        result = _manage_decisions_impl(action="list", session_id=session_id)
 
         assert result["success"] is True
         assert result["metadata"]["total"] == 2
@@ -252,9 +253,9 @@ class TestGetDecisions:
     def test_get_decisions_with_limit(self):
         """Get decisions respects limit."""
         for i in range(5):
-            _record_decision_impl(decision=f"Decision {i}")
+            _manage_decisions_impl(action="record", decision=f"Decision {i}")
 
-        result = _get_decisions_impl(limit=2)
+        result = _manage_decisions_impl(action="list", limit=2)
 
         assert result["success"] is True
         assert len(result["data"]) <= 2
@@ -276,18 +277,20 @@ class TestSessionIntegration:
         session_id = start_result["data"]["session_id"]
 
         # Record decisions
-        _record_decision_impl(
+        _manage_decisions_impl(
+            action="record",
             decision="Use JWT",
             rationale="Better for stateless APIs",
         )
-        _record_decision_impl(
+        _manage_decisions_impl(
+            action="record",
             decision="Bcrypt for passwords",
             rationale="Industry standard",
         )
 
         # Verify decisions linked to session
-        session_result = _get_session_impl(session_id)
-        assert session_result["session"]["decision_count"] == 2
+        session_result = _get_sessions_impl(session_id=session_id)
+        assert session_result["data"][0]["decision_count"] == 2
 
         # End session
         end_result = _end_session_impl()
@@ -295,5 +298,5 @@ class TestSessionIntegration:
         assert end_result["data"]["is_active"] is False
 
         # Verify decisions still accessible
-        decisions_result = _get_decisions_impl(session_id=session_id)
+        decisions_result = _manage_decisions_impl(action="list", session_id=session_id)
         assert decisions_result["metadata"]["total"] == 2

@@ -145,9 +145,6 @@ class EmbeddingEngine:
 
         # In-memory index
         self._concepts: dict[str, IndexedConcept] = {}
-        self._embeddings_matrix: Optional[np.ndarray] = None
-        self._id_to_index: dict[str, int] = {}
-        self._index_dirty = False
 
     @property
     def config(self) -> EmbeddingConfig:
@@ -344,28 +341,6 @@ class EmbeddingEngine:
         content = f"{name}:{concept_type}:{file_path}"
         return hashlib.sha256(content.encode()).hexdigest()[:16]
 
-    def _build_index(self) -> None:
-        """Rebuild the embedding matrix from indexed concepts."""
-        if not self._index_dirty or not self._concepts:
-            return
-
-        concept_ids = list(self._concepts.keys())
-        embeddings = []
-
-        for cid in concept_ids:
-            concept = self._concepts[cid]
-            if concept.embedding is not None:
-                embeddings.append(concept.embedding)
-
-        if embeddings:
-            self._embeddings_matrix = np.vstack(embeddings)
-            self._id_to_index = {cid: i for i, cid in enumerate(concept_ids)}
-        else:
-            self._embeddings_matrix = None
-            self._id_to_index = {}
-
-        self._index_dirty = False
-
     def add_concept(
         self,
         name: str,
@@ -404,7 +379,6 @@ class EmbeddingEngine:
         )
 
         self._concepts[concept_id] = concept
-        self._index_dirty = True
 
         return concept_id
 
@@ -450,7 +424,6 @@ class EmbeddingEngine:
             self._concepts[concept_id] = concept
             concept_ids.append(concept_id)
 
-        self._index_dirty = True
         return concept_ids
 
     def remove_concept(self, concept_id: str) -> bool:
@@ -464,7 +437,6 @@ class EmbeddingEngine:
         """
         if concept_id in self._concepts:
             del self._concepts[concept_id]
-            self._index_dirty = True
             return True
         return False
 
@@ -637,9 +609,6 @@ class EmbeddingEngine:
     def clear(self) -> None:
         """Clear all indexed concepts."""
         self._concepts.clear()
-        self._embeddings_matrix = None
-        self._id_to_index.clear()
-        self._index_dirty = False
 
     def get_stats(self) -> dict:
         """Get statistics about the embedding engine.
@@ -653,5 +622,4 @@ class EmbeddingEngine:
             "model_error": self._model_error,
             "concept_count": self.concept_count,
             "device": self._config.device,
-            "index_dirty": self._index_dirty,
         }

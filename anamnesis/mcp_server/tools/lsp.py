@@ -16,7 +16,7 @@ from anamnesis.mcp_server._shared import (
 
 
 # =============================================================================
-# LSP Helper Functions (kept for backward test compatibility)
+# LSP Helper Functions
 # =============================================================================
 
 
@@ -208,16 +208,6 @@ def _get_complexity_hotspots_helper(relative_path: str, min_level: str = "high")
     return svc.get_complexity_hotspots(relative_path, min_level=min_level)
 
 
-# Decorated _impl functions (kept for backward test compatibility)
-
-
-# TODO(cleanup): Remove this backward-compat wrapper -- tests migrated to canonical function
-@_with_error_handling("analyze_file_complexity")
-def _analyze_file_complexity_impl(relative_path: str) -> dict:
-    """Implementation for analyze_file_complexity tool."""
-    return _analyze_file_complexity_helper(relative_path)
-
-
 @_with_error_handling("investigate_symbol")
 def _investigate_symbol_impl(
     name_path: str,
@@ -227,20 +217,6 @@ def _investigate_symbol_impl(
     svc = _get_symbol_service()
     raw = svc.investigate_symbol(name_path, relative_path)
     return raw if not raw.get("success", True) else _success_response(raw)
-
-
-# TODO(cleanup): Remove this backward-compat wrapper -- tests migrated to canonical function
-@_with_error_handling("suggest_refactorings")
-def _suggest_refactorings_impl(relative_path: str, max_suggestions: int = 10) -> dict:
-    """Implementation for suggest_refactorings tool."""
-    return _suggest_refactorings_helper(relative_path, max_suggestions)
-
-
-# TODO(cleanup): Remove this backward-compat wrapper -- tests migrated to canonical function
-@_with_error_handling("get_complexity_hotspots")
-def _get_complexity_hotspots_impl(relative_path: str, min_level: str = "high") -> dict:
-    """Implementation for get_complexity_hotspots tool."""
-    return _get_complexity_hotspots_helper(relative_path, min_level)
 
 
 def _check_conventions_helper(relative_path: str) -> dict:
@@ -322,41 +298,6 @@ def _analyze_code_quality_impl(
         return _failure_response(
             f"Unknown detail_level '{detail_level}'. Choose from: quick, standard, deep, conventions"
         )
-
-
-# Backward-compat alias for _check_conventions_impl (kept for test imports)
-@_with_error_handling("check_conventions")
-def _check_conventions_impl(relative_path: str) -> dict:
-    """Backward-compat wrapper: delegates to _check_conventions_helper."""
-    return _check_conventions_helper(relative_path)
-
-
-# Backward-compat aliases for insert_before/after (kept for test imports)
-@_with_error_handling("insert_after_symbol")
-def _insert_after_symbol_impl(name_path: str, relative_path: str, body: str) -> dict:
-    """Backward-compat wrapper: delegates to _insert_near_symbol_impl."""
-    svc = _get_symbol_service()
-    result = svc.insert_after(name_path, relative_path, body)
-    return _success_response(result)
-
-
-@_with_error_handling("insert_before_symbol")
-def _insert_before_symbol_impl(name_path: str, relative_path: str, body: str) -> dict:
-    """Backward-compat wrapper: delegates to _insert_near_symbol_impl."""
-    svc = _get_symbol_service()
-    result = svc.insert_before(name_path, relative_path, body)
-    return _success_response(result)
-
-
-# Backward-compat aliases for enable_lsp/get_lsp_status (kept for test imports)
-def _enable_lsp_impl(language: str = "") -> dict:
-    """Backward-compat wrapper: delegates to _manage_lsp_impl."""
-    return _manage_lsp_impl(action="enable", language=language)
-
-
-def _get_lsp_status_impl() -> dict:
-    """Backward-compat wrapper: delegates to _manage_lsp_impl."""
-    return _manage_lsp_impl(action="status")
 
 
 # =============================================================================

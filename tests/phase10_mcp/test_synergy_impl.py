@@ -15,7 +15,6 @@ import pytest
 
 from anamnesis.mcp_server.tools.lsp import (
     _analyze_code_quality_impl,
-    _check_conventions_impl,
     _investigate_symbol_impl,
     _match_sibling_style_impl,
 )
@@ -523,11 +522,11 @@ class TestSuggestCodePattern:
 
 
 class TestCheckConventions:
-    """Tests for _check_conventions_impl."""
+    """Tests for _analyze_code_quality_impl with detail_level='conventions'."""
 
     def test_happy_path(self):
         """Service.py has symbols — symbols_checked > 0, violations is list."""
-        result = _as_dict(_check_conventions_impl("src/service.py"))
+        result = _as_dict(_analyze_code_quality_impl("src/service.py", detail_level="conventions"))
 
         assert result["success"] is True
         data = result["data"]
@@ -536,7 +535,7 @@ class TestCheckConventions:
 
     def test_nonexistent_file(self):
         """Nonexistent file returns success with 0 symbols or error."""
-        result = _as_dict(_check_conventions_impl("src/does_not_exist.py"))
+        result = _as_dict(_analyze_code_quality_impl("src/does_not_exist.py", detail_level="conventions"))
 
         # Either error response or success with 0 symbols checked
         if result["success"]:
@@ -551,7 +550,7 @@ class TestCheckConventions:
         an empty dict for naming_conventions, causing KeyErrors in the
         kind_map construction or missing convention keys in the output.
         """
-        result = _as_dict(_check_conventions_impl("src/service.py"))
+        result = _as_dict(_analyze_code_quality_impl("src/service.py", detail_level="conventions"))
 
         assert result["success"] is True
         data = result["data"]
@@ -576,7 +575,7 @@ class TestCheckConventions:
                 "def saveRecord():\n    pass\n"
             )
 
-        result = _as_dict(_check_conventions_impl("src/bad_naming.py"))
+        result = _as_dict(_analyze_code_quality_impl("src/bad_naming.py", detail_level="conventions"))
 
         assert result["success"] is True
         data = result["data"]

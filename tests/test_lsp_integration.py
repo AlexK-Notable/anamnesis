@@ -895,11 +895,9 @@ class TestMCPToolRegistration:
             "_get_symbols_overview_impl",
             "_find_referencing_symbols_impl",
             "_replace_symbol_body_impl",
-            "_insert_after_symbol_impl",
-            "_insert_before_symbol_impl",
+            "_insert_near_symbol_impl",
             "_rename_symbol_impl",
-            "_enable_lsp_impl",
-            "_get_lsp_status_impl",
+            "_manage_lsp_impl",
         ]
         for name in tool_names:
             assert hasattr(srv, name), f"Missing {name}"

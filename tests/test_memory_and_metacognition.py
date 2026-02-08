@@ -447,25 +447,25 @@ class TestListMemoriesTool:
     """Tests for list_memories MCP tool implementation."""
 
     def test_list_empty(self):
-        """list_memories returns empty when no memories exist."""
-        from anamnesis.mcp_server.server import _list_memories_impl
+        """search_memories(query=None) returns empty when no memories exist."""
+        from anamnesis.mcp_server.server import _search_memories_impl
 
-        result = _list_memories_impl()
+        result = _search_memories_impl(query=None)
         assert result["success"] is True
         assert result["metadata"]["total"] == 0
         assert result["data"] == []
 
     def test_list_after_writes(self):
-        """list_memories returns entries after writing."""
+        """search_memories(query=None) returns entries after writing."""
         from anamnesis.mcp_server.server import (
-            _list_memories_impl,
+            _search_memories_impl,
             _write_memory_impl,
         )
 
         _write_memory_impl("alpha", "first")
         _write_memory_impl("beta", "second")
 
-        result = _list_memories_impl()
+        result = _search_memories_impl(query=None)
         assert result["success"] is True
         assert result["metadata"]["total"] == 2
 

@@ -398,63 +398,57 @@ class TestMCPProjectTools:
         server_module._registry._persist_path = orig_persist
 
     def test_activate_project_via_dedicated_tool(self, project_a):
-        from anamnesis.mcp_server.server import _activate_project_impl
+        from anamnesis.mcp_server.server import _manage_project_impl
 
-        result = _activate_project_impl(path=project_a)
+        result = _manage_project_impl(action="activate", path=project_a)
         assert result["success"] is True
         assert result["data"]["activated"]["name"] == "project_a"
 
     def test_activate_project_invalid_path(self):
-        from anamnesis.mcp_server.server import _activate_project_impl
+        from anamnesis.mcp_server.server import _manage_project_impl
 
-        result = _activate_project_impl(path="/nonexistent/path")
+        result = _manage_project_impl(action="activate", path="/nonexistent/path")
         assert result["success"] is False
         assert "error" in result
 
     def test_get_current_config_empty(self):
-        from anamnesis.mcp_server.server import _get_project_config_impl
+        from anamnesis.mcp_server.server import _manage_project_impl
 
-        result = _get_project_config_impl()
+        result = _manage_project_impl(action="status")
         assert result["success"] is True
         assert result["data"]["registry"]["project_count"] == 0
 
     def test_get_current_config_with_projects(self, project_a, project_b):
-        from anamnesis.mcp_server.server import (
-            _activate_project_impl,
-            _get_project_config_impl,
-        )
+        from anamnesis.mcp_server.server import _manage_project_impl
 
-        _activate_project_impl(path=project_a)
-        _activate_project_impl(path=project_b)
+        _manage_project_impl(action="activate", path=project_a)
+        _manage_project_impl(action="activate", path=project_b)
 
-        result = _get_project_config_impl()
+        result = _manage_project_impl(action="status")
         assert result["data"]["registry"]["project_count"] == 2
         assert result["data"]["registry"]["active_project"] == "project_b"
 
     def test_list_projects_tool(self, project_a, project_b):
-        from anamnesis.mcp_server.server import (
-            _activate_project_impl,
-            _list_projects_impl,
-        )
+        from anamnesis.mcp_server.server import _manage_project_impl
 
-        _activate_project_impl(path=project_a)
-        _activate_project_impl(path=project_b)
+        _manage_project_impl(action="activate", path=project_a)
+        _manage_project_impl(action="activate", path=project_b)
 
-        result = _list_projects_impl()
+        result = _manage_project_impl(action="status")
         assert result["success"] is True
         assert result["metadata"]["total"] == 2
 
     def test_project_switch_affects_services(self, project_a, project_b):
         """Switching active project changes which services are returned."""
         from anamnesis.mcp_server.server import (
-            _activate_project_impl,
+            _manage_project_impl,
             _get_learning_service,
         )
 
-        _activate_project_impl(path=project_a)
+        _manage_project_impl(action="activate", path=project_a)
         svc_a = _get_learning_service()
 
-        _activate_project_impl(path=project_b)
+        _manage_project_impl(action="activate", path=project_b)
         svc_b = _get_learning_service()
 
         assert svc_a is not svc_b

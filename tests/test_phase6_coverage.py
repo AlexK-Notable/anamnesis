@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import enum
 import threading
-import time
 from unittest.mock import patch
+
+from freezegun import freeze_time
 
 # ---------------------------------------------------------------------------
 # 1. utils/helpers.py — enum_value()
@@ -113,10 +114,11 @@ class TestParseCacheTTL:
     def test_parse_cache_expired_entry_returns_none(self):
         from anamnesis.extraction.cache import ParseCache
 
-        cache = ParseCache(ttl_seconds=0)  # immediate expiry
-        cache.put("src", "f.py", object())
-        time.sleep(0.01)
-        assert cache.get("src", "f.py") is None
+        with freeze_time("2024-01-01 00:00:00") as frozen:
+            cache = ParseCache(ttl_seconds=1)  # 1 second TTL
+            cache.put("src", "f.py", object())
+            frozen.tick(2)  # advance 2 seconds past TTL
+            assert cache.get("src", "f.py") is None
 
 
 class TestParseCacheEviction:
@@ -125,16 +127,19 @@ class TestParseCacheEviction:
     def test_parse_cache_eviction_removes_oldest(self):
         from anamnesis.extraction.cache import ParseCache
 
-        cache = ParseCache(max_entries=2)
-        cache.put("a", "f.py", "val_a")
-        time.sleep(0.01)
-        cache.put("b", "f.py", "val_b")
-        time.sleep(0.01)
-        cache.put("c", "f.py", "val_c")  # triggers eviction of 'a'
+        with freeze_time("2024-01-01 00:00:00") as frozen:
+            cache = ParseCache(max_entries=2)
+            cache.put("a", "f.py", "val_a")
+            frozen.tick(1)  # 1 second later
+            cache.put("b", "f.py", "val_b")
+            frozen.tick(1)  # 2 seconds later
+            cache.put("c", "f.py", "val_c")  # triggers eviction of 'a'
 
-        assert cache.get("a", "f.py") is None  # evicted
-        assert cache.get("b", "f.py") == "val_b"
-        assert cache.get("c", "f.py") == "val_c"
+            # Assertions must be inside freeze_time — cache.get() uses
+            # time.time() for TTL checks, which must match the frozen clock.
+            assert cache.get("a", "f.py") is None  # evicted
+            assert cache.get("b", "f.py") == "val_b"
+            assert cache.get("c", "f.py") == "val_c"
 
     def test_parse_cache_eviction_respects_max_entries(self):
         from anamnesis.extraction.cache import ParseCache

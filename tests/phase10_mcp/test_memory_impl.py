@@ -10,7 +10,6 @@ import pytest
 from anamnesis.mcp_server.tools.memory import (
     _delete_memory_impl,
     _edit_memory_impl,
-    _list_memories_impl,
     _read_memory_impl,
     _reflect_impl,
     _search_memories_impl,
@@ -71,10 +70,10 @@ class TestReadMemory:
 
 
 class TestListMemories:
-    """Tests for _list_memories_impl."""
+    """Tests for _search_memories_impl(query=None) (list-all mode)."""
 
     def test_empty_project_returns_empty_list(self):
-        result = _as_dict(_list_memories_impl())
+        result = _as_dict(_search_memories_impl(query=None))
         assert result["success"] is True
         assert result["metadata"]["total"] == 0
         assert result["data"] == []
@@ -82,7 +81,7 @@ class TestListMemories:
     def test_lists_written_memories(self):
         _write_memory_impl("mem-a", "content a")
         _write_memory_impl("mem-b", "content b")
-        result = _as_dict(_list_memories_impl())
+        result = _as_dict(_search_memories_impl(query=None))
         assert result["success"] is True
         assert result["metadata"]["total"] == 2
         names = {m["name"] for m in result["data"]}

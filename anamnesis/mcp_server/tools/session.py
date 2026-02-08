@@ -149,65 +149,6 @@ def _manage_decisions_impl(
         )
 
 
-# Backward-compat aliases for tests that import old names
-def _get_session_impl(session_id: Optional[str] = None) -> dict:
-    """Backward-compat wrapper: delegates to _get_sessions_impl.
-
-    The old API returned "session" (singular dict), the new API returns
-    "sessions" (list). This wrapper adds the singular key for compat.
-    """
-    if session_id:
-        result = _get_sessions_impl(session_id=session_id)
-    else:
-        # Replicate old behavior: get active session or return error
-        session_manager = _get_session_manager()
-        target_id = session_manager.active_session_id
-        if not target_id:
-            return _failure_response("No active session", session=None)
-        result = _get_sessions_impl(session_id=target_id)
-    # Old API returned "session" (singular), not "data" (list)
-    if result.get("success") and isinstance(result.get("data"), list) and result["data"]:
-        result["session"] = result["data"][0]
-    return result
-
-
-def _list_sessions_impl(active_only: bool = False, limit: int = 10) -> dict:
-    """Backward-compat wrapper: delegates to _get_sessions_impl."""
-    return _get_sessions_impl(active_only=active_only, limit=limit)
-
-
-def _record_decision_impl(
-    decision: str = "",
-    context: str = "",
-    rationale: str = "",
-    session_id: Optional[str] = None,
-    related_files: Optional[list[str]] = None,
-    tags: Optional[list[str]] = None,
-) -> dict:
-    """Backward-compat wrapper: delegates to _manage_decisions_impl."""
-    return _manage_decisions_impl(
-        action="record",
-        decision=decision,
-        context=context,
-        rationale=rationale,
-        session_id=session_id,
-        related_files=related_files,
-        tags=tags,
-    )
-
-
-def _get_decisions_impl(
-    session_id: Optional[str] = None,
-    limit: int = 10,
-) -> dict:
-    """Backward-compat wrapper: delegates to _manage_decisions_impl."""
-    return _manage_decisions_impl(
-        action="list",
-        session_id=session_id,
-        limit=limit,
-    )
-
-
 # =============================================================================
 # MCP Tool Registrations
 # =============================================================================

@@ -9,6 +9,7 @@ Tests the actual MCP server over stdio transport, verifying:
 """
 
 import json
+import select
 import subprocess
 import sys
 import tempfile
@@ -40,7 +41,11 @@ class MCPClient:
         self.process.stdin.write(request_line)
         self.process.stdin.flush()
 
-        # Read response
+        # Read response with timeout
+        ready, _, _ = select.select([self.process.stdout], [], [], 10.0)
+        if not ready:
+            raise TimeoutError(f"MCP server did not respond within 10s for '{method}'")
+
         response_line = self.process.stdout.readline()
         if not response_line:
             raise RuntimeError("No response from server")
@@ -522,10 +527,10 @@ class TestLearnQueryRecommendE2E:
         shared_module._registry._persist_path = orig_persist
 
     def test_learn_query_recommend_e2e(self):
-        """Full pipeline: auto_learn -> get_semantic_insights -> get_pattern_recommendations."""
+        """Full pipeline: auto_learn -> manage_concepts(query) -> get_coding_guidance."""
         from anamnesis.mcp_server.tools.intelligence import (
-            _get_pattern_recommendations_impl,
-            _get_semantic_insights_impl,
+            _get_coding_guidance_impl,
+            _manage_concepts_impl,
         )
         from anamnesis.mcp_server.tools.learning import _auto_learn_if_needed_impl
         from anamnesis.utils.toon_encoder import ToonEncoder
@@ -546,15 +551,17 @@ class TestLearnQueryRecommendE2E:
         assert "concepts_learned" in learn_result["data"]
 
         # Step 2: Query semantic insights (should find symbols from learned project)
-        insights_result = as_dict(_get_semantic_insights_impl())
+        insights_result = as_dict(_manage_concepts_impl(action="query"))
         assert insights_result["success"] is True
         assert isinstance(insights_result["data"], list)
         assert isinstance(insights_result["metadata"]["total"], int)
 
-        # Step 3: Get pattern recommendations for a task
+        # Step 3: Get coding guidance (pattern recommendations) for a task
         rec_result = as_dict(
-            _get_pattern_recommendations_impl(
-                problem_description="add a utility function"
+            _get_coding_guidance_impl(
+                problem_description="add a utility function",
+                include_patterns=True,
+                include_file_routing=False,
             )
         )
         assert rec_result["success"] is True
@@ -589,7 +596,6 @@ class TestMemoryCrudLifecycleE2E:
         """Full pipeline: write -> read -> list -> search -> delete -> verify gone."""
         from anamnesis.mcp_server.tools.memory import (
             _delete_memory_impl,
-            _list_memories_impl,
             _read_memory_impl,
             _search_memories_impl,
             _write_memory_impl,
@@ -616,7 +622,7 @@ class TestMemoryCrudLifecycleE2E:
         assert "Architecture Decisions" in read_result["data"]["content"]
 
         # Step 3: List all memories — should include the new one
-        list_result = as_dict(_list_memories_impl())
+        list_result = as_dict(_search_memories_impl(query=None))
         assert list_result["success"] is True
         names = [m["name"] for m in list_result["data"]]
         assert "test-decisions" in names
@@ -631,6 +637,6 @@ class TestMemoryCrudLifecycleE2E:
         assert delete_result["success"] is True
 
         # Step 6: Verify it's gone
-        list_after = as_dict(_list_memories_impl())
+        list_after = as_dict(_search_memories_impl(query=None))
         names_after = [m["name"] for m in list_after["data"]]
         assert "test-decisions" not in names_after

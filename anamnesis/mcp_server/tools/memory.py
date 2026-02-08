@@ -91,12 +91,6 @@ def _search_memories_impl(
     )
 
 
-# Backward-compat alias for tests that import _list_memories_impl
-def _list_memories_impl() -> dict:
-    """Backward-compat wrapper: delegates to _search_memories_impl(query=None)."""
-    return _search_memories_impl()
-
-
 # =============================================================================
 # Metacognition Implementation
 # =============================================================================
