@@ -1,6 +1,6 @@
 # CLAUDE.md -- Anamnesis
 
-Codebase intelligence MCP server. 37 tools across 8 modules. Python 3.11+, FastMCP transport, tree-sitter parsing, SQLite + Qdrant storage.
+Codebase intelligence MCP server. 28 tools across 8 modules. Python 3.11+, FastMCP transport, tree-sitter parsing, SQLite + Qdrant storage.
 
 ## Quick Start
 
@@ -60,16 +60,16 @@ MCP Client -> FastMCP (mcp_server/_shared.py)
 | `utils/` | Cross-cutting concerns | `toon_encoder.py`, `error_classifier.py`, `security.py`, `language_registry.py` |
 | `cli/` | Click-based CLI | `main.py` (entry point: `anamnesis.cli.main:cli`) |
 
-### Tool Modules (37 tools)
+### Tool Modules (28 tools)
 
 | Module | Count | Domain |
 |--------|-------|--------|
-| `tools/lsp.py` | 13 | Symbol navigation, editing, `analyze_code_quality`, `match_sibling_style`, `investigate_symbol` |
-| `tools/intelligence.py` | 6 | `get_learned_concepts`, patterns, blueprints, profiles |
-| `tools/memory.py` | 7 | Persistent project memory (write, read, list, edit, delete, search, reflect) |
-| `tools/session.py` | 6 | Session lifecycle + decision tracking |
+| `tools/lsp.py` | 10 | `find_symbol`, `get_symbols_overview`, `find_referencing_symbols`, `replace_symbol_body`, `insert_near_symbol`, `rename_symbol`, `manage_lsp`, `match_sibling_style`, `analyze_code_quality`, `investigate_symbol` |
+| `tools/intelligence.py` | 5 | `manage_concepts`, `get_coding_guidance`, `get_developer_profile`, `analyze_project`, `get_system_status` (note: was in monitoring) |
+| `tools/memory.py` | 6 | `write_memory`, `read_memory`, `delete_memory`, `edit_memory`, `search_memories`, `reflect` |
+| `tools/session.py` | 3 | `start_session`, `end_session`, `get_sessions`, `manage_decisions` |
 | `tools/project.py` | 1 | `manage_project` (status + activate) |
-| `tools/search.py` | 2 | Code search (text, pattern, semantic) |
+| `tools/search.py` | 1 | `search_codebase` (text, pattern, semantic) |
 | `tools/learning.py` | 1 | `auto_learn_if_needed` |
 | `tools/monitoring.py` | 1 | `get_system_status` |
 
@@ -97,10 +97,10 @@ def _operation_name_impl(arg1: str, arg2: int = 0) -> dict:
     """Implementation with business logic."""
     svc = _get_some_service()
     result = svc.do_thing(arg1, arg2)
-    return {"success": True, "data": result}
+    return _success_response(result, total=len(result))
 
 @mcp.tool
-def operation_name(arg1: str, arg2: int = 0) -> dict:
+def operation_name(arg1: str, arg2: Literal["a", "b"] = "a") -> dict:
     """Docstring visible to LLM consumers.
 
     Args:
@@ -108,7 +108,7 @@ def operation_name(arg1: str, arg2: int = 0) -> dict:
         arg2: Description
 
     Returns:
-        Description
+        Standard envelope with data containing the result
     """
     return _operation_name_impl(arg1, arg2)
 ```
@@ -116,8 +116,9 @@ def operation_name(arg1: str, arg2: int = 0) -> dict:
 Key points:
 - `@mcp.tool` on a thin wrapper that just delegates to `_impl`
 - `@_with_error_handling` on the `_impl` function (handles exceptions, sanitizes paths, applies TOON encoding)
-- All tools return `dict` with `"success": True/False`
-- Error responses: `{"success": False, "error": "...", "error_code": "...", "is_retryable": bool}`
+- All success returns use `_success_response(data, **metadata)` — never manual dict construction
+- `Literal[...]` on `@mcp.tool` wrappers for JSON schema enum generation; `str` on `_impl` (runtime validation)
+- Error responses: `_failure_response("message")` → `{"success": False, "error": "...", "error_code": "...", "is_retryable": bool}`
 
 ### Service Access
 
@@ -161,7 +162,7 @@ Use `detect_language_from_extension()` from `anamnesis.utils.language_registry` 
 When adding or removing MCP tools, update the expected count in:
 `tests/test_memory_and_metacognition.py::TestToolRegistration::test_total_tool_count`
 
-Currently asserts `tool_count == 37`.
+Currently asserts `tool_count == 28`.
 
 ### Vendored LSP Code
 
@@ -232,12 +233,26 @@ Optional groups:
 
 Install all: `uv sync --all-extras`
 
-## Current State (2026-02-07)
+## Response Envelope
+
+All tools return a standardized envelope:
+```json
+{"success": true, "data": {...or [...]}, "metadata": {"total": N, ...}}
+```
+- `data`: primary payload (dict for single items, list for collections)
+- `metadata`: optional context (total counts, query echo, messages)
+- Errors: `{"success": false, "error": "...", "error_code": "...", "is_retryable": bool}`
+
+Build responses with `_success_response(data, **metadata)` and `_failure_response(message)`.
+
+## Current State (2026-02-08)
 
 - Version: 0.1.0
-- 37 MCP tools registered (consolidated from 41 — see Tool Modules table above)
-- 2005 tests passing
+- 28 MCP tools registered (consolidated from 41 → 37 → 28)
+- 2176 tests passing
 - All synergy features (S1-S5) complete
-- Search pipeline (text, pattern, semantic) complete
-- ~2,400 LOC dead code removed, all `datetime.now()` calls replaced with UTC-aware `utcnow()`
-- Comprehensive code review fixes applied (Phases 1-6): error handling, performance, correctness, test coverage
+- Standardized response envelope across all tools
+- Literal type constraints on all dispatch parameters (FastMCP generates JSON schema enums)
+- Parameter naming normalized (name_path, relative_path, name)
+- Layer violations fixed (tool layer only calls services)
+- Comprehensive code review remediation (Phases 1-3 complete)
