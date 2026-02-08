@@ -182,6 +182,7 @@ def service_insight_to_storage(
     try:
         insight_type_enum = InsightType(insight_type.upper())
     except ValueError:
+        logger.debug("Unknown insight_type '{}' — keeping as string", insight_type)
         insight_type_enum = insight_type
 
     # Extract fields from content
