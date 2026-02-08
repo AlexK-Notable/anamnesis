@@ -17,7 +17,6 @@ from fastmcp import FastMCP
 from anamnesis.mcp_server._shared import (  # noqa: F401
     _categorize_references,
     _check_names_against_convention,
-    _detect_naming_style,
     _format_blueprint_as_memory,
     _get_active_context,
     _get_codebase_service,

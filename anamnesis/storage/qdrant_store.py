@@ -9,6 +9,7 @@ This module provides a Qdrant-backed vector store that supports:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -152,13 +153,15 @@ class QdrantVectorStore:
 
         from qdrant_client import models
 
-        collections = self._client.get_collections().collections
+        resp = await asyncio.to_thread(self._client.get_collections)
+        collections = resp.collections
         exists = any(c.name == self._config.collection_name for c in collections)
 
         if not exists:
             logger.info(f"Creating Qdrant collection: {self._config.collection_name}")
 
-            self._client.create_collection(
+            await asyncio.to_thread(
+                self._client.create_collection,
                 collection_name=self._config.collection_name,
                 vectors_config=models.VectorParams(
                     size=self._config.vector_size,
@@ -172,17 +175,20 @@ class QdrantVectorStore:
             )
 
             # Create payload indexes for efficient filtering
-            self._client.create_payload_index(
+            await asyncio.to_thread(
+                self._client.create_payload_index,
                 collection_name=self._config.collection_name,
                 field_name="file_path",
                 field_schema=models.PayloadSchemaType.KEYWORD,
             )
-            self._client.create_payload_index(
+            await asyncio.to_thread(
+                self._client.create_payload_index,
                 collection_name=self._config.collection_name,
                 field_name="language",
                 field_schema=models.PayloadSchemaType.KEYWORD,
             )
-            self._client.create_payload_index(
+            await asyncio.to_thread(
+                self._client.create_payload_index,
                 collection_name=self._config.collection_name,
                 field_name="concept_type",
                 field_schema=models.PayloadSchemaType.KEYWORD,
@@ -231,7 +237,8 @@ class QdrantVectorStore:
 
         point_id = self._generate_id(file_path, name, concept_type)
 
-        self._client.upsert(
+        await asyncio.to_thread(
+            self._client.upsert,
             collection_name=self._config.collection_name,
             points=[
                 models.PointStruct(
@@ -290,7 +297,8 @@ class QdrantVectorStore:
             )
 
         # Batch upsert - Qdrant handles batching internally for efficiency
-        self._client.upsert(
+        await asyncio.to_thread(
+            self._client.upsert,
             collection_name=self._config.collection_name,
             points=qdrant_points,
         )
@@ -336,7 +344,8 @@ class QdrantVectorStore:
             if must_conditions:
                 qdrant_filter = models.Filter(must=must_conditions)
 
-        results = self._client.search(
+        results = await asyncio.to_thread(
+            self._client.search,
             collection_name=self._config.collection_name,
             query_vector=query_vector,
             limit=limit,
@@ -367,7 +376,8 @@ class QdrantVectorStore:
 
         from qdrant_client import models
 
-        self._client.delete(
+        await asyncio.to_thread(
+            self._client.delete,
             collection_name=self._config.collection_name,
             points_selector=models.FilterSelector(
                 filter=models.Filter(
@@ -395,7 +405,7 @@ class QdrantVectorStore:
         if self._client is None:
             raise RuntimeError("Not connected. Call connect() first.")
 
-        self._client.delete_collection(self._config.collection_name)
+        await asyncio.to_thread(self._client.delete_collection, self._config.collection_name)
         logger.warning(f"Deleted collection: {self._config.collection_name}")
         return True
 
@@ -409,7 +419,9 @@ class QdrantVectorStore:
             return QdrantStats(status="disconnected")
 
         try:
-            info = self._client.get_collection(self._config.collection_name)
+            info = await asyncio.to_thread(
+                self._client.get_collection, self._config.collection_name
+            )
             return QdrantStats(
                 vectors_count=info.vectors_count or 0,
                 indexed_vectors_count=info.indexed_vectors_count or 0,
@@ -424,7 +436,7 @@ class QdrantVectorStore:
     async def close(self) -> None:
         """Close connection to Qdrant."""
         if self._client:
-            self._client.close()
+            await asyncio.to_thread(self._client.close)
             self._client = None
             self._initialized = False
             logger.info("Qdrant connection closed")

@@ -14,7 +14,7 @@ from anamnesis.mcp_server.tools.lsp import (
     _check_conventions_impl,
     _get_complexity_hotspots_impl,
     _investigate_symbol_impl,
-    _suggest_code_pattern_impl,
+    _match_sibling_style_impl,
     _suggest_refactorings_impl,
 )
 from tests.phase10_mcp.conftest import _as_dict
@@ -342,17 +342,17 @@ class TestInvestigateSymbol:
 
 
 # =============================================================================
-# S3: suggest_code_pattern
+# S3: match_sibling_style
 # =============================================================================
 
 
 class TestSuggestCodePattern:
-    """Tests for _suggest_code_pattern_impl."""
+    """Tests for _match_sibling_style_impl."""
 
     def test_suggest_class_pattern(self):
         """Suggesting a class pattern returns naming convention and examples."""
         result = _as_dict(
-            _suggest_code_pattern_impl("src/service.py", symbol_kind="class")
+            _match_sibling_style_impl("src/service.py", symbol_kind="class")
         )
 
         assert result["success"] is True
@@ -366,7 +366,7 @@ class TestSuggestCodePattern:
     def test_suggest_function_pattern(self):
         """Suggesting a function pattern returns convention data."""
         result = _as_dict(
-            _suggest_code_pattern_impl("src/service.py", symbol_kind="function")
+            _match_sibling_style_impl("src/service.py", symbol_kind="function")
         )
 
         assert result["success"] is True
@@ -384,7 +384,7 @@ class TestSuggestCodePattern:
         verifies the function always returns a well-formed response.
         """
         result = _as_dict(
-            _suggest_code_pattern_impl(
+            _match_sibling_style_impl(
                 "src/service.py",
                 symbol_kind="method",
                 context_symbol="UserService",
@@ -398,7 +398,7 @@ class TestSuggestCodePattern:
     def test_without_context_symbol_method(self):
         """Without context_symbol, method-kind falls back to generic function scan."""
         result = _as_dict(
-            _suggest_code_pattern_impl(
+            _match_sibling_style_impl(
                 "src/service.py",
                 symbol_kind="method",
             )
@@ -423,7 +423,7 @@ class TestSuggestCodePattern:
             f.write("CONSTANT_VALUE = 42\nMAX_RETRIES = 3\n")
 
         result = _as_dict(
-            _suggest_code_pattern_impl("src/constants_only.py", symbol_kind="function")
+            _match_sibling_style_impl("src/constants_only.py", symbol_kind="function")
         )
 
         assert result["success"] is True
@@ -438,13 +438,13 @@ class TestSuggestCodePattern:
         is_method branch check.
         """
         without_context = _as_dict(
-            _suggest_code_pattern_impl(
+            _match_sibling_style_impl(
                 "src/service.py",
                 symbol_kind="method",
             )
         )
         with_empty_context = _as_dict(
-            _suggest_code_pattern_impl(
+            _match_sibling_style_impl(
                 "src/service.py",
                 symbol_kind="method",
                 context_symbol="",

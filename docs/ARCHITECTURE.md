@@ -229,7 +229,7 @@ deprecation notice in `extractors/__init__.py`, they are actively used.
 |---------|----------|---------------|
 | `utils/` | `toon_encoder.py`, `error_classifier.py`, `circuit_breaker.py`, `security.py`, `logger.py`, `serialization.py`, `language_registry.py` | TOON encoding, error classification with pattern-based mapping, circuit breakers, path sanitization, language detection |
 | `patterns/` | `matcher.py`, `ast_matcher.py`, `regex_matcher.py` | Pattern matching for search (AST + regex) |
-| `interfaces/` | `search.py`, `engines.py` | ABCs and Protocols (`SearchBackend`, `ISearchService`, `ProgressCallback`, `SemanticSearchResult`) |
+| `interfaces/` | `search.py`, `engines.py` | ABCs and Protocols (`SearchBackend`, `ISearchService`, `SemanticSearchResult`) |
 | `types/` | `errors.py`, `core.py` | Error types (`MCPErrorCode`, `AnamnesisError`), `LineRange` dataclass. |
 | `parsing/` | `tree_sitter_wrapper.py`, `language_parsers.py`, `ast_types.py` | Tree-sitter wrapper layer for parser management |
 | `cli/` | `main.py`, `interactive_setup.py`, `debug_tools.py` | Click-based CLI. Entry point: `anamnesis.cli.main:cli` |

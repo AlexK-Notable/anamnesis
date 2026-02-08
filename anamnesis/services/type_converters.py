@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from anamnesis.constants import utcnow
 from anamnesis.utils.helpers import enum_value
+from anamnesis.utils.logger import logger
 
 if TYPE_CHECKING:
     from anamnesis.intelligence.pattern_engine import DetectedPattern
@@ -48,7 +49,7 @@ def engine_concept_to_storage(
     try:
         concept_type = StorageConceptType(concept_type)
     except ValueError:
-        pass  # Keep as string
+        logger.debug("Unknown concept_type '{}' — keeping as string", concept_type)
 
     # Convert line_range to line_start/line_end
     line_start = 0
@@ -99,7 +100,7 @@ def detected_pattern_to_storage(
     try:
         pattern_type = StoragePatternType(pattern_type)
     except ValueError:
-        pass  # Keep as string
+        logger.debug("Unknown pattern_type '{}' — keeping as string", pattern_type)
 
     # Build file_paths list
     file_paths = []
@@ -139,7 +140,7 @@ def storage_pattern_to_detected(pattern: "StorageDeveloperPattern") -> "Detected
     try:
         pattern_type = EnginePatternType(pattern_type)
     except ValueError:
-        pass  # Keep as string
+        logger.debug("Unknown pattern_type '{}' — keeping as string", pattern_type)
 
     return DetectedPattern(
         pattern_type=pattern_type,

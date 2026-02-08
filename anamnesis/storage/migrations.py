@@ -81,15 +81,6 @@ INITIAL_SCHEMA = Migration(
     name="initial_schema",
     description="Initial database schema with all tables for codebase intelligence.",
     up_sql="""
--- Schema migrations tracking
-CREATE TABLE IF NOT EXISTS schema_migrations (
-    version INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    checksum TEXT NOT NULL,
-    applied_at TEXT NOT NULL,
-    execution_time_ms INTEGER DEFAULT 0
-);
-
 -- Semantic concepts table
 CREATE TABLE IF NOT EXISTS semantic_concepts (
     id TEXT PRIMARY KEY,
@@ -305,7 +296,6 @@ DROP TABLE IF EXISTS file_intelligence;
 DROP TABLE IF EXISTS architectural_decisions;
 DROP TABLE IF EXISTS developer_patterns;
 DROP TABLE IF EXISTS semantic_concepts;
-DROP TABLE IF EXISTS schema_migrations;
 """,
 )
 

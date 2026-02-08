@@ -274,13 +274,13 @@ class TestConventionChecking:
 
     def test_detect_naming_convention(self):
         """Detects the dominant naming convention from symbol names."""
-        from anamnesis.mcp_server.server import _detect_naming_style
+        from anamnesis.services.symbol_service import SymbolService
 
-        assert _detect_naming_style("my_function") == "snake_case"
-        assert _detect_naming_style("MyClass") == "PascalCase"
-        assert _detect_naming_style("myVariable") == "camelCase"
-        assert _detect_naming_style("MY_CONSTANT") == "UPPER_CASE"
-        assert _detect_naming_style("lowercase") == "flat_case"
+        assert SymbolService.detect_naming_style("my_function") == "snake_case"
+        assert SymbolService.detect_naming_style("MyClass") == "PascalCase"
+        assert SymbolService.detect_naming_style("myVariable") == "camelCase"
+        assert SymbolService.detect_naming_style("MY_CONSTANT") == "UPPER_CASE"
+        assert SymbolService.detect_naming_style("lowercase") == "flat_case"
 
     def test_check_names_against_convention(self):
         """Check a list of names and report violations."""

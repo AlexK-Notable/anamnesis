@@ -12,6 +12,7 @@ from anamnesis.mcp_server._shared import (
     _get_current_path,
     _get_intelligence_service,
     _get_learning_service,
+    _sanitize_error_message,
     _server_start_time,
     _with_error_handling,
     mcp,
@@ -139,28 +140,28 @@ def _get_system_status_impl(
         checks: dict[str, bool] = {}
         checks["path_exists"] = resolved_path.exists()
         if not checks["path_exists"]:
-            issues.append(f"Path does not exist: {resolved_path}")
+            issues.append(_sanitize_error_message(f"Path does not exist: {resolved_path}"))
         checks["is_directory"] = resolved_path.is_dir() if checks["path_exists"] else False
         if checks["path_exists"] and not checks["is_directory"]:
-            issues.append(f"Path is not a directory: {resolved_path}")
+            issues.append(_sanitize_error_message(f"Path is not a directory: {resolved_path}"))
         try:
             _get_learning_service()
             checks["learning_service"] = True
         except Exception as e:
             checks["learning_service"] = False
-            issues.append(f"Learning service error: {e}")
+            issues.append(f"Learning service error: {_sanitize_error_message(str(e))}")
         try:
             _get_intelligence_service()
             checks["intelligence_service"] = True
         except Exception as e:
             checks["intelligence_service"] = False
-            issues.append(f"Intelligence service error: {e}")
+            issues.append(f"Intelligence service error: {_sanitize_error_message(str(e))}")
         try:
             _get_codebase_service()
             checks["codebase_service"] = True
         except Exception as e:
             checks["codebase_service"] = False
-            issues.append(f"Codebase service error: {e}")
+            issues.append(f"Codebase service error: {_sanitize_error_message(str(e))}")
         checks["has_intelligence"] = has_intel
         result["health"] = {
             "healthy": len(issues) == 0,

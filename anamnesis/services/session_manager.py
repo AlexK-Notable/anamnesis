@@ -14,6 +14,40 @@ from anamnesis.constants import utcnow
 from anamnesis.services.type_converters import generate_id
 from anamnesis.storage.schema import ProjectDecision, WorkSession
 
+# ---------------------------------------------------------------------------
+# Conversion helpers — single source of truth for schema → info mapping
+# ---------------------------------------------------------------------------
+
+
+def _session_to_info(s: WorkSession, decision_count: int = 0) -> "SessionInfo":
+    """Convert a WorkSession schema object to a SessionInfo."""
+    return SessionInfo(
+        session_id=s.id,
+        name=s.name,
+        feature=s.feature,
+        files=s.files,
+        tasks=s.tasks,
+        is_active=s.is_active,
+        started_at=s.started_at,
+        updated_at=s.updated_at,
+        ended_at=s.ended_at,
+        decision_count=decision_count,
+    )
+
+
+def _decision_to_info(d: ProjectDecision) -> "DecisionInfo":
+    """Convert a ProjectDecision schema object to a DecisionInfo."""
+    return DecisionInfo(
+        decision_id=d.id,
+        decision=d.decision,
+        context=d.context,
+        rationale=d.rationale,
+        session_id=d.session_id,
+        related_files=d.related_files,
+        tags=d.tags,
+        created_at=d.created_at,
+    )
+
 if TYPE_CHECKING:
     from anamnesis.storage.sync_backend import SyncSQLiteBackend
 
@@ -213,21 +247,8 @@ class SessionManager:
         if not session:
             return None
 
-        # Count decisions for this session
-        decisions = self._backend.get_decisions_by_session(session_id)
-
-        return SessionInfo(
-            session_id=session.id,
-            name=session.name,
-            feature=session.feature,
-            files=session.files,
-            tasks=session.tasks,
-            is_active=session.is_active,
-            started_at=session.started_at,
-            updated_at=session.updated_at,
-            ended_at=session.ended_at,
-            decision_count=len(decisions),
-        )
+        counts = self._backend.get_decision_counts_by_sessions([session_id])
+        return _session_to_info(session, decision_count=counts.get(session_id, 0))
 
     def get_active_sessions(self) -> list[SessionInfo]:
         """Get all active (non-ended) sessions.
@@ -236,19 +257,13 @@ class SessionManager:
             List of active SessionInfo objects
         """
         sessions = self._backend.get_active_sessions()
+        if not sessions:
+            return []
+        counts = self._backend.get_decision_counts_by_sessions(
+            [s.id for s in sessions]
+        )
         return [
-            SessionInfo(
-                session_id=s.id,
-                name=s.name,
-                feature=s.feature,
-                files=s.files,
-                tasks=s.tasks,
-                is_active=True,
-                started_at=s.started_at,
-                updated_at=s.updated_at,
-                ended_at=None,
-                decision_count=len(self._backend.get_decisions_by_session(s.id)),
-            )
+            _session_to_info(s, decision_count=counts.get(s.id, 0))
             for s in sessions
         ]
 
@@ -262,19 +277,13 @@ class SessionManager:
             List of recent SessionInfo objects
         """
         sessions = self._backend.get_recent_sessions(limit)
+        if not sessions:
+            return []
+        counts = self._backend.get_decision_counts_by_sessions(
+            [s.id for s in sessions]
+        )
         return [
-            SessionInfo(
-                session_id=s.id,
-                name=s.name,
-                feature=s.feature,
-                files=s.files,
-                tasks=s.tasks,
-                is_active=s.is_active,
-                started_at=s.started_at,
-                updated_at=s.updated_at,
-                ended_at=s.ended_at,
-                decision_count=len(self._backend.get_decisions_by_session(s.id)),
-            )
+            _session_to_info(s, decision_count=counts.get(s.id, 0))
             for s in sessions
         ]
 
@@ -445,16 +454,7 @@ class SessionManager:
         if not decision:
             return None
 
-        return DecisionInfo(
-            decision_id=decision.id,
-            decision=decision.decision,
-            context=decision.context,
-            rationale=decision.rationale,
-            session_id=decision.session_id,
-            related_files=decision.related_files,
-            tags=decision.tags,
-            created_at=decision.created_at,
-        )
+        return _decision_to_info(decision)
 
     def get_decisions_by_session(self, session_id: str) -> list[DecisionInfo]:
         """Get all decisions for a session.
@@ -466,19 +466,7 @@ class SessionManager:
             List of DecisionInfo objects
         """
         decisions = self._backend.get_decisions_by_session(session_id)
-        return [
-            DecisionInfo(
-                decision_id=d.id,
-                decision=d.decision,
-                context=d.context,
-                rationale=d.rationale,
-                session_id=d.session_id,
-                related_files=d.related_files,
-                tags=d.tags,
-                created_at=d.created_at,
-            )
-            for d in decisions
-        ]
+        return [_decision_to_info(d) for d in decisions]
 
     def get_recent_decisions(self, limit: int = 10) -> list[DecisionInfo]:
         """Get recent decisions.
@@ -490,16 +478,4 @@ class SessionManager:
             List of recent DecisionInfo objects
         """
         decisions = self._backend.get_recent_decisions(limit)
-        return [
-            DecisionInfo(
-                decision_id=d.id,
-                decision=d.decision,
-                context=d.context,
-                rationale=d.rationale,
-                session_id=d.session_id,
-                related_files=d.related_files,
-                tags=d.tags,
-                created_at=d.created_at,
-            )
-            for d in decisions
-        ]
+        return [_decision_to_info(d) for d in decisions]

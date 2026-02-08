@@ -40,8 +40,8 @@ def server(path: str) -> None:
     from anamnesis.mcp_server import create_server
 
     resolved_path = Path(path).resolve()
-    click.echo(f"📂 Working directory: {resolved_path}")
-    click.echo("🚀 Starting Anamnesis MCP Server...")
+    click.echo(f"📂 Working directory: {resolved_path}", err=True)
+    click.echo("🚀 Starting Anamnesis MCP Server...", err=True)
 
     try:
         import os

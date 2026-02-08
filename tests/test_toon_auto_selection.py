@@ -307,13 +307,6 @@ class TestToonRoundtrip:
 import pytest
 
 from anamnesis.mcp_server._shared import _with_error_handling
-from anamnesis.utils.circuit_breaker import (
-    CircuitBreakerError,
-    CircuitBreakerOptions,
-    CircuitBreakerStats,
-    CircuitState,
-    ErrorDetails,
-)
 
 
 class TestAsyncErrorHandling:
@@ -345,32 +338,6 @@ class TestAsyncErrorHandling:
         assert "async boom" in result["error"]
 
     @pytest.mark.asyncio
-    async def test_async_circuit_breaker_returns_error_dict(self):
-        """Async tool raising CircuitBreakerError returns error dict."""
-        stats = CircuitBreakerStats(
-            state=CircuitState.OPEN,
-            failures=5,
-            successes=0,
-            total_requests=5,
-        )
-        details = ErrorDetails(
-            message="circuit open",
-            state=CircuitState.OPEN,
-            failures=5,
-            success_rate=0.0,
-            stats=stats,
-        )
-        options = CircuitBreakerOptions()
-
-        @_with_error_handling("test_async_op")
-        async def breaker_tool():
-            raise CircuitBreakerError("circuit open", details, options)
-
-        result = await breaker_tool()
-        assert result["success"] is False
-        assert "circuit open" in result["error"]
-
-    @pytest.mark.asyncio
     async def test_async_toon_encoding_on_eligible_data(self):
         """Async tool returning TOON-eligible data gets encoded."""
 
@@ -387,33 +354,3 @@ class TestAsyncErrorHandling:
         assert isinstance(result, str)
 
 
-class TestSyncCircuitBreakerErrorPath:
-    """Tests for sync CircuitBreakerError path in _with_error_handling."""
-
-    def test_sync_circuit_breaker_error_returns_failure(self):
-        """Sync function raising CircuitBreakerError returns structured error dict."""
-        stats = CircuitBreakerStats(
-            state=CircuitState.OPEN,
-            failures=5,
-            successes=0,
-            total_requests=5,
-        )
-        details = ErrorDetails(
-            message="circuit open",
-            state=CircuitState.OPEN,
-            failures=5,
-            success_rate=0.0,
-            stats=stats,
-        )
-        options = CircuitBreakerOptions()
-
-        @_with_error_handling("test_op")
-        def sync_breaker_tool():
-            raise CircuitBreakerError("circuit open", details, options)
-
-        result = sync_breaker_tool()
-
-        assert isinstance(result, dict)
-        assert result["success"] is False
-        assert result["error_code"] == "circuit_breaker"
-        assert result["is_retryable"] is True

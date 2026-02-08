@@ -426,6 +426,14 @@ class SyncSQLiteBackend:
         """Get decisions by session."""
         return self._run(self._async_backend.get_decisions_by_session(session_id))
 
+    def get_decision_counts_by_sessions(
+        self, session_ids: list[str]
+    ) -> dict[str, int]:
+        """Get decision counts for multiple sessions in a single query."""
+        return self._run(
+            self._async_backend.get_decision_counts_by_sessions(session_ids)
+        )
+
     def get_recent_decisions(self, limit: int = 10) -> list[ProjectDecision]:
         """Get recent decisions."""
         return self._run(self._async_backend.get_recent_decisions(limit))

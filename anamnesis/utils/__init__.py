@@ -5,15 +5,13 @@ This package provides shared utilities used across the Anamnesis codebase:
 - Logging (MCP-safe)
 - Security (path validation, sensitive file detection)
 - Language detection and registry
-- Resilience (circuit breaker, error classification)
+- Resilience (error classification)
 - TOON encoding and response formatting
 """
 
 # Logger
 from .logger import (
-    Logger,
     RequestContext,
-    configure_loguru,
     generate_request_id,
     get_correlation_id,
     get_request_context,
@@ -26,8 +24,6 @@ from .logger import (
 
 # Security
 from .security import (
-    PathValidationResult,
-    PathValidator,
     SENSITIVE_FILE_PATTERNS,
     escape_sql_like,
     escape_sql_string,
@@ -65,15 +61,6 @@ from .language_registry import (
     should_ignore_path,
 )
 
-# Circuit Breaker (Phase 2)
-from .circuit_breaker import (
-    CircuitBreaker,
-    CircuitBreakerError,
-    CircuitBreakerOptions,
-    CircuitBreakerStats,
-    CircuitState,
-    ErrorDetails,
-)
 
 # Error Classifier (Phase 2)
 from .error_classifier import (
@@ -110,9 +97,7 @@ from .helpers import enum_value
 
 __all__ = [
     # Logger
-    "Logger",
     "RequestContext",
-    "configure_loguru",
     "generate_request_id",
     "get_correlation_id",
     "get_request_context",
@@ -122,8 +107,6 @@ __all__ = [
     "run_with_request_context",
     "with_correlation_id",
     # Security
-    "PathValidationResult",
-    "PathValidator",
     "SENSITIVE_FILE_PATTERNS",
     "escape_sql_like",
     "escape_sql_string",
@@ -156,13 +139,6 @@ __all__ = [
     "is_code_file",
     "normalize_language_name",
     "should_ignore_path",
-    # Circuit Breaker (Phase 2)
-    "CircuitBreaker",
-    "CircuitBreakerError",
-    "CircuitBreakerOptions",
-    "CircuitBreakerStats",
-    "CircuitState",
-    "ErrorDetails",
     # Error Classifier (Phase 2)
     "ErrorCategory",
     "ErrorClassification",

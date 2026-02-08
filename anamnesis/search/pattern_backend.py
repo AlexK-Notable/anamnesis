@@ -15,6 +15,7 @@ from loguru import logger
 from anamnesis.constants import DEFAULT_IGNORE_DIRS, DEFAULT_SOURCE_PATTERNS
 from anamnesis.interfaces.search import SearchBackend, SearchQuery, SearchResult, SearchType
 from anamnesis.patterns import RegexPatternMatcher, ASTPatternMatcher, PatternMatch
+from anamnesis.utils.security import is_sensitive_file
 
 
 class PatternSearchBackend(SearchBackend):
@@ -172,7 +173,8 @@ class PatternSearchBackend(SearchBackend):
             for file_path in self._base_path.glob(pattern):
                 if file_path.is_file():
                     if not any(skip in file_path.parts for skip in skip_dirs):
-                        files.append(file_path)
+                        if not is_sensitive_file(str(file_path)):
+                            files.append(file_path)
 
         return files
 

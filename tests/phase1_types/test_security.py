@@ -2,20 +2,15 @@
 Phase 1 Tests: Security Utilities
 
 Tests for security utilities including:
-- Path validation and traversal prevention
 - Sensitive file detection
 - SQL escaping
+- Path sanitization
 - Input validation
 """
-
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 
 from anamnesis.utils import (
-    PathValidator,
     escape_sql_like,
     escape_sql_string,
     get_sensitivity_reason,
@@ -26,104 +21,6 @@ from anamnesis.utils import (
     validate_positive_integer,
     validate_string_length,
 )
-
-
-class TestPathValidator:
-    """Tests for PathValidator class."""
-
-    def test_validate_existing_path(self):
-        """Validates path that exists."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            result = PathValidator.validate_project_path(tmpdir, "test")
-            assert result == str(Path(tmpdir).resolve())
-
-    def test_validate_nonexistent_path(self):
-        """Raises error for nonexistent path."""
-        with pytest.raises(ValueError, match="does not exist"):
-            PathValidator.validate_project_path("/nonexistent/path/xyz", "test")
-
-    def test_validate_none_path_uses_cwd(self):
-        """Uses cwd when path is None."""
-        result = PathValidator.validate_project_path(None, "test")
-        assert result == os.getcwd()
-
-    def test_validate_relative_path(self):
-        """Resolves relative paths."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create a subdirectory
-            subdir = Path(tmpdir) / "subdir"
-            subdir.mkdir()
-
-            # Save and change cwd
-            original_cwd = os.getcwd()
-            try:
-                os.chdir(tmpdir)
-                result = PathValidator.validate_project_path("subdir", "test")
-                assert result == str(subdir.resolve())
-            finally:
-                os.chdir(original_cwd)
-
-    def test_looks_like_project_root_with_git(self):
-        """Detects .git as project marker."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            git_dir = Path(tmpdir) / ".git"
-            git_dir.mkdir()
-            assert PathValidator.looks_like_project_root(tmpdir) is True
-
-    def test_looks_like_project_root_with_package_json(self):
-        """Detects package.json as project marker."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "package.json").write_text("{}")
-            assert PathValidator.looks_like_project_root(tmpdir) is True
-
-    def test_looks_like_project_root_empty(self):
-        """Empty directory is not a project root."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            assert PathValidator.looks_like_project_root(tmpdir) is False
-
-    def test_describe_path_node_project(self):
-        """Describes Node.js project."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "package.json").write_text("{}")
-            desc = PathValidator.describe_path(tmpdir)
-            assert "Node.js" in desc
-
-    def test_describe_path_python_project(self):
-        """Describes Python project."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            (Path(tmpdir) / "pyproject.toml").write_text("[project]")
-            desc = PathValidator.describe_path(tmpdir)
-            assert "Python" in desc
-
-    def test_validate_safe_path_normal(self):
-        """Validates normal path as safe."""
-        result = PathValidator.validate_safe_path("/home/user/project/file.txt")
-        assert result.is_valid is True
-        assert result.error is None
-
-    def test_validate_safe_path_with_traversal(self):
-        """Detects and sanitizes path traversal."""
-        result = PathValidator.validate_safe_path("/home/user/../../../etc/passwd")
-        assert result.is_valid is True
-        assert result.warnings is not None
-        assert any("traversal" in w.lower() for w in result.warnings)
-
-    def test_validate_safe_path_within_base(self):
-        """Validates path is within base directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            subfile = Path(tmpdir) / "subdir" / "file.txt"
-            subfile.parent.mkdir(parents=True)
-            subfile.write_text("test")
-
-            result = PathValidator.validate_safe_path(str(subfile), tmpdir)
-            assert result.is_valid is True
-
-    def test_validate_safe_path_escapes_base(self):
-        """Detects path escaping base directory."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            result = PathValidator.validate_safe_path("/etc/passwd", tmpdir)
-            assert result.is_valid is False
-            assert "escapes" in result.error.lower()
 
 
 class TestSensitiveFileDetection:

@@ -1229,6 +1229,32 @@ class SQLiteBackend:
         rows = await cursor.fetchall()
         return [self._row_to_project_decision(row) for row in rows]
 
+    async def get_decision_counts_by_sessions(
+        self, session_ids: list[str]
+    ) -> dict[str, int]:
+        """Get decision counts for multiple sessions in a single query.
+
+        Args:
+            session_ids: List of session IDs to count decisions for.
+
+        Returns:
+            Dictionary mapping session_id to decision count.
+            Sessions with no decisions are included with count 0.
+        """
+        self._ensure_connected()
+        if not session_ids:
+            return {}
+
+        placeholders = ",".join("?" for _ in session_ids)
+        cursor = await self._conn.execute(
+            f"SELECT session_id, COUNT(*) as cnt FROM project_decisions "
+            f"WHERE session_id IN ({placeholders}) GROUP BY session_id",
+            tuple(session_ids),
+        )
+        rows = await cursor.fetchall()
+        counts = {row["session_id"]: row["cnt"] for row in rows}
+        return {sid: counts.get(sid, 0) for sid in session_ids}
+
     async def get_recent_decisions(self, limit: int = 20) -> list[ProjectDecision]:
         """Get recent project decisions."""
         self._ensure_connected()

@@ -20,6 +20,20 @@ if TYPE_CHECKING:
     from anamnesis.extractors.symbol_extractor import ExtractedSymbol
 
 
+# Pre-compiled regex patterns for hot-path methods
+_RE_IDENTIFIER = re.compile(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b")
+_RE_NUMBER = re.compile(r"\b\d+\.?\d*\b")
+_RE_MULTILINE_DQUOTE = re.compile(r'""".*?"""', re.DOTALL)
+_RE_MULTILINE_SQUOTE = re.compile(r"'''.*?'''", re.DOTALL)
+_RE_SINGLE_DQUOTE = re.compile(r'"[^"\\]*(?:\\.[^"\\]*)*"')
+_RE_SINGLE_SQUOTE = re.compile(r"'[^'\\]*(?:\\.[^'\\]*)*'")
+_RE_HASH_COMMENT = re.compile(r"#.*$", re.MULTILINE)
+_RE_SLASH_COMMENT = re.compile(r"//.*$", re.MULTILINE)
+_RE_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_RE_WORD = re.compile(r"\b\w+\b")
+_RE_PYTHON_TERNARY = re.compile(r"\bif\b.*\belse\b")
+
+
 class ComplexityLevel(str, Enum):
     """Complexity level classifications."""
 
@@ -325,6 +339,12 @@ class ComplexityAnalyzer:
         self.language = language
         self._decision_keywords = self._get_decision_keywords(language)
 
+        # Pre-compile regex patterns for word-boundary keyword matching
+        self._keyword_patterns: dict[str, re.Pattern[str]] = {}
+        for keyword in self._decision_keywords:
+            if keyword not in ("&&", "||", "?", ":"):
+                self._keyword_patterns[keyword] = re.compile(rf"\b{keyword}\b")
+
     def _get_decision_keywords(self, language: str) -> set[str]:
         """Get decision keywords for the language."""
         lang_map = {
@@ -570,9 +590,8 @@ class ComplexityAnalyzer:
             if keyword in ("&&", "||", "?", ":"):
                 count = source.count(keyword)
             else:
-                # Match as whole word
-                pattern = rf"\b{keyword}\b"
-                count = len(re.findall(pattern, source))
+                # Match as whole word (pre-compiled in __init__)
+                count = len(self._keyword_patterns[keyword].findall(source))
 
             decision_points += count
             complexity += count
@@ -580,7 +599,7 @@ class ComplexityAnalyzer:
         # Also count ternary operators and short-circuit operators
         if self.language == "python":
             # Python ternary: x if condition else y
-            ternary_count = len(re.findall(r"\bif\b.*\belse\b", source))
+            ternary_count = len(_RE_PYTHON_TERNARY.findall(source))
             # Don't double count - reduce by 1 for each ternary
             complexity -= ternary_count // 2
 
@@ -609,7 +628,7 @@ class ComplexityAnalyzer:
                 continue
 
             # Check for keywords
-            words = re.findall(r"\b\w+\b", stripped)
+            words = _RE_WORD.findall(stripped)
             for word in words:
                 if word in nesting_keywords:
                     # Add 1 + nesting penalty
@@ -651,24 +670,25 @@ class ComplexityAnalyzer:
         # Remove comments and strings for cleaner analysis
         cleaned = self._remove_comments_and_strings(source)
 
-        # Find operators
-        for op in self.OPERATORS:
-            count = cleaned.count(op)
+        # Find operators — process longest first to avoid substring overlap
+        # (e.g., count '==' before '=' so '==' doesn't inflate '=' count)
+        remaining = cleaned
+        for op in sorted(self.OPERATORS, key=len, reverse=True):
+            count = remaining.count(op)
             if count > 0:
                 operators[op] = count
+                # Remove matched operators to prevent substring double-counting
+                remaining = remaining.replace(op, " " * len(op))
 
         # Find operands (identifiers and literals)
         # Identifiers
-        identifiers = re.findall(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", cleaned)
-        for ident in identifiers:
-            if ident not in self._decision_keywords and ident not in {
-                "def", "class", "return", "import", "from", "as"
-            }:
+        _non_operand = self._decision_keywords | {"def", "class", "return", "import", "from", "as"}
+        for ident in _RE_IDENTIFIER.findall(cleaned):
+            if ident not in _non_operand:
                 operands[ident] = operands.get(ident, 0) + 1
 
         # Numbers
-        numbers = re.findall(r"\b\d+\.?\d*\b", cleaned)
-        for num in numbers:
+        for num in _RE_NUMBER.findall(cleaned):
             operands[num] = operands.get(num, 0) + 1
 
         return HalsteadMetrics(
@@ -702,19 +722,19 @@ class ComplexityAnalyzer:
     def _remove_comments_and_strings(self, source: str) -> str:
         """Remove comments and string literals from source."""
         # Remove multiline strings
-        source = re.sub(r'""".*?"""', "", source, flags=re.DOTALL)
-        source = re.sub(r"'''.*?'''", "", source, flags=re.DOTALL)
+        source = _RE_MULTILINE_DQUOTE.sub("", source)
+        source = _RE_MULTILINE_SQUOTE.sub("", source)
 
         # Remove single-line strings
-        source = re.sub(r'"[^"\\]*(?:\\.[^"\\]*)*"', "", source)
-        source = re.sub(r"'[^'\\]*(?:\\.[^'\\]*)*'", "", source)
+        source = _RE_SINGLE_DQUOTE.sub("", source)
+        source = _RE_SINGLE_SQUOTE.sub("", source)
 
         # Remove single-line comments
-        source = re.sub(r"#.*$", "", source, flags=re.MULTILINE)
-        source = re.sub(r"//.*$", "", source, flags=re.MULTILINE)
+        source = _RE_HASH_COMMENT.sub("", source)
+        source = _RE_SLASH_COMMENT.sub("", source)
 
         # Remove block comments
-        source = re.sub(r"/\*.*?\*/", "", source, flags=re.DOTALL)
+        source = _RE_BLOCK_COMMENT.sub("", source)
 
         return source
 

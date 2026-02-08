@@ -8,22 +8,20 @@ from anamnesis.mcp_server._shared import (
 )
 
 # =============================================================================
-# Implementations
+# Raw helpers (undecorated — called by the merged dispatch tool)
 # =============================================================================
 
 
-@_with_error_handling("get_project_config")
-def _get_project_config_impl() -> dict:
-    """Implementation for get_project_config tool (read-only)."""
+def _get_project_config_helper() -> dict:
+    """Return current project config (no error wrapping)."""
     return {
         "success": True,
         "registry": _registry.to_dict(),
     }
 
 
-@_with_error_handling("activate_project")
-def _activate_project_impl(path: str) -> dict:
-    """Implementation for activate_project tool."""
+def _activate_project_helper(path: str) -> dict:
+    """Activate a project by path (no error wrapping)."""
     ctx = _registry.activate(path)
     return {
         "success": True,
@@ -32,9 +30,8 @@ def _activate_project_impl(path: str) -> dict:
     }
 
 
-@_with_error_handling("list_projects")
-def _list_projects_impl() -> dict:
-    """Implementation for list_projects tool."""
+def _list_projects_helper() -> dict:
+    """List all known projects (no error wrapping)."""
     projects = _registry.list_projects()
     return {
         "success": True,
@@ -42,6 +39,29 @@ def _list_projects_impl() -> dict:
         "total": len(projects),
         "active_path": _registry.active_path,
     }
+
+
+# =============================================================================
+# Decorated _impl functions (kept for backward test compatibility)
+# =============================================================================
+
+
+@_with_error_handling("get_project_config")
+def _get_project_config_impl() -> dict:
+    """Implementation for get_project_config tool (read-only)."""
+    return _get_project_config_helper()
+
+
+@_with_error_handling("activate_project")
+def _activate_project_impl(path: str) -> dict:
+    """Implementation for activate_project tool."""
+    return _activate_project_helper(path)
+
+
+@_with_error_handling("list_projects")
+def _list_projects_impl() -> dict:
+    """Implementation for list_projects tool."""
+    return _list_projects_helper()
 
 
 # =============================================================================
@@ -53,8 +73,8 @@ def _list_projects_impl() -> dict:
 def _manage_project_impl(action: str = "status", path: str = "") -> dict:
     """Implementation for manage_project tool — dispatches by action."""
     if action == "status":
-        config = _get_project_config_impl()
-        projects = _list_projects_impl()
+        config = _get_project_config_helper()
+        projects = _list_projects_helper()
         return {
             "success": True,
             "registry": config.get("registry"),
@@ -67,7 +87,7 @@ def _manage_project_impl(action: str = "status", path: str = "") -> dict:
             return _failure_response(
                 "path is required when action='activate'"
             )
-        return _activate_project_impl(path)
+        return _activate_project_helper(path)
     else:
         return _failure_response(
             f"Unknown action '{action}'. Choose from: status, activate"
@@ -96,6 +116,9 @@ def manage_project(
         path: Project directory path (required when action="activate")
 
     Returns:
-        Project configuration, registry state, and project list
+        When action="status":
+            registry, projects list, total count, active_path
+        When action="activate":
+            activated project details and updated registry
     """
     return _manage_project_impl(action, path)

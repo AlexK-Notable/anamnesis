@@ -159,7 +159,7 @@ def _get_project_blueprint_impl(
 
 
 @mcp.tool
-def query_learned_concepts(
+def get_learned_concepts(
     query: Optional[str] = None,
     concept_type: Optional[str] = None,
     limit: int = 50,

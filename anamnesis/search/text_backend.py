@@ -11,8 +11,9 @@ from typing import Optional
 
 from loguru import logger
 
-from anamnesis.constants import DEFAULT_IGNORE_DIRS
+from anamnesis.constants import DEFAULT_IGNORE_DIRS, MAX_FILE_SIZE
 from anamnesis.interfaces.search import SearchBackend, SearchQuery, SearchResult, SearchType
+from anamnesis.utils.security import is_sensitive_file
 
 
 # File extensions by language
@@ -79,6 +80,10 @@ class TextSearchBackend(SearchBackend):
                     continue
 
                 try:
+                    if file_path.stat().st_size > MAX_FILE_SIZE:
+                        logger.debug(f"Skipping oversized file: {file_path}")
+                        continue
+
                     content = file_path.read_text(encoding="utf-8", errors="ignore")
 
                     if search_text in content.lower():
@@ -171,6 +176,9 @@ class TextSearchBackend(SearchBackend):
         for part in path.parts:
             if part in skip_dirs or part.endswith(".egg-info"):
                 return True
+
+        if is_sensitive_file(str(path)):
+            return True
 
         return False
 

@@ -67,18 +67,28 @@ class ParseCache:
         """Get cached parse or create new one using TreeSitterParser.
 
         This is the primary entry point. It lazily imports the parser
-        to avoid circular dependencies.
+        to avoid circular dependencies. Parser instances are cached by
+        language to avoid repeated initialization overhead.
         """
         cached = self.get(content, file_path)
         if cached is not None:
             return cached
 
-        from anamnesis.parsing.tree_sitter_wrapper import TreeSitterParser
-
-        parser = TreeSitterParser(language)
+        parser = self._get_parser(language)
         context = parser.parse_to_context(content, file_path)
         self.put(content, file_path, context)
         return context
+
+    def _get_parser(self, language: str):
+        """Get or create a TreeSitterParser for the given language."""
+        if not hasattr(self, "_parser_cache"):
+            self._parser_cache = {}
+
+        if language not in self._parser_cache:
+            from anamnesis.parsing.tree_sitter_wrapper import TreeSitterParser
+
+            self._parser_cache[language] = TreeSitterParser(language)
+        return self._parser_cache[language]
 
     def _evict_if_needed(self) -> None:
         """Evict oldest entries if cache exceeds max size.

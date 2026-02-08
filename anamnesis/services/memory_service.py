@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -193,7 +193,7 @@ class MemoryService:
         path.write_text(content, encoding="utf-8")
 
         stat = path.stat()
-        now = datetime.fromtimestamp(stat.st_mtime)
+        now = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
         logger.info(f"Memory written: {clean_name} ({stat.st_size} bytes)")
 
@@ -204,7 +204,7 @@ class MemoryService:
         return MemoryInfo(
             name=clean_name,
             content=content,
-            created_at=datetime.fromtimestamp(stat.st_ctime),
+            created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
             updated_at=now,
             size_bytes=stat.st_size,
         )
@@ -233,8 +233,8 @@ class MemoryService:
         return MemoryInfo(
             name=clean_name,
             content=content,
-            created_at=datetime.fromtimestamp(stat.st_ctime),
-            updated_at=datetime.fromtimestamp(stat.st_mtime),
+            created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
+            updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
             size_bytes=stat.st_size,
         )
 
@@ -254,8 +254,8 @@ class MemoryService:
                 entries.append(
                     MemoryListEntry(
                         name=path.stem,
-                        created_at=datetime.fromtimestamp(stat.st_ctime),
-                        updated_at=datetime.fromtimestamp(stat.st_mtime),
+                        created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
+                        updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
                         size_bytes=stat.st_size,
                     )
                 )
@@ -341,8 +341,8 @@ class MemoryService:
         return MemoryInfo(
             name=clean_name,
             content=new_content,
-            created_at=datetime.fromtimestamp(stat.st_ctime),
-            updated_at=datetime.fromtimestamp(stat.st_mtime),
+            created_at=datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc),
+            updated_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc),
             size_bytes=stat.st_size,
         )
 

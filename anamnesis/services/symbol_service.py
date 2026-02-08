@@ -805,7 +805,7 @@ class SymbolService:
 
     def investigate_symbol(
         self,
-        symbol_name: str,
+        name_path: str,
         relative_path: str,
         source: Optional[str] = None,
     ) -> dict:
@@ -815,7 +815,7 @@ class SymbolService:
         and refactoring suggestions (S1) for a specific named symbol.
 
         Args:
-            symbol_name: Name of the function/method/class to investigate.
+            name_path: Name path of the symbol (e.g., "MyClass/my_method" or "my_func").
             relative_path: File containing the symbol.
             source: Optional source code. If None, reads from disk.
 
@@ -823,6 +823,10 @@ class SymbolService:
             Dict with complexity metrics, convention status, suggestions,
             and location data for the symbol.
         """
+        # Extract simple name from name_path for symbol matching
+        # "MyClass/my_function" -> "my_function"
+        # "my_function" -> "my_function" (no change for simple names)
+        simple_name = name_path.rsplit("/", 1)[-1]
         if source is None:
             source = self._read_source(relative_path)
             if source is None:
@@ -842,14 +846,14 @@ class SymbolService:
         # Find the target symbol
         target = None
         for sym in extraction.symbols:
-            if sym.name == symbol_name:
+            if sym.name == simple_name:
                 target = sym
                 break
 
         if target is None:
             return {
                 "success": False,
-                "error": f"Symbol '{symbol_name}' not found in {relative_path}",
+                "error": f"Symbol '{name_path}' not found in {relative_path}",
             }
 
         # Complexity analysis
@@ -869,7 +873,7 @@ class SymbolService:
         }
 
         # Convention check
-        naming_style = self.detect_naming_style(symbol_name)
+        naming_style = self.detect_naming_style(simple_name)
 
         # Collect peer names to detect dominant convention
         kind_str = target.kind if isinstance(target.kind, str) else target.kind.value
@@ -897,13 +901,13 @@ class SymbolService:
         if cyc > em["cyclomatic"] or cog > em["cognitive"]:
             suggestions.append({
                 "type": "extract_method",
-                "title": f"Extract method: '{symbol_name}' is very complex",
+                "title": f"Extract method: '{simple_name}' is very complex",
                 "priority": "critical" if cyc > 30 else "high",
             })
         elif cyc > rc["cyclomatic"] or cog > rc["cognitive"]:
             suggestions.append({
                 "type": "reduce_complexity",
-                "title": f"Simplify '{symbol_name}': complexity is {level}",
+                "title": f"Simplify '{simple_name}': complexity is {level}",
                 "priority": "high" if level == "high" else "medium",
             })
 
@@ -923,7 +927,7 @@ class SymbolService:
 
         return {
             "success": True,
-            "symbol": symbol_name,
+            "symbol": name_path,
             "file": relative_path,
             "kind": kind_str,
             "line": target.start_line,

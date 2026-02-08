@@ -65,7 +65,7 @@ MCP Client -> FastMCP (mcp_server/_shared.py)
 | Module | Count | Domain |
 |--------|-------|--------|
 | `tools/lsp.py` | 13 | Symbol navigation, editing, `analyze_code_quality`, `match_sibling_style`, `investigate_symbol` |
-| `tools/intelligence.py` | 6 | `query_learned_concepts`, patterns, blueprints, profiles |
+| `tools/intelligence.py` | 6 | `get_learned_concepts`, patterns, blueprints, profiles |
 | `tools/memory.py` | 7 | Persistent project memory (write, read, list, edit, delete, search, reflect) |
 | `tools/session.py` | 6 | Session lifecycle + decision tracking |
 | `tools/project.py` | 1 | `manage_project` (status + activate) |
@@ -232,11 +232,12 @@ Optional groups:
 
 Install all: `uv sync --all-extras`
 
-## Current State (2026-02-06)
+## Current State (2026-02-07)
 
 - Version: 0.1.0
 - 37 MCP tools registered (consolidated from 41 — see Tool Modules table above)
-- 2015 tests passing
+- 2005 tests passing
 - All synergy features (S1-S5) complete
 - Search pipeline (text, pattern, semantic) complete
 - ~2,400 LOC dead code removed, all `datetime.now()` calls replaced with UTC-aware `utcnow()`
+- Comprehensive code review fixes applied (Phases 1-6): error handling, performance, correctness, test coverage

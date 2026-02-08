@@ -23,7 +23,6 @@ from anamnesis.services import (
     SessionManager,
 )
 from anamnesis.services.project_registry import ProjectContext, ProjectRegistry
-from anamnesis.utils.circuit_breaker import CircuitBreakerError
 from anamnesis.utils.error_classifier import classify_error
 from anamnesis.utils.logger import logger
 from anamnesis.utils.toon_encoder import ToonEncoder, is_structurally_toon_eligible
@@ -357,6 +356,7 @@ def _collect_key_symbols(
 
     from anamnesis.extraction.backends import get_shared_tree_sitter
     from anamnesis.extraction.types import SymbolKind
+    from anamnesis.lsp.utils import safe_join
     from anamnesis.utils.language_registry import detect_language
 
     # Gather candidate files from entry points and feature map
@@ -385,7 +385,11 @@ def _collect_key_symbols(
     _TOP_LEVEL_KINDS = {SymbolKind.CLASS, SymbolKind.FUNCTION, SymbolKind.INTERFACE}
 
     for rel_path in unique:
-        abs_path = os.path.join(project_path, rel_path)
+        try:
+            abs_path = safe_join(project_path, rel_path)
+        except ValueError:
+            logger.debug("Path traversal blocked in _collect_key_symbols: %s", rel_path)
+            continue
         if not os.path.isfile(abs_path):
             continue
 
@@ -425,16 +429,6 @@ def _categorize_references(references: list[dict]) -> dict[str, list[dict]]:
     from anamnesis.services.symbol_service import SymbolService
 
     return SymbolService.categorize_references(references)
-
-
-def _detect_naming_style(name: str) -> str:
-    """Detect the naming convention of a single identifier.
-
-    Thin wrapper — delegates to SymbolService.detect_naming_style().
-    """
-    from anamnesis.services.symbol_service import SymbolService
-
-    return SymbolService.detect_naming_style(name)
 
 
 def _check_names_against_convention(
@@ -480,24 +474,41 @@ def _sanitize_error_message(error_msg: str) -> str:
     return sanitized
 
 
-def _failure_response(error_message: str, **extra: object) -> dict:
+def _failure_response(
+    error_message: str,
+    error_code: str = "client_error",
+    is_retryable: bool = False,
+    **extra: object,
+) -> dict:
     """Build a standard failure response dict.
 
     All MCP tool failures should use this shape so LLM consumers see a
-    single, predictable structure: ``{"success": False, "error": "..."}``.
+    single, predictable structure with consistent error classification
+    fields: ``{"success": False, "error": "...", "error_code": "...",
+    "is_retryable": ...}``.
 
     Args:
         error_message: Human-readable error description.
+        error_code: Error classification (default ``"client_error"``).
+            Use ``"system_error"`` for infrastructure failures.
+        is_retryable: Whether the consumer should retry the operation
+            (default ``False``).
         **extra: Additional keys merged into the response (e.g. ``results=[]``).
     """
-    return {"success": False, "error": error_message, **extra}
+    return {
+        "success": False,
+        "error": error_message,
+        "error_code": error_code,
+        "is_retryable": is_retryable,
+        **extra,
+    }
 
 
 def _with_error_handling(operation_name: str, toon_auto: bool = True):
     """Decorator for MCP tool implementations with error handling and TOON auto-encoding.
 
-    Catches CircuitBreakerError and other exceptions, returning
-    standardized ``{"success": False, "error": "..."}`` error responses.
+    Catches exceptions and returns standardized
+    ``{"success": False, "error": "..."}`` error responses.
     Supports both sync and async tool implementations.
 
     When toon_auto is True (default), successful dict responses are checked
@@ -526,21 +537,6 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                 pass  # Silent fallback to dict/JSON on any encoding error
         return result
 
-    def _handle_circuit_breaker(e: CircuitBreakerError):
-        logger.error(
-            f"Circuit breaker open for operation '{operation_name}'",
-            extra={
-                "operation": operation_name,
-                "circuit_state": "OPEN",
-                "details": str(e.details) if e.details else None,
-            },
-        )
-        return _failure_response(
-            str(e),
-            error_code="circuit_breaker",
-            is_retryable=True,
-        )
-
     def _handle_exception(e: Exception):
         classification = classify_error(e, {"operation": operation_name})
         logger.error(
@@ -565,8 +561,6 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                 try:
                     result = await func(*args, **kwargs)
                     return _apply_toon(result)
-                except CircuitBreakerError as e:
-                    return _handle_circuit_breaker(e)
                 except Exception as e:
                     return _handle_exception(e)
 
@@ -578,8 +572,6 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                 try:
                     result = func(*args, **kwargs)
                     return _apply_toon(result)
-                except CircuitBreakerError as e:
-                    return _handle_circuit_breaker(e)
                 except Exception as e:
                     return _handle_exception(e)
 

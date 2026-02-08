@@ -25,6 +25,10 @@ DEFAULT_SOURCE_PATTERNS: list[str] = [
     "**/*.go",
 ]
 
+# Maximum file size to process during learning/analysis (1 MB).
+# Files larger than this are skipped to prevent pathological parse times.
+MAX_FILE_SIZE: int = 1_000_000
+
 # Directories to skip during file traversal (search, learning, indexing)
 DEFAULT_IGNORE_DIRS: set[str] = {
     "node_modules",

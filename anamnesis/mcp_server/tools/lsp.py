@@ -174,14 +174,14 @@ def _get_lsp_status_impl() -> dict:
     return result
 
 
-@_with_error_handling("suggest_code_pattern")
-def _suggest_code_pattern_impl(
+@_with_error_handling("match_sibling_style")
+def _match_sibling_style_impl(
     relative_path: str,
     symbol_kind: str,
     context_symbol: str = "",
     max_examples: int = 3,
 ) -> dict:
-    """Implementation for suggest_code_pattern tool."""
+    """Implementation for match_sibling_style tool."""
     svc = _get_symbol_service()
     return svc.suggest_code_pattern(
         relative_path,
@@ -191,43 +191,56 @@ def _suggest_code_pattern_impl(
     )
 
 
-@_with_error_handling("analyze_file_complexity")
-def _analyze_file_complexity_impl(
-    relative_path: str,
-) -> dict:
-    """Implementation for analyze_file_complexity tool."""
+# Raw helpers (undecorated — called by the merged analyze_code_quality dispatch)
+
+
+def _analyze_file_complexity_helper(relative_path: str) -> dict:
+    """Return per-function complexity metrics (no error wrapping)."""
     svc = _get_symbol_service()
     return svc.analyze_file_complexity(relative_path)
 
 
-@_with_error_handling("investigate_symbol")
-def _investigate_symbol_impl(
-    symbol_name: str,
-    relative_path: str,
-) -> dict:
-    """Implementation for investigate_symbol tool."""
-    svc = _get_symbol_service()
-    return svc.investigate_symbol(symbol_name, relative_path)
-
-
-@_with_error_handling("suggest_refactorings")
-def _suggest_refactorings_impl(
-    relative_path: str,
-    max_suggestions: int = 10,
-) -> dict:
-    """Implementation for suggest_refactorings tool."""
+def _suggest_refactorings_helper(relative_path: str, max_suggestions: int = 10) -> dict:
+    """Return refactoring suggestions (no error wrapping)."""
     svc = _get_symbol_service()
     return svc.suggest_refactorings(relative_path, max_suggestions=max_suggestions)
 
 
-@_with_error_handling("get_complexity_hotspots")
-def _get_complexity_hotspots_impl(
-    relative_path: str,
-    min_level: str = "high",
-) -> dict:
-    """Implementation for get_complexity_hotspots tool."""
+def _get_complexity_hotspots_helper(relative_path: str, min_level: str = "high") -> dict:
+    """Return high-complexity hotspots (no error wrapping)."""
     svc = _get_symbol_service()
     return svc.get_complexity_hotspots(relative_path, min_level=min_level)
+
+
+# Decorated _impl functions (kept for backward test compatibility)
+
+
+@_with_error_handling("analyze_file_complexity")
+def _analyze_file_complexity_impl(relative_path: str) -> dict:
+    """Implementation for analyze_file_complexity tool."""
+    return _analyze_file_complexity_helper(relative_path)
+
+
+@_with_error_handling("investigate_symbol")
+def _investigate_symbol_impl(
+    name_path: str,
+    relative_path: str,
+) -> dict:
+    """Implementation for investigate_symbol tool."""
+    svc = _get_symbol_service()
+    return svc.investigate_symbol(name_path, relative_path)
+
+
+@_with_error_handling("suggest_refactorings")
+def _suggest_refactorings_impl(relative_path: str, max_suggestions: int = 10) -> dict:
+    """Implementation for suggest_refactorings tool."""
+    return _suggest_refactorings_helper(relative_path, max_suggestions)
+
+
+@_with_error_handling("get_complexity_hotspots")
+def _get_complexity_hotspots_impl(relative_path: str, min_level: str = "high") -> dict:
+    """Implementation for get_complexity_hotspots tool."""
+    return _get_complexity_hotspots_helper(relative_path, min_level)
 
 
 @_with_error_handling("analyze_code_quality")
@@ -239,21 +252,18 @@ def _analyze_code_quality_impl(
 ) -> dict:
     """Implementation for analyze_code_quality tool."""
     if detail_level == "quick":
-        return _get_complexity_hotspots_impl(relative_path, min_complexity_level)
+        return _get_complexity_hotspots_helper(relative_path, min_complexity_level)
     elif detail_level == "standard":
-        return _analyze_file_complexity_impl(relative_path)
+        return _analyze_file_complexity_helper(relative_path)
     elif detail_level == "deep":
-        complexity_result = _analyze_file_complexity_impl(relative_path)
-        if isinstance(complexity_result, dict) and not complexity_result.get("success", True):
+        complexity_result = _analyze_file_complexity_helper(relative_path)
+        if not complexity_result.get("success", True):
             return complexity_result
-        refactoring_result = _suggest_refactorings_impl(relative_path, max_suggestions)
-        if isinstance(refactoring_result, dict):
-            # Merge refactoring data into the complexity result
-            if isinstance(complexity_result, dict):
-                for key in ("suggestions", "suggestion_count"):
-                    if key in refactoring_result:
-                        complexity_result[key] = refactoring_result[key]
-                complexity_result["detail_level"] = "deep"
+        refactoring_result = _suggest_refactorings_helper(relative_path, max_suggestions)
+        for key in ("suggestions", "suggestion_count"):
+            if key in refactoring_result:
+                complexity_result[key] = refactoring_result[key]
+        complexity_result["detail_level"] = "deep"
         return complexity_result
     else:
         return _failure_response(
@@ -538,7 +548,7 @@ def match_sibling_style(
     Returns:
         Naming convention, common patterns, example signatures, and confidence
     """
-    return _suggest_code_pattern_impl(relative_path, symbol_kind, context_symbol, max_examples)
+    return _match_sibling_style_impl(relative_path, symbol_kind, context_symbol, max_examples)
 
 
 @mcp.tool
@@ -591,7 +601,7 @@ def analyze_code_quality(
 
 @mcp.tool
 def investigate_symbol(
-    symbol_name: str,
+    name_path: str,
     relative_path: str,
 ) -> dict:
     """Deep investigation of a single symbol combining all analysis layers.
@@ -601,10 +611,10 @@ def investigate_symbol(
     Combines S1 (refactoring), S2 (complexity), and S3 (conventions) data.
 
     Args:
-        symbol_name: Name of the symbol to investigate
+        name_path: Name path of the symbol to investigate (e.g., "MyClass/my_method")
         relative_path: File containing the symbol (relative to project root)
 
     Returns:
         Combined complexity, convention, and suggestion data for the symbol
     """
-    return _investigate_symbol_impl(symbol_name, relative_path)
+    return _investigate_symbol_impl(name_path, relative_path)

@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Optional
 
-from anamnesis.constants import DEFAULT_IGNORE_DIRS, utcnow
+from anamnesis.constants import DEFAULT_IGNORE_DIRS, MAX_FILE_SIZE, utcnow
 from anamnesis.utils.helpers import enum_value
 from anamnesis.intelligence.pattern_engine import PatternEngine
 from anamnesis.intelligence.semantic_engine import SemanticEngine
@@ -197,10 +197,12 @@ class LearningService:
                 options.progress_callback(2, 7, "Learning semantic concepts")
 
             if self._use_unified_pipeline:
-                concepts = self._extract_concepts_unified(path, options.max_files)
-                insights.append("   📦 Using unified extraction pipeline")
+                # Single traversal + extraction pass for both concepts and patterns
+                concepts, patterns = self._extract_both_unified(path, options.max_files)
+                insights.append("   📦 Using unified extraction pipeline (single pass)")
             else:
                 concepts = analysis.concepts
+                patterns = []  # filled below
             concept_types: dict[str, int] = {}
             for concept in concepts:
                 # UnifiedSymbol uses .kind, engine SemanticConcept uses .concept_type
@@ -217,10 +219,8 @@ class LearningService:
             if options.progress_callback:
                 options.progress_callback(3, 7, "Discovering patterns")
 
-            if self._use_unified_pipeline:
-                patterns = self._learn_patterns_unified(path, options.max_files)
-                insights.append("   📦 Using unified extraction pipeline")
-            else:
+            if not self._use_unified_pipeline:
+                # Non-unified pipeline: patterns not yet collected
                 patterns = self._learn_patterns_from_directory(str(path), options.max_files)
             pattern_categories: dict[str, int] = {}
             for pattern in patterns:
@@ -377,9 +377,13 @@ class LearningService:
         for ext in extensions:
             files.extend(path_obj.rglob(f"*{ext}"))
 
-        # Limit files
+        # Filter and limit files
         files = files[:max_files]
-        files = [f for f in files if not is_sensitive_file(str(f))]
+        files = [
+            f for f in files
+            if not is_sensitive_file(str(f))
+            and f.stat().st_size <= MAX_FILE_SIZE
+        ]
 
         for file_path in files:
             try:
@@ -405,32 +409,48 @@ class LearningService:
     # Unified pipeline methods
     # ================================================================
 
-    def _extract_concepts_unified(self, path: Path, max_files: int) -> list:
-        """Extract concepts using the unified ExtractionOrchestrator.
+    def _collect_source_files(self, path: Path, max_files: int) -> list[Path]:
+        """Collect source files for learning — single traversal, shared filtering.
 
-        Returns UnifiedSymbol objects directly — no intermediate engine
-        conversion. Downstream consumers (persistence, IntelligenceService)
-        use direct unified→storage converters where possible.
+        Used by both concept extraction and pattern learning to avoid
+        duplicate rglob walks over the same directory tree.
+        """
+        extensions = get_code_extensions()
+        files: list[Path] = []
+        for ext in extensions:
+            files.extend(path.rglob(f"*{ext}"))
+
+        # Skip ignored directories, sensitive files, oversized files; then limit
+        filtered = []
+        for f in files:
+            if any(part in DEFAULT_IGNORE_DIRS for part in f.parts):
+                continue
+            if is_sensitive_file(str(f)):
+                continue
+            try:
+                if f.stat().st_size > MAX_FILE_SIZE:
+                    continue
+            except OSError:
+                continue
+            filtered.append(f)
+            if len(filtered) >= max_files:
+                break
+
+        return filtered
+
+    def _extract_unified(self, path: Path, max_files: int) -> tuple[list, list]:
+        """Single-pass unified extraction returning (concepts, patterns).
+
+        Performs one filesystem traversal and one orchestrator.extract()
+        call per file, collecting both symbols and patterns simultaneously.
         """
         from anamnesis.extraction.converters import flatten_unified_symbols
 
         orchestrator = self._get_orchestrator()
-        concepts = []
+        concepts: list = []
+        patterns: list = []
 
-        extensions = get_code_extensions()
-        files = []
-        for ext in extensions:
-            files.extend(path.rglob(f"*{ext}"))
-
-        # Skip ignored directories and limit files
-        files = [
-            f for f in files
-            if not any(
-                part in DEFAULT_IGNORE_DIRS
-                for part in f.parts
-            )
-        ][:max_files]
-        files = [f for f in files if not is_sensitive_file(str(f))]
+        files = self._collect_source_files(path, max_files)
 
         for file_path in files:
             try:
@@ -441,54 +461,32 @@ class LearningService:
 
                 result = orchestrator.extract(content, str(file_path.relative_to(path)), language)
                 concepts.extend(flatten_unified_symbols(result.symbols))
-            except (OSError, IOError):
-                continue
-
-        return concepts
-
-    def _learn_patterns_unified(self, path: Path, max_files: int) -> list:
-        """Learn patterns using the unified ExtractionOrchestrator.
-
-        Returns UnifiedPattern objects directly. Downstream consumers
-        (IntelligenceService, PatternEngine) accept both UnifiedPattern
-        and DetectedPattern via the unified type protocol.
-        """
-        orchestrator = self._get_orchestrator()
-        patterns = []
-
-        extensions = get_code_extensions()
-        files = []
-        for ext in extensions:
-            files.extend(path.rglob(f"*{ext}"))
-
-        files = [
-            f for f in files
-            if not any(
-                part in DEFAULT_IGNORE_DIRS
-                for part in f.parts
-            )
-        ][:max_files]
-        files = [f for f in files if not is_sensitive_file(str(f))]
-
-        for file_path in files:
-            try:
-                content = file_path.read_text(encoding="utf-8", errors="ignore")
-                language = self._semantic_engine.detect_language(file_path) or ""
-                if not language:
-                    continue
-
-                result = orchestrator.extract(content, str(file_path.relative_to(path)), language)
-
-                # Pass UnifiedPattern directly — no conversion overhead
                 patterns.extend(result.patterns)
             except (OSError, IOError):
                 continue
 
+        return concepts, patterns
+
+    def _extract_concepts_unified(self, path: Path, max_files: int) -> list:
+        """Extract concepts using the unified pipeline (backward compat)."""
+        concepts, _ = self._extract_unified(path, max_files)
+        return concepts
+
+    def _learn_patterns_unified(self, path: Path, max_files: int) -> list:
+        """Learn patterns using the unified pipeline (backward compat)."""
+        _, patterns = self._extract_unified(path, max_files)
         return patterns
+
+    def _extract_both_unified(self, path: Path, max_files: int) -> tuple[list, list]:
+        """Extract concepts AND patterns in a single traversal.
+
+        Replaces separate _extract_concepts_unified + _learn_patterns_unified
+        calls in learn_from_codebase to avoid redundant rglob and parsing.
+        """
+        return self._extract_unified(path, max_files)
 
     def _analyze_relationships(self, concepts: list, patterns: list) -> dict:
         """Analyze relationships between concepts and patterns."""
-        concept_relationships = set()
         dependency_patterns = set()
 
         # Group concepts by file
@@ -499,12 +497,11 @@ class LearningService:
                 concepts_by_file[file_path] = []
             concepts_by_file[file_path].append(concept)
 
-        # Find relationships within files
-        for file_concepts in concepts_by_file.values():
-            for i, concept1 in enumerate(file_concepts):
-                for concept2 in file_concepts[i + 1 :]:
-                    rel_key = f"{concept1.name}-{concept2.name}"
-                    concept_relationships.add(rel_key)
+        # Count intra-file pairwise relationships using combinatorial formula
+        # instead of materializing O(N^2) string keys in a set.
+        concept_relationship_count = sum(
+            len(fc) * (len(fc) - 1) // 2 for fc in concepts_by_file.values()
+        )
 
         # Identify dependency patterns
         for pattern in patterns:
@@ -516,7 +513,7 @@ class LearningService:
                 dependency_patterns.add(pattern_type)
 
         return {
-            "concept_relationships": len(concept_relationships),
+            "concept_relationships": concept_relationship_count,
             "dependency_patterns": len(dependency_patterns),
         }
 

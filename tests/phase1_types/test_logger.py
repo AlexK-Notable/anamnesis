@@ -14,7 +14,6 @@ import time
 import pytest
 
 from anamnesis.utils import (
-    Logger,
     RequestContext,
     generate_request_id,
     get_correlation_id,
@@ -176,35 +175,3 @@ class TestMcpServerDetection:
                 os.environ.pop("MCP_SERVER", None)
 
 
-class TestLoggerClass:
-    """Tests for Logger static class."""
-
-    def test_logger_has_standard_methods(self):
-        """Logger has standard logging methods."""
-        assert hasattr(Logger, "debug")
-        assert hasattr(Logger, "info")
-        assert hasattr(Logger, "warn")
-        assert hasattr(Logger, "error")
-
-    def test_logger_debug_callable(self):
-        """Logger.debug is callable."""
-        # Should not raise
-        Logger.debug("Test debug message")
-
-    def test_logger_info_callable(self):
-        """Logger.info is callable."""
-        Logger.info("Test info message")
-
-    def test_logger_warn_callable(self):
-        """Logger.warn is callable."""
-        Logger.warn("Test warning message")
-
-    def test_logger_error_callable(self):
-        """Logger.error is callable."""
-        Logger.error("Test error message")
-
-    def test_logger_with_context(self):
-        """Logger works within correlation ID context."""
-        with with_correlation_id("test_log_context"):
-            # Should not raise and should include correlation ID
-            Logger.info("Message with correlation ID")

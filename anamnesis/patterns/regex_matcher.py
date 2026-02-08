@@ -7,8 +7,7 @@ constructs across multiple languages.
 from __future__ import annotations
 
 import re
-import os
-import signal
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from typing import Iterator, Optional
 
@@ -413,39 +412,36 @@ class RegexPatternMatcher(PatternMatcher):
             logger.warning(f"Invalid regex pattern '{pattern}': {e}")
             return
 
-        match_count = 0
         max_matches = 10_000
 
-        def _timeout_handler(signum, frame):
-            raise TimeoutError("Regex match timed out")
-
-        use_alarm = os.name != "nt" and hasattr(signal, "SIGALRM")
-
-        if use_alarm:
-            old_handler = signal.signal(signal.SIGALRM, _timeout_handler)
-            signal.alarm(int(self._REGEX_TIMEOUT_SECONDS))
-
-        try:
+        # Collect all matches in a thread with timeout
+        def _collect_matches():
+            results = []
             for match in compiled.finditer(content):
-                match_count += 1
-                if match_count > max_matches:
+                results.append(match)
+                if len(results) >= max_matches:
                     logger.warning(
                         f"Regex match count exceeded {max_matches} for pattern "
                         f"'{pattern[:100]}', stopping"
                     )
                     break
-                yield self._create_match(
-                    match, content, lines, file_path, "_custom"
-                )
-        except TimeoutError:
+            return results
+
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_collect_matches)
+                matches = future.result(timeout=self._REGEX_TIMEOUT_SECONDS)
+        except (FuturesTimeoutError, TimeoutError):
             logger.warning(
                 f"Regex search timed out after {self._REGEX_TIMEOUT_SECONDS}s "
                 f"for pattern '{pattern[:100]}'"
             )
-        finally:
-            if use_alarm:
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
+            return
+
+        for match in matches:
+            yield self._create_match(
+                match, content, lines, file_path, "_custom"
+            )
 
     def supports_language(self, language: str) -> bool:
         """Check if patterns exist for a language.

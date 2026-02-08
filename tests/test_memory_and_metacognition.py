@@ -560,6 +560,6 @@ class TestToolRegistration:
         tool_count = len(mcp._tool_manager._tools)
         # 41 → 37: merged 3 complexity tools → analyze_code_quality (-2),
         # merged 3 project tools → manage_project (-2),
-        # renamed get_semantic_insights → query_learned_concepts,
+        # renamed get_semantic_insights → get_learned_concepts,
         # renamed suggest_code_pattern → match_sibling_style
         assert tool_count == 37

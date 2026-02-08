@@ -12,7 +12,6 @@ from .search import (
     ISearchService,
 )
 from .engines import (
-    ProgressCallback,
     SemanticSearchResult,
 )
 
@@ -24,6 +23,5 @@ __all__ = [
     "SearchBackend",
     "ISearchService",
     # Engine types
-    "ProgressCallback",
     "SemanticSearchResult",
 ]
