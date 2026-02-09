@@ -117,7 +117,7 @@ Service Layer (services/ — one instance per project)
 
 Tree-sitter grammar support for 10 languages: TypeScript, JavaScript, Python, Rust, Go, Java, C, C++, C#, SQL. Ruby is in the language registry but not in the grammar validation suite.
 
-LSP integration supports Python (Pyright), Go (gopls), Rust (rust-analyzer), and TypeScript (typescript-language-server).
+LSP integration supports Python (Pyright), Go (gopls), Rust (rust-analyzer), and TypeScript (typescript-language-server). LSP is optional — navigation falls back to tree-sitter when a language server binary is not installed. To check availability, call `manage_lsp(action="status")`. See [docs/TOOL_GUIDE.md](docs/TOOL_GUIDE.md#lsp-prerequisites-optional-but-recommended) for install commands.
 
 ## Development
 

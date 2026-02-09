@@ -561,7 +561,7 @@ Manage LSP language servers: enable or check status. Supported languages: python
 | `action` | `Literal["status", "enable"]` | `"status"` | `"enable"` to start servers, `"status"` to check current state. |
 | `language` | `str` | `""` | Language to enable (e.g., `"python"`). Empty string starts all available servers. |
 
-**Returns:** Status of LSP servers or result of enable operation.
+**Returns:** With `action="status"`, returns per-language binary availability: `installed` (bool), `running` (bool), `binary` (name checked on PATH), and `install` (hint, only when not installed). With `action="enable"`, returns which servers started/failed.
 
 **Replaces:** `enable_lsp` (use `action="enable"`) and `get_lsp_status` (use `action="status"`).
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 from typing import Any
 
 from anamnesis.lsp.solidlsp.ls_config import Language, LanguageServerConfig
@@ -21,6 +22,14 @@ _SUPPORTED_LANGUAGES: dict[str, Language] = {
     "go": Language.GO,
     "rust": Language.RUST,
     "typescript": Language.TYPESCRIPT,
+}
+
+# Binary probes: language -> (binary_to_check, install_hint)
+_BINARY_PROBES: dict[str, tuple[str, str]] = {
+    "python": ("pyright-langserver", "npm install -g pyright"),
+    "go": ("gopls", "go install golang.org/x/tools/gopls@latest"),
+    "rust": ("rust-analyzer", "rustup component add rust-analyzer"),
+    "typescript": ("node", "install Node.js from https://nodejs.org"),
 }
 
 
@@ -166,14 +175,25 @@ class LspManager:
                             lang_enum.value, exc_info=True)
 
     def get_status(self) -> dict[str, Any]:
-        """Get status of all language servers."""
+        """Get status of all language servers, including binary availability."""
+        languages = {}
+        for name in _SUPPORTED_LANGUAGES:
+            binary, install_hint = _BINARY_PROBES[name]
+            found = shutil.which(binary) is not None
+            lang_enum = _SUPPORTED_LANGUAGES[name]
+            running = lang_enum in self._servers
+            entry: dict[str, Any] = {
+                "binary": binary,
+                "installed": found,
+                "running": running,
+            }
+            if not found:
+                entry["install"] = install_hint
+            if running:
+                entry["class"] = type(self._servers[lang_enum]).__name__
+            languages[name] = entry
+
         return {
             "project_root": self._project_root,
-            "supported_languages": list(_SUPPORTED_LANGUAGES.keys()),
-            "running_servers": {
-                lang.value: {
-                    "class": type(server).__name__,
-                }
-                for lang, server in self._servers.items()
-            },
+            "languages": languages,
         }

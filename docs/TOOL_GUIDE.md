@@ -76,6 +76,26 @@ After connecting for the first time, follow this sequence:
 
 3. **Start exploring** -- use `get_symbols_overview`, `find_symbol`, or `search_codebase` to navigate into specific areas of interest.
 
+### LSP Prerequisites (Optional but Recommended)
+
+Anamnesis has a **two-tier symbol system**. All navigation tools work out of the box using tree-sitter parsing (10 languages, no external binaries needed). For compiler-grade accuracy — cross-file references, go-to-definition, project-wide rename, and LSP diagnostics — you need the language server binary installed for your language:
+
+| Language | Binary | Install Command | Provides |
+|----------|--------|-----------------|----------|
+| Python | `pyright-langserver` | `npm install -g pyright` | Type checking, references, diagnostics |
+| Go | `gopls` | `go install golang.org/x/tools/gopls@latest` | Full Go intelligence |
+| Rust | `rust-analyzer` | `rustup component add rust-analyzer` | Cargo-aware analysis |
+| TypeScript | `typescript-language-server` | Requires `node` + `npm` (auto-installed on first use) | TS/JS intelligence |
+
+**You do not need to install all of them** — only the ones relevant to your project. If a binary is missing, LSP-dependent tools gracefully degrade:
+
+- **Navigation tools** (`find_symbol`, `get_symbols_overview`): fall back to tree-sitter — still functional, slightly less precise
+- **LSP-only tools** (`find_referencing_symbols`, `go_to_definition`, `rename_symbol`, editing tools, `analyze_code_quality(detail_level="diagnostics")`): return a clear error message explaining LSP is required
+
+**To check what's installed**, call `manage_lsp(action="status")`. It probes for each binary on PATH and reports which are installed, which are running, and provides install hints for any that are missing.
+
+**LSP servers start lazily** — they are not running when the MCP server starts. The first tool call that needs LSP for a given language will start the server automatically (expect a 5–10 second delay on that first call). You can pre-warm servers by calling `manage_lsp(action="enable")` early in your session.
+
 ### Response Envelope
 
 Every tool returns a standardized JSON envelope:
@@ -1091,15 +1111,12 @@ Before calling `find_symbol` with `include_body=True` on a large file, first cal
 
 ### Enable LSP for full power
 
-Navigation tools work with tree-sitter alone, but LSP provides significantly better results:
-- `find_referencing_symbols` requires LSP
-- `go_to_definition` requires LSP
-- `rename_symbol` requires LSP (project-wide)
-- `replace_symbol_body` requires LSP
-- `insert_near_symbol` requires LSP
-- `analyze_code_quality(detail_level="diagnostics")` requires LSP
+Navigation tools work with tree-sitter alone, but LSP provides significantly better results. These tools **require LSP**:
+- `find_referencing_symbols`, `go_to_definition`, `rename_symbol` (project-wide)
+- `replace_symbol_body`, `insert_near_symbol`
+- `analyze_code_quality(detail_level="diagnostics")`
 
-Call `manage_lsp(action="enable")` early in your session if you need any of these. The language server binary (e.g., `pyright`, `gopls`) must be installed on the system.
+The language server binary must be installed on the system (see [LSP Prerequisites](#lsp-prerequisites-optional-but-recommended) above for install commands). Call `manage_lsp(action="status")` to check what's available, then `manage_lsp(action="enable")` to pre-warm servers.
 
 ### Memory naming conventions
 

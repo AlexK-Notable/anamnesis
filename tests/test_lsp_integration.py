@@ -530,9 +530,19 @@ class TestLspManager:
         mgr = LspManager(project_dir)
         status = mgr.get_status()
         assert "project_root" in status
-        assert "supported_languages" in status
-        assert "running_servers" in status
-        assert len(status["running_servers"]) == 0
+        assert "languages" in status
+        # All 4 supported languages present with binary probe info
+        assert len(status["languages"]) == 4
+        for lang in ("python", "go", "rust", "typescript"):
+            entry = status["languages"][lang]
+            assert "binary" in entry
+            assert "installed" in entry
+            assert isinstance(entry["installed"], bool)
+            assert "running" in entry
+            assert entry["running"] is False
+            # Missing binaries should include install hint
+            if not entry["installed"]:
+                assert "install" in entry
 
     def test_start_unsupported_language(self, project_dir):
         from anamnesis.lsp.manager import LspManager
