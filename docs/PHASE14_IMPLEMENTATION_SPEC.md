@@ -1,5 +1,8 @@
 # Phase 14: Pattern & Semantic Search Implementation
 
+> **COMPLETED** — This was a planning document. The actual implementation may differ from the spec below.
+> See the source code in `anamnesis/search/` for the current implementation.
+
 ## Overview
 
 This specification details the implementation of actual pattern matching and semantic search capabilities for the `search_codebase` MCP tool. Currently, the `search_type` parameter is ignored and only text search is performed. This phase delivers working pattern and semantic search.

@@ -1,13 +1,13 @@
 # Anamnesis Architecture
 
 > This document describes the actual system design of Anamnesis as of
-> 2026-02-06. Every file path, class name, and relationship described here
+> 2026-02-08. Every file path, class name, and relationship described here
 > has been verified against the source code.
 
 ## System Overview
 
 Anamnesis is a **Model Context Protocol (MCP) server** that provides codebase
-intelligence through 37 tools. It learns from codebases by extracting semantic
+intelligence through 29 tools. It learns from codebases by extracting semantic
 concepts (classes, functions, patterns, frameworks), stores them in SQLite and
 Qdrant, and serves them to LLM-based agents via the MCP protocol.
 
@@ -117,10 +117,10 @@ cross-project data contamination. The primary entry point is either the CLI
 |------|---------------|-------------|
 | `_shared.py` | FastMCP instance, service accessors, `_with_error_handling` decorator, TOON encoding, metacognition prompts | `mcp`, `_registry`, `_with_error_handling` |
 | `server.py` | Coordinator -- imports all tool modules (triggering `@mcp.tool` registration), re-exports `_impl` names for tests | `create_server()` |
-| `tools/lsp.py` | 10 tools: find_symbol, get_symbols_overview, find_referencing_symbols, replace_symbol_body, insert_near_symbol, rename_symbol, manage_lsp, match_sibling_style, analyze_code_quality, investigate_symbol | LSP + synergy _impl functions |
-| `tools/intelligence.py` | 5 tools: manage_concepts, get_coding_guidance, get_developer_profile, analyze_project, get_system_status | Intelligence _impl functions |
+| `tools/lsp.py` | 11 tools: find_symbol, get_symbols_overview, find_referencing_symbols, go_to_definition, replace_symbol_body, insert_near_symbol, rename_symbol, manage_lsp, match_sibling_style, analyze_code_quality, investigate_symbol | LSP + synergy _impl functions |
+| `tools/intelligence.py` | 4 tools: manage_concepts, get_coding_guidance, get_developer_profile, analyze_project | Intelligence _impl functions |
 | `tools/memory.py` | 6 tools: write/read/delete/edit memory, search_memories, reflect | Memory _impl functions |
-| `tools/session.py` | 3 tools: start_session, end_session, get_sessions, manage_decisions | Session _impl functions |
+| `tools/session.py` | 4 tools: start_session, end_session, get_sessions, manage_decisions | Session _impl functions |
 | `tools/project.py` | 1 tool: manage_project (status + activate) | Project _impl functions |
 | `tools/search.py` | 1 tool: search_codebase (text, pattern, semantic) | Search _impl functions |
 | `tools/learning.py` | 1 tool: auto_learn_if_needed | `_auto_learn_if_needed_impl` |
@@ -200,7 +200,7 @@ deprecation notice in `extractors/__init__.py`, they are actively used.
 | `sqlite_backend.py` | `SQLiteBackend` | Async CRUD via `aiosqlite` for all 12 entity types. Includes `ConnectionWrapper` for migration protocol and `_safe_json_loads` for corruption resilience. |
 | `sync_backend.py` | `SyncSQLiteBackend` | Synchronous wrapper using a dedicated background thread with its own event loop. Bridges async storage to sync service layer. |
 | `qdrant_store.py` | `QdrantVectorStore` | Qdrant vector database for semantic search. Supports embedded mode (`.anamnesis/qdrant/`) and remote server mode. |
-| `schema.py` | 12 entity dataclasses | `SemanticConcept`, `DeveloperPattern`, `ArchitecturalDecision`, `FileIntelligence`, `AIInsight`, `ProjectMetadata`, `WorkSession`, `EntryPoint`, `KeyDirectory`, `FeatureMap`, `SharedPattern`, `ProjectDecision` |
+| `schema.py` | 11 entity dataclasses | `SemanticConcept`, `DeveloperPattern`, `FileIntelligence`, `AIInsight`, `ProjectMetadata`, `WorkSession`, `EntryPoint`, `KeyDirectory`, `FeatureMap`, `SharedPattern`, `ProjectDecision` |
 | `migrations.py` | `DatabaseMigrator`, `Migration` | Versioned schema migrations with checksum verification. Runs automatically on first connection. |
 
 ### LSP Integration (`anamnesis/lsp/`)
@@ -227,10 +227,10 @@ deprecation notice in `extractors/__init__.py`, they are actively used.
 
 | Package | Key Files | Responsibility |
 |---------|----------|---------------|
-| `utils/` | `toon_encoder.py`, `error_classifier.py`, `circuit_breaker.py`, `security.py`, `logger.py`, `serialization.py`, `language_registry.py` | TOON encoding, error classification with pattern-based mapping, circuit breakers, path sanitization, language detection |
+| `utils/` | `toon_encoder.py`, `error_classifier.py`, `security.py`, `logger.py`, `serialization.py`, `language_registry.py` | TOON encoding, error classification (lookup table), path sanitization, language detection |
 | `patterns/` | `matcher.py`, `ast_matcher.py`, `regex_matcher.py` | Pattern matching for search (AST + regex) |
 | `interfaces/` | `search.py`, `engines.py` | ABCs and Protocols (`SearchBackend`, `ISearchService`, `SemanticSearchResult`) |
-| `types/` | `errors.py`, `core.py` | Error types (`MCPErrorCode`, `AnamnesisError`), `LineRange` dataclass. |
+| `types/` | `core.py` | `LineRange` dataclass. |
 | `parsing/` | `tree_sitter_wrapper.py`, `language_parsers.py`, `ast_types.py` | Tree-sitter wrapper layer for parser management |
 | `cli/` | `main.py`, `interactive_setup.py`, `debug_tools.py` | Click-based CLI. Entry point: `anamnesis.cli.main:cli` |
 | `watchers/` | `file_watcher.py`, `change_analyzer.py` | File system watching (via watchdog) |
@@ -408,11 +408,7 @@ Tool _impl function
   |     +-- Yes -> ToonEncoder.encode(result) -> return TOON string
   |     +-- No  -> return dict as-is (JSON via FastMCP)
   |
-  +-- CircuitBreakerError:
-  |     -> {"success": false, "error": str(e),
-  |         "error_code": "circuit_breaker", "is_retryable": true}
-  |
-  +-- Other Exception:
+  +-- Exception:
         -> classify_error(e) -> ErrorClassification
         -> _sanitize_error_message(str(e))   (strip filesystem paths)
         -> {"success": false, "error": sanitized,
@@ -476,7 +472,7 @@ If TOON encoding fails for any reason, the original dict is returned silently.
 - Clean docstrings on the `@mcp.tool` function (LLM-facing)
 - Re-export of `_impl` names for backward test compatibility
 
-**Trade-off**: Two functions per tool (74 functions for 37 tools) adds
+**Trade-off**: Two functions per tool (58 functions for 29 tools) adds
 boilerplate, but the pattern is highly consistent and tool authors follow it
 by convention.
 
@@ -684,8 +680,9 @@ All are implemented and tested (54 synergy tests).
 
 4. **Dead code (addressed)**: ~2,400 LOC of dead code was removed in the
    Feb 2026 remediation sprint. Deleted files: `types/patterns.py`,
-   `types/analysis.py`. Trimmed: `types/core.py`, `types/errors.py`,
-   `interfaces/engines.py`, `utils/circuit_breaker.py`.
+   `types/analysis.py`. Trimmed: `types/core.py`,
+   `interfaces/engines.py`. Note: `types/errors.py` and
+   `utils/circuit_breaker.py` were later deleted entirely (2026-02-08).
 
 5. **Unbounded caches**: `_analysis_cache`, `_concept_index`, and
    `_learned_data` in intelligence engines grow without bounds.
