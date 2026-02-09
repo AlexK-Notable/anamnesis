@@ -200,47 +200,6 @@ class TestCompatModule:
                 pass
         assert any("test operation" in record.message for record in caplog.records)
 
-    def test_matched_consecutive_lines(self):
-        from anamnesis.lsp.solidlsp.compat import (
-            LineType,
-            MatchedConsecutiveLines,
-            TextLine,
-        )
-
-        lines = [
-            TextLine(line_number=5, line_content="before", match_type=LineType.BEFORE_MATCH),
-            TextLine(line_number=6, line_content="match", match_type=LineType.MATCH),
-            TextLine(line_number=7, line_content="after", match_type=LineType.AFTER_MATCH),
-        ]
-        mcl = MatchedConsecutiveLines(lines=lines, source_file_path="test.py")
-        assert mcl.start_line == 5
-        assert mcl.end_line == 7
-        assert mcl.num_matched_lines == 1
-        assert len(mcl.lines_before_matched) == 1
-        assert len(mcl.lines_after_matched) == 1
-
-    def test_matched_consecutive_lines_requires_match(self):
-        from anamnesis.lsp.solidlsp.compat import (
-            LineType,
-            MatchedConsecutiveLines,
-            TextLine,
-        )
-
-        with pytest.raises(AssertionError):
-            MatchedConsecutiveLines(
-                lines=[TextLine(line_number=1, line_content="x", match_type=LineType.BEFORE_MATCH)],
-            )
-
-    def test_matched_consecutive_lines_from_file_contents(self):
-        from anamnesis.lsp.solidlsp.compat import MatchedConsecutiveLines
-
-        content = "line0\nline1\nline2\nline3\nline4"
-        mcl = MatchedConsecutiveLines.from_file_contents(
-            content, line=2, context_lines_before=1, context_lines_after=1,
-        )
-        assert mcl.num_matched_lines == 1
-        assert mcl.start_line == 1
-        assert mcl.end_line == 3
 
 
 # ===========================================================================

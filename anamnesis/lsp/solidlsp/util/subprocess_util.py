@@ -5,7 +5,6 @@ windows on Windows) and safe shell argument quoting.
 """
 
 import platform
-import shlex
 import subprocess
 
 
@@ -18,8 +17,3 @@ def subprocess_kwargs() -> dict:
     if platform.system() == "Windows":
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW  # type: ignore
     return kwargs
-
-
-def quote_arg(arg: str) -> str:
-    """Safely quote a single argument for shell command strings."""
-    return shlex.quote(arg)

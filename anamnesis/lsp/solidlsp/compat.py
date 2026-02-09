@@ -10,10 +10,8 @@ import logging
 import os
 import pickle
 import time
-from dataclasses import dataclass, field
-from enum import StrEnum
 from pathlib import Path
-from typing import Any, Self
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -87,110 +85,6 @@ class LogTime:
     def __exit__(self, *args: Any) -> None:
         elapsed = time.monotonic() - self._start
         self.logger.log(self.level, "%s took %.3fs", self.description, elapsed)
-
-
-# ---------------------------------------------------------------------------
-# serena.text_utils replacements (MatchedConsecutiveLines + dependencies)
-# ---------------------------------------------------------------------------
-
-class LineType(StrEnum):
-    """Enum for different types of lines in search results."""
-
-    MATCH = "match"
-    BEFORE_MATCH = "prefix"
-    AFTER_MATCH = "postfix"
-
-
-@dataclass(kw_only=True)
-class TextLine:
-    """Represents a line of text with information on how it relates to a match."""
-
-    line_number: int
-    line_content: str
-    match_type: LineType
-
-    def get_display_prefix(self) -> str:
-        if self.match_type == LineType.MATCH:
-            return "  >"
-        return "..."
-
-    def format_line(self, include_line_numbers: bool = True) -> str:
-        prefix = self.get_display_prefix()
-        if include_line_numbers:
-            line_num = str(self.line_number).rjust(4)
-            prefix = f"{prefix}{line_num}"
-        return f"{prefix}:{self.line_content}"
-
-
-@dataclass(kw_only=True)
-class MatchedConsecutiveLines:
-    """Represents consecutive lines found through some criterion in a text file.
-
-    May include lines before, after, and matched.
-    """
-
-    lines: list[TextLine]
-    source_file_path: str | None = None
-
-    # Set in post-init
-    lines_before_matched: list[TextLine] = field(default_factory=list)
-    matched_lines: list[TextLine] = field(default_factory=list)
-    lines_after_matched: list[TextLine] = field(default_factory=list)
-
-    def __post_init__(self) -> None:
-        for line in self.lines:
-            if line.match_type == LineType.BEFORE_MATCH:
-                self.lines_before_matched.append(line)
-            elif line.match_type == LineType.MATCH:
-                self.matched_lines.append(line)
-            elif line.match_type == LineType.AFTER_MATCH:
-                self.lines_after_matched.append(line)
-
-        assert len(self.matched_lines) > 0, "At least one matched line is required"
-
-    @property
-    def start_line(self) -> int:
-        return self.lines[0].line_number
-
-    @property
-    def end_line(self) -> int:
-        return self.lines[-1].line_number
-
-    @property
-    def num_matched_lines(self) -> int:
-        return len(self.matched_lines)
-
-    def to_display_string(self, include_line_numbers: bool = True) -> str:
-        return "\n".join([line.format_line(include_line_numbers) for line in self.lines])
-
-    @classmethod
-    def from_file_contents(
-        cls,
-        file_contents: str,
-        line: int,
-        context_lines_before: int = 0,
-        context_lines_after: int = 0,
-        source_file_path: str | None = None,
-    ) -> Self:
-        line_contents = file_contents.split("\n")
-        start_lineno = max(0, line - context_lines_before)
-        end_lineno = min(len(line_contents) - 1, line + context_lines_after)
-        text_lines: list[TextLine] = []
-        for lineno in range(start_lineno, line):
-            text_lines.append(
-                TextLine(line_number=lineno, line_content=line_contents[lineno],
-                         match_type=LineType.BEFORE_MATCH)
-            )
-        text_lines.append(
-            TextLine(line_number=line, line_content=line_contents[line],
-                     match_type=LineType.MATCH)
-        )
-        for lineno in range(line + 1, end_lineno + 1):
-            text_lines.append(
-                TextLine(line_number=lineno, line_content=line_contents[lineno],
-                         match_type=LineType.AFTER_MATCH)
-            )
-        return cls(lines=text_lines, source_file_path=source_file_path)
 
 
 # ---------------------------------------------------------------------------

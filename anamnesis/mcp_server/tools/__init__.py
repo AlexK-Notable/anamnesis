@@ -22,6 +22,7 @@ from anamnesis.mcp_server.tools.lsp import (  # noqa: F401
     _get_lsp_manager,
     _get_symbol_retriever,
     _get_symbols_overview_impl,
+    _go_to_definition_impl,
     _insert_near_symbol_impl,
     _investigate_symbol_impl,
     _manage_lsp_impl,

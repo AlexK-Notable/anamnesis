@@ -75,9 +75,6 @@ class Request(ToStringMixin):
         self._status = "pending"
         self._result_queue: Queue[Request.Result] = Queue()
 
-    def _tostring_includes(self) -> list[str]:
-        return ["_request_id", "_status", "_method"]
-
     def on_result(self, params: PayloadLike) -> None:
         self._status = "completed"
         self._result_queue.put(Request.Result(payload=params))

@@ -73,6 +73,7 @@ from anamnesis.mcp_server.tools import (  # noqa: F401
     _find_symbol_impl,
     _get_symbols_overview_impl,
     _find_referencing_symbols_impl,
+    _go_to_definition_impl,
     _replace_symbol_body_impl,
     _insert_near_symbol_impl,
     _manage_lsp_impl,

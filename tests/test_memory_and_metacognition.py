@@ -558,5 +558,5 @@ class TestToolRegistration:
         from anamnesis.mcp_server.server import mcp
 
         tool_count = len(mcp._tool_manager._tools)
-        # 37 → 28: 9 merges reducing tool count
-        assert tool_count == 28
+        # 37 → 28 → 29: 9 merges reducing tool count, +1 go_to_definition
+        assert tool_count == 29

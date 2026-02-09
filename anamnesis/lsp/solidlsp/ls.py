@@ -27,7 +27,6 @@ from typing import Self, Union, cast
 import pathspec
 from anamnesis.lsp.solidlsp.compat import getstate, load_pickle
 
-from anamnesis.lsp.solidlsp.compat import MatchedConsecutiveLines
 from anamnesis.lsp.solidlsp.compat import match_path
 from anamnesis.lsp.solidlsp import ls_types
 from anamnesis.lsp.solidlsp.ls_config import Language, LanguageServerConfig
@@ -830,26 +829,9 @@ class SolidLanguageServer(ABC):
 
     def retrieve_content_around_line(
         self, relative_file_path: str, line: int, context_lines_before: int = 0, context_lines_after: int = 0
-    ) -> MatchedConsecutiveLines:
-        """
-        Retrieve the content of the given file around the given line.
-
-        :param relative_file_path: The relative path of the file to retrieve the content from
-        :param line: The line number to retrieve the content around
-        :param context_lines_before: The number of lines to retrieve before the given line
-        :param context_lines_after: The number of lines to retrieve after the given line
-
-        :return MatchedConsecutiveLines: A container with the desired lines.
-        """
-        with self.open_file(relative_file_path) as file_data:
-            file_contents = file_data.contents
-        return MatchedConsecutiveLines.from_file_contents(
-            file_contents,
-            line=line,
-            context_lines_before=context_lines_before,
-            context_lines_after=context_lines_after,
-            source_file_path=relative_file_path,
-        )
+    ) -> None:
+        """Removed: no callers in Anamnesis. Underlying types (MatchedConsecutiveLines) deleted."""
+        raise NotImplementedError("retrieve_content_around_line was removed — no callers in Anamnesis")
 
     def request_completions(
         self, relative_file_path: str, line: int, column: int, allow_incomplete: bool = False
@@ -1371,7 +1353,7 @@ class SolidLanguageServer(ABC):
         Raise a [textDocument/signatureHelp](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_signatureHelp)
         request to the Language Server to find the signature help at the given line and column in the given file.
         Note: contrary to `hover`, this only returns something on the position of a *call* and not on a symbol definition.
-        This means for Serena's purposes, this method is not particularly useful. The result is also fairly verbose (but well structured).
+        For practical purposes, this method's result is fairly verbose but well structured.
 
         :param relative_file_path: The relative path of the file that has the signature help
         :param line: The line number of the symbol

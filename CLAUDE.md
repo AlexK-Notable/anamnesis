@@ -1,6 +1,6 @@
 # CLAUDE.md -- Anamnesis
 
-Codebase intelligence MCP server. 28 tools across 8 modules. Python 3.11+, FastMCP transport, tree-sitter parsing, SQLite + Qdrant storage.
+Codebase intelligence MCP server. 29 tools across 8 modules. Python 3.11+, FastMCP transport, tree-sitter parsing, SQLite + Qdrant storage.
 
 ## Quick Start
 
@@ -60,14 +60,14 @@ MCP Client -> FastMCP (mcp_server/_shared.py)
 | `utils/` | Cross-cutting concerns | `toon_encoder.py`, `error_classifier.py`, `security.py`, `language_registry.py` |
 | `cli/` | Click-based CLI | `main.py` (entry point: `anamnesis.cli.main:cli`) |
 
-### Tool Modules (28 tools)
+### Tool Modules (29 tools)
 
 | Module | Count | Domain |
 |--------|-------|--------|
-| `tools/lsp.py` | 10 | `find_symbol`, `get_symbols_overview`, `find_referencing_symbols`, `replace_symbol_body`, `insert_near_symbol`, `rename_symbol`, `manage_lsp`, `match_sibling_style`, `analyze_code_quality`, `investigate_symbol` |
-| `tools/intelligence.py` | 5 | `manage_concepts`, `get_coding_guidance`, `get_developer_profile`, `analyze_project`, `get_system_status` (note: was in monitoring) |
+| `tools/lsp.py` | 11 | `find_symbol`, `get_symbols_overview`, `find_referencing_symbols`, `go_to_definition`, `replace_symbol_body`, `insert_near_symbol`, `rename_symbol`, `manage_lsp`, `match_sibling_style`, `analyze_code_quality`, `investigate_symbol` |
+| `tools/intelligence.py` | 4 | `manage_concepts`, `get_coding_guidance`, `get_developer_profile`, `analyze_project` |
 | `tools/memory.py` | 6 | `write_memory`, `read_memory`, `delete_memory`, `edit_memory`, `search_memories`, `reflect` |
-| `tools/session.py` | 3 | `start_session`, `end_session`, `get_sessions`, `manage_decisions` |
+| `tools/session.py` | 4 | `start_session`, `end_session`, `get_sessions`, `manage_decisions` |
 | `tools/project.py` | 1 | `manage_project` (status + activate) |
 | `tools/search.py` | 1 | `search_codebase` (text, pattern, semantic) |
 | `tools/learning.py` | 1 | `auto_learn_if_needed` |
@@ -162,7 +162,7 @@ Use `detect_language_from_extension()` from `anamnesis.utils.language_registry` 
 When adding or removing MCP tools, update the expected count in:
 `tests/test_memory_and_metacognition.py::TestToolRegistration::test_total_tool_count`
 
-Currently asserts `tool_count == 28`.
+Currently asserts `tool_count == 29`.
 
 ### Adopted LSP Code
 
@@ -250,7 +250,7 @@ Build responses with `_success_response(data, **metadata)` and `_failure_respons
 ## Current State (2026-02-08)
 
 - Version: 0.1.0
-- 28 MCP tools registered (consolidated from 41 → 37 → 28)
+- 29 MCP tools registered (consolidated from 41 → 37 → 28, +1 go_to_definition)
 - 2176 tests passing
 - All synergy features (S1-S5) complete
 - Standardized response envelope across all tools

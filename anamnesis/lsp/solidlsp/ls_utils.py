@@ -7,14 +7,12 @@ import logging
 import os
 import platform
 import shutil
-import subprocess
 import uuid
 import zipfile
 from enum import Enum
 from pathlib import Path, PurePath
 
 from anamnesis.lsp.solidlsp.ls_exceptions import SolidLSPException
-from anamnesis.lsp.solidlsp.ls_types import UnifiedSymbolInformation
 
 log = logging.getLogger(__name__)
 
@@ -121,19 +119,9 @@ class PathUtils:
 
         This method was obtained from https://stackoverflow.com/a/61922504
         """
-        try:
-            from urllib.parse import unquote, urlparse
-            from urllib.request import url2pathname
-        except ImportError:
-            # backwards compatibility (Python 2)
-            from urllib.parse import unquote as unquote_py2
-            from urllib.request import url2pathname as url2pathname_py2
+        from urllib.parse import unquote, urlparse
+        from urllib.request import url2pathname
 
-            from urlparse import urlparse as urlparse_py2
-
-            unquote = unquote_py2
-            url2pathname = url2pathname_py2
-            urlparse = urlparse_py2
         parsed = urlparse(uri)
         host = f"{os.path.sep}{os.path.sep}{parsed.netloc}{os.path.sep}"
         path = os.path.normpath(os.path.join(host, url2pathname(unquote(parsed.path))))
@@ -284,15 +272,6 @@ class PlatformId(str, Enum):
         return self.value.startswith("win")
 
 
-class DotnetVersion(str, Enum):
-    V4 = "4"
-    V6 = "6"
-    V7 = "7"
-    V8 = "8"
-    V9 = "9"
-    VMONO = "mono"
-
-
 class PlatformUtils:
     """
     This class provides utilities for platform detection and identification.
@@ -369,53 +348,3 @@ class PlatformUtils:
 
         return arch_map.get(sys_info.wProcessorArchitecture, f"Unknown ({sys_info.wProcessorArchitecture})")
 
-    @staticmethod
-    def get_dotnet_version() -> DotnetVersion:
-        """
-        Returns the dotnet version for the current system
-        """
-        try:
-            result = subprocess.run(["dotnet", "--list-runtimes"], capture_output=True, check=True)
-            available_version_cmd_output = []
-            for line in result.stdout.decode("utf-8").split("\n"):
-                if line.startswith("Microsoft.NETCore.App"):
-                    version_cmd_output = line.split(" ")[1]
-                    available_version_cmd_output.append(version_cmd_output)
-
-            if not available_version_cmd_output:
-                raise SolidLSPException("dotnet not found on the system")
-
-            # Check for supported versions in order of preference (latest first)
-            for version_cmd_output in available_version_cmd_output:
-                if version_cmd_output.startswith("9"):
-                    return DotnetVersion.V9
-                if version_cmd_output.startswith("8"):
-                    return DotnetVersion.V8
-                if version_cmd_output.startswith("7"):
-                    return DotnetVersion.V7
-                if version_cmd_output.startswith("6"):
-                    return DotnetVersion.V6
-                if version_cmd_output.startswith("4"):
-                    return DotnetVersion.V4
-
-            # If no supported version found, raise exception with all available versions
-            raise SolidLSPException(
-                f"No supported dotnet version found. Available versions: {', '.join(available_version_cmd_output)}. Supported versions: 4, 6, 7, 8"
-            )
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            try:
-                result = subprocess.run(["mono", "--version"], capture_output=True, check=True)
-                return DotnetVersion.VMONO
-            except (FileNotFoundError, subprocess.CalledProcessError):
-                raise SolidLSPException("dotnet or mono not found on the system")
-
-
-class SymbolUtils:
-    @staticmethod
-    def symbol_tree_contains_name(roots: list[UnifiedSymbolInformation], name: str) -> bool:
-        for symbol in roots:
-            if symbol["name"] == name:
-                return True
-            if SymbolUtils.symbol_tree_contains_name(symbol["children"], name):
-                return True
-        return False

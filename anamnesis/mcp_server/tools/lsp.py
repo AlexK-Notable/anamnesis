@@ -79,9 +79,15 @@ def _get_symbols_overview_impl(
 def _find_referencing_symbols_impl(
     name_path: str,
     relative_path: str,
+    include_imports: bool = True,
+    include_self: bool = False,
 ) -> dict:
     svc = _get_symbol_service()
-    results = svc.find_referencing_symbols(name_path, relative_path)
+    results = svc.find_referencing_symbols(
+        name_path, relative_path,
+        include_imports=include_imports,
+        include_self=include_self,
+    )
 
     # Intelligence augmentation: categorize references
     categorized = _categorize_references(results)
@@ -90,6 +96,25 @@ def _find_referencing_symbols_impl(
         {"references": results, "categories": categorized},
         total=len(results),
     )
+
+
+@_with_error_handling("go_to_definition")
+def _go_to_definition_impl(
+    relative_path: str,
+    name_path: str = "",
+    line: int = -1,
+    column: int = -1,
+) -> dict:
+    if not name_path and line < 0:
+        return _failure_response("Provide either name_path or line+column")
+    svc = _get_symbol_service()
+    results = svc.go_to_definition(
+        relative_path,
+        name_path=name_path or None,
+        line=line if line >= 0 else None,
+        column=column if column >= 0 else None,
+    )
+    return _success_response(results, total=len(results))
 
 
 @_with_error_handling("replace_symbol_body")
@@ -283,7 +308,7 @@ def _analyze_code_quality_impl(
 ) -> dict:
     """Implementation for analyze_code_quality tool.
 
-    detail_level values: quick, standard, deep, conventions.
+    detail_level values: quick, standard, deep, conventions, diagnostics.
     """
     max_suggestions = clamp_integer(max_suggestions, "max_suggestions", 1, 50)
 
@@ -309,9 +334,19 @@ def _analyze_code_quality_impl(
         return _success_response(complexity_result)
     elif detail_level == "conventions":
         return _check_conventions_helper(relative_path)
+    elif detail_level == "diagnostics":
+        svc = _get_symbol_service()
+        diagnostics = svc.get_diagnostics(relative_path)
+        if diagnostics and len(diagnostics) == 1 and "error" in diagnostics[0]:
+            return _failure_response(diagnostics[0]["error"])
+        return _success_response(
+            {"relative_path": relative_path, "diagnostics": diagnostics},
+            total=len(diagnostics),
+        )
     else:
         return _failure_response(
-            f"Unknown detail_level '{detail_level}'. Choose from: quick, standard, deep, conventions"
+            f"Unknown detail_level '{detail_level}'. "
+            "Choose from: quick, standard, deep, conventions, diagnostics"
         )
 
 
@@ -381,20 +416,60 @@ def get_symbols_overview(
 def find_referencing_symbols(
     name_path: str,
     relative_path: str,
+    include_imports: bool = True,
+    include_self: bool = False,
 ) -> dict:
     """Find all references to a symbol across the codebase.
 
     Requires LSP to be enabled for the file's language. Returns locations
     where the symbol is used, with code snippets for context.
 
+    For cleaner results showing only "real usages" (not import statements),
+    set include_imports=False.
+
     Args:
         name_path: The symbol's name path (e.g., "MyClass/my_method")
         relative_path: File containing the symbol definition
+        include_imports: If True (default), include import/require statements
+            in results. Set to False to see only actual usage sites.
+        include_self: If True, include the reference at the symbol's own
+            definition. Default False (definition site is usually not useful).
 
     Returns:
         List of references with file paths, line numbers, and code snippets
     """
-    return _find_referencing_symbols_impl(name_path, relative_path)
+    return _find_referencing_symbols_impl(
+        name_path, relative_path,
+        include_imports=include_imports,
+        include_self=include_self,
+    )
+
+
+@mcp.tool
+def go_to_definition(
+    relative_path: str,
+    name_path: str = "",
+    line: int = -1,
+    column: int = -1,
+) -> dict:
+    """Navigate to the definition of a symbol.
+
+    Requires LSP to be enabled. Provide either name_path (recommended for
+    LLM callers who know the symbol name) or line+column (for position-based
+    lookup). The first call per session may take 5-10s for cross-file init.
+
+    Args:
+        relative_path: File where the symbol is used or referenced
+        name_path: Symbol name path (e.g., "MyClass/my_method"). Resolved
+            to a position, then sent to the language server.
+        line: 0-based line number (alternative to name_path)
+        column: 0-based column number (alternative to name_path)
+
+    Returns:
+        List of definition locations with file paths, line numbers, and
+        code snippets showing the definition site
+    """
+    return _go_to_definition_impl(relative_path, name_path, line, column)
 
 
 @mcp.tool
@@ -519,7 +594,7 @@ def match_sibling_style(
 @mcp.tool
 def analyze_code_quality(
     relative_path: str,
-    detail_level: Literal["quick", "standard", "deep", "conventions"] = "standard",
+    detail_level: Literal["quick", "standard", "deep", "conventions", "diagnostics"] = "standard",
     min_complexity_level: Literal["low", "moderate", "high", "very_high"] = "high",
     max_suggestions: int = 10,
 ) -> dict:
@@ -535,6 +610,7 @@ def analyze_code_quality(
             - "standard": Full per-function complexity metrics and breakdown (default)
             - "deep": Full metrics plus refactoring suggestions with evidence
             - "conventions": Check naming conventions against learned project style
+            - "diagnostics": LSP diagnostics (errors, warnings) from language server
         min_complexity_level: Minimum level for hotspots: low, moderate, high, very_high
             (default: high)
         max_suggestions: Maximum refactoring suggestions when detail_level="deep" (default 10)

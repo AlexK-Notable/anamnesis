@@ -332,17 +332,31 @@ class SymbolRetriever:
             return results[0]
         return None
 
+    # Import-line detection keywords (used by import filtering heuristic)
+    _IMPORT_PREFIXES = (
+        "import ", "from ", "use ", "require(", "require ",
+        "#include", "include ", "using ", "extern crate ",
+    )
+
     def find_referencing_symbols(
         self,
         name_path: str,
         relative_path: str,
         include_kinds: Sequence[int] | None = None,
         exclude_kinds: Sequence[int] | None = None,
+        include_imports: bool = True,
+        include_self: bool = False,
     ) -> list[dict[str, Any]]:
         """Find all references to a symbol.
 
         Returns a list of dicts with the referencing symbol info and
         a code snippet around the reference.
+
+        Args:
+            include_imports: If False, filter out references that appear to be
+                import/require statements (heuristic based on line content).
+            include_self: If False, filter out the reference at the symbol's own
+                definition site.
         """
         ls = self._get_ls(relative_path)
         if ls is None:
@@ -376,8 +390,22 @@ class SymbolRetriever:
             ref_line = ref.get("range", {}).get("start", {}).get("line", 0)
             ref_col = ref.get("range", {}).get("start", {}).get("character", 0)
 
+            # Filter: exclude the definition site itself
+            if not include_self:
+                if (
+                    ref_path == relative_path
+                    and ref_line == target.location.start_line
+                    and ref_col == target.location.start_col
+                ):
+                    continue
+
             # Read context lines around the reference
             snippet = self._read_context(ref_path, ref_line, context=2)
+
+            # Filter: exclude import statements (heuristic)
+            if not include_imports:
+                if self._is_import_line(ref_path, ref_line):
+                    continue
 
             result: dict[str, Any] = {
                 "relative_path": ref_path,
@@ -398,6 +426,110 @@ class SymbolRetriever:
 
             results.append(result)
 
+        return results
+
+    def _is_import_line(self, relative_path: str, line: int) -> bool:
+        """Heuristic: check if the line at the given position is an import."""
+        try:
+            abs_path = safe_join(self._project_root, relative_path)
+        except ValueError:
+            return False
+        if not os.path.exists(abs_path):
+            return False
+        try:
+            with open(abs_path, encoding="utf-8") as f:
+                lines = f.readlines()
+            if 0 <= line < len(lines):
+                stripped = lines[line].lstrip()
+                return stripped.startswith(self._IMPORT_PREFIXES)
+        except Exception:
+            pass
+        return False
+
+    def go_to_definition(
+        self,
+        relative_path: str,
+        name_path: str | None = None,
+        line: int | None = None,
+        column: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Go to the definition of a symbol.
+
+        Accepts either a name_path (resolved to a position) or explicit
+        line/column coordinates. At least one must be provided.
+
+        Returns a list of definition locations with code snippets.
+        """
+        ls = self._get_ls(relative_path)
+        if ls is None:
+            return [{"error": "LSP not available — go-to-definition requires a running language server"}]
+
+        # Resolve position from name_path if needed
+        if name_path is not None and (line is None or column is None):
+            symbols = self._get_all_symbols_flat(relative_path, depth=-1)
+            matcher = NamePathMatcher(name_path)
+            for sym in self._walk_symbols(symbols):
+                if matcher.matches(sym):
+                    line = sym.location.start_line
+                    column = sym.location.start_col
+                    break
+
+        if line is None or column is None:
+            return [{"error": f"Symbol '{name_path}' not found in {relative_path}"}]
+
+        try:
+            locations = ls.request_definition(relative_path, line, column)
+        except Exception:
+            log.debug("LSP definition query failed", exc_info=True)
+            return []
+
+        results = []
+        for loc in locations:
+            # Extract the relative path from the Location TypedDict
+            def_path = loc.get("relativePath") or self._uri_to_relative(loc.get("uri", ""))
+            range_info = loc.get("range", {})
+            def_line = range_info.get("start", {}).get("line", 0)
+
+            snippet = self._read_context(def_path, def_line, context=3)
+
+            results.append({
+                "relative_path": def_path,
+                "line": def_line,
+                "character": range_info.get("start", {}).get("character", 0),
+                "snippet": snippet,
+            })
+
+        return results
+
+    _SEVERITY_MAP = {1: "error", 2: "warning", 3: "information", 4: "hint"}
+
+    def get_diagnostics(self, relative_path: str) -> list[dict[str, Any]]:
+        """Get LSP diagnostics (errors, warnings) for a file.
+
+        Returns a list of diagnostic dicts with severity, message, range, and code.
+        Requires a running language server — returns an error dict if unavailable.
+        """
+        ls = self._get_ls(relative_path)
+        if ls is None:
+            return [{"error": "LSP not available — diagnostics require a running language server"}]
+
+        try:
+            raw_diagnostics = ls.request_text_document_diagnostics(relative_path)
+        except Exception:
+            log.debug("LSP diagnostics query failed for %s", relative_path, exc_info=True)
+            return []
+
+        results = []
+        for diag in raw_diagnostics:
+            severity_int = diag.get("severity", 0)
+            results.append({
+                "severity": self._SEVERITY_MAP.get(severity_int, str(severity_int)),
+                "message": diag.get("message", ""),
+                "line": diag.get("range", {}).get("start", {}).get("line", 0),
+                "end_line": diag.get("range", {}).get("end", {}).get("line", 0),
+                "column": diag.get("range", {}).get("start", {}).get("character", 0),
+                "code": diag.get("code", ""),
+            })
         return results
 
     def get_overview(

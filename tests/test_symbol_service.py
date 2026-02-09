@@ -220,9 +220,23 @@ class TestNavigationDelegation:
 
         self.mock_retriever.find_referencing_symbols.assert_called_once_with(
             "MyClass/run", "src/main.py",
+            include_imports=True,
+            include_self=False,
         )
         assert len(result) == 1
         assert result[0]["relative_path"] == "src/other.py"
+
+    def test_get_diagnostics_delegates_to_retriever(self, svc):
+        """svc.get_diagnostics(...) forwards to retriever.get_diagnostics(...)."""
+        self.mock_retriever.get_diagnostics.return_value = [
+            {"severity": "error", "message": "syntax error", "line": 5}
+        ]
+
+        result = svc.get_diagnostics("src/main.py")
+
+        self.mock_retriever.get_diagnostics.assert_called_once_with("src/main.py")
+        assert len(result) == 1
+        assert result[0]["severity"] == "error"
 
 
 # ===========================================================================

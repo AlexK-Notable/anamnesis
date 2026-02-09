@@ -3,7 +3,6 @@ Configuration objects for language servers
 """
 
 import fnmatch
-from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Self
@@ -101,19 +100,12 @@ class Language(str, Enum):
     Supports TOML validation, formatting, and schema support.
     """
 
-    @classmethod
-    def iter_all(cls, include_experimental: bool = False) -> Iterable[Self]:
-        for lang in cls:
-            if include_experimental or not lang.is_experimental():
-                yield lang
-
     def is_experimental(self) -> bool:
         """
         Check if the language server is experimental or deprecated.
 
-        Note for serena users/developers:
-        Experimental languages are not autodetected and must be explicitly specified
-        in the project.yml configuration.
+        Note: Experimental languages are not autodetected and must be explicitly
+        specified in the project configuration.
         """
         return self in {
             self.TYPESCRIPT_VTS,
@@ -303,8 +295,3 @@ class LanguageServerConfig:
     encoding: str = "utf-8"
     """File encoding to use when reading source files"""
 
-    @classmethod
-    def from_dict(cls, env: dict) -> Self:
-        import inspect
-
-        return cls(**{k: v for k, v in env.items() if k in inspect.signature(cls).parameters})

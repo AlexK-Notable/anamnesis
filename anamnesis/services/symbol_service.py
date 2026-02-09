@@ -114,9 +114,31 @@ class SymbolService:
         self,
         name_path: str,
         relative_path: str,
+        include_imports: bool = True,
+        include_self: bool = False,
     ) -> list[dict]:
         """Find all references to a symbol."""
-        return self.retriever.find_referencing_symbols(name_path, relative_path)
+        return self.retriever.find_referencing_symbols(
+            name_path, relative_path,
+            include_imports=include_imports,
+            include_self=include_self,
+        )
+
+    def go_to_definition(
+        self,
+        relative_path: str,
+        name_path: str | None = None,
+        line: int | None = None,
+        column: int | None = None,
+    ) -> list[dict]:
+        """Go to the definition of a symbol."""
+        return self.retriever.go_to_definition(
+            relative_path, name_path=name_path, line=line, column=column,
+        )
+
+    def get_diagnostics(self, relative_path: str) -> list[dict]:
+        """Get LSP diagnostics (errors, warnings) for a file."""
+        return self.retriever.get_diagnostics(relative_path)
 
     # -----------------------------------------------------------------
     # Editing (delegates to CodeEditor)

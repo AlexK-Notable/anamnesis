@@ -219,8 +219,8 @@ class UnifiedSymbolInformation(TypedDict):
     if necessary). It can't be used to re-infer a hierarchy for the document
     symbols. 
     
-    Note: within Serena, the parent attribute was added and should be used instead. 
-    Most LS don't provide containerName.
+    Note: the parent attribute was added as an extension to the LSP spec
+    and should be used instead. Most LS don't provide containerName.
     """
 
     detail: NotRequired[str]
@@ -243,7 +243,7 @@ class UnifiedSymbolInformation(TypedDict):
     since it is sometimes useful to have the children of the symbol as a user-facing feature."""
 
     parent: NotRequired[UnifiedSymbolInformation | None]
-    """The parent of the symbol, if there is any. Added with Serena, not part of the LSP.
+    """The parent of the symbol, if there is any. Added as a custom extension, not part of the LSP.
     All symbols except the root packages will have a parent.
     """
 
@@ -252,7 +252,7 @@ class UnifiedSymbolInformation(TypedDict):
     The overload index of the symbol, if applicable. If a symbol does not have overloads, this field is omitted.
     If the symbol is an overloaded function or method (same symbol name with the same parent), 
     this index indicates which overload it is. The index is 0-based.
-    Added for Serena, not part of the LSP.
+    Added as a custom extension, not part of the LSP.
     """
 
 
