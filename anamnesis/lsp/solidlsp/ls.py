@@ -1,3 +1,11 @@
+"""Abstract base class for language servers.
+
+Manages the full lifecycle of an LSP session: workspace indexing, symbol
+resolution, navigation (go-to-definition, references, implementations),
+and file-level operations (read, edit, rename). Concrete subclasses
+(e.g. Pyright, Gopls) override language-specific behavior.
+"""
+
 import dataclasses
 import hashlib
 import json

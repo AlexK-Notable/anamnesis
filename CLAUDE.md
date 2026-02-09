@@ -164,9 +164,11 @@ When adding or removing MCP tools, update the expected count in:
 
 Currently asserts `tool_count == 28`.
 
-### Vendored LSP Code
+### Adopted LSP Code
 
-`lsp/solidlsp/` is vendored from the Serena project. Do not modify unless porting upstream changes. 11 of 24 files lack module docstrings -- this is known and accepted.
+`lsp/solidlsp/` originated from the Serena project and is now owned and maintained as first-class Anamnesis code. Feel free to modify, document, and evolve it.
+
+Three files under `lsp_protocol_handler/` (`lsp_types.py`, `lsp_requests.py`, `server.py`) are generated from the [OLSP](https://github.com/predragnikolic/OLSP) project under the MIT License — do not edit those directly.
 
 ### pytest-xdist Parallelism
 

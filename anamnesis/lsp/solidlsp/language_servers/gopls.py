@@ -1,3 +1,9 @@
+"""Go language server (gopls) implementation.
+
+Configures and launches gopls with Go-specific workspace settings, module
+detection, and directory filtering.
+"""
+
 import logging
 import os
 import pathlib

@@ -1,3 +1,9 @@
+"""Platform-specific subprocess kwargs and argument quoting.
+
+Provides consistent subprocess creation flags (e.g. hiding console
+windows on Windows) and safe shell argument quoting.
+"""
+
 import platform
 import shlex
 import subprocess

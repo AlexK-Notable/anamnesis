@@ -1,3 +1,10 @@
+"""Runtime dependency management for language server binaries.
+
+Locates, downloads, and installs language server executables and their
+dependencies (e.g. Node.js packages, Go binaries) so that LSP servers
+can be launched without manual setup.
+"""
+
 from __future__ import annotations
 
 import logging

@@ -1,3 +1,10 @@
+"""JSON-RPC 2.0 client for language server processes.
+
+Manages subprocess lifecycle, stdin/stdout message framing, request/response
+correlation, and asynchronous notification routing for a single LSP server
+instance.
+"""
+
 import asyncio
 import json
 import logging

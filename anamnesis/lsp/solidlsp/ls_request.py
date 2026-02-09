@@ -1,3 +1,11 @@
+"""Typed wrappers around LSP request methods.
+
+Provides a high-level ``LanguageServerRequest`` class whose methods map
+one-to-one to LSP specification requests (textDocument/definition,
+textDocument/references, etc.), adding type annotations for parameters and
+return values.
+"""
+
 from typing import TYPE_CHECKING, Any, Union
 
 from anamnesis.lsp.solidlsp.lsp_protocol_handler import lsp_types

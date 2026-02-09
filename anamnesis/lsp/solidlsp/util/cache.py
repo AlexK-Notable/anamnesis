@@ -1,3 +1,9 @@
+"""Pickle-based caching with version tracking.
+
+Provides load/save helpers that embed a version tag alongside the cached
+object, automatically invalidating stale entries on version mismatch.
+"""
+
 import logging
 from typing import Any, Optional
 
