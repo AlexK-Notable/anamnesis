@@ -14,7 +14,7 @@ import os
 import tempfile
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Union
 
@@ -521,7 +521,7 @@ class ProjectRegistry:
         """
         projects = list(self._projects.values())
         projects.sort(
-            key=lambda p: p.activated_at or datetime.min,
+            key=lambda p: p.activated_at or datetime.min.replace(tzinfo=timezone.utc),
             reverse=True,
         )
         return projects

@@ -261,7 +261,7 @@ class MemoryService:
                 )
 
         # Sort by updated_at descending (newest first)
-        entries.sort(key=lambda e: e.updated_at or datetime.min, reverse=True)
+        entries.sort(key=lambda e: e.updated_at or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
         return entries
 
     def delete_memory(self, name: str) -> bool:
