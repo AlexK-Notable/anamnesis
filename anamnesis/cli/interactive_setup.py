@@ -199,14 +199,14 @@ class InteractiveSetup:
         gitignore_path = self.project_path / ".gitignore"
         if gitignore_path.exists():
             content = gitignore_path.read_text()
-            if "anamnesis.db" not in content:
+            if ".anamnesis/" not in content:
                 update = click.confirm(
                     "Add Anamnesis entries to .gitignore?",
                     default=True,
                 )
                 if update:
                     with gitignore_path.open("a") as f:
-                        f.write("\n# Anamnesis\nanamnesis.db\n.anamnesis/cache/\n")
+                        f.write("\n# Anamnesis\n.anamnesis/\n")
                     click.echo("   Updated .gitignore")
         else:
             create = click.confirm(
@@ -215,7 +215,7 @@ class InteractiveSetup:
             )
             if create:
                 gitignore_path.write_text(
-                    "# Anamnesis\nanamnesis.db\n.anamnesis/cache/\n"
+                    "# Anamnesis\n.anamnesis/\n"
                 )
                 click.echo("   Created .gitignore")
 

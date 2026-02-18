@@ -290,10 +290,10 @@ class DebugTools:
     def _check_database_file(self, path: Path) -> DiagnosticResult:
         """Check for database file."""
         start = time.time()
-        db_path = path / ".anamnesis" / "anamnesis.db"
+        db_path = path / ".anamnesis" / "intelligence.db"
 
-        # Also check old location
-        alt_db_path = path / "anamnesis.db"
+        # Also check legacy locations
+        alt_db_path = path / ".anamnesis" / "anamnesis.db"
 
         duration = (time.time() - start) * 1000
 
@@ -330,9 +330,9 @@ class DebugTools:
         try:
             from anamnesis.storage.sync_backend import SyncSQLiteBackend
 
-            db_path = path / ".anamnesis" / "anamnesis.db"
+            db_path = path / ".anamnesis" / "intelligence.db"
             if not db_path.exists():
-                db_path = path / "anamnesis.db"
+                db_path = path / ".anamnesis" / "anamnesis.db"
 
             if db_path.exists():
                 backend = SyncSQLiteBackend(str(db_path))

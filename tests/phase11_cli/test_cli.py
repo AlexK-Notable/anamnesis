@@ -116,7 +116,7 @@ class TestInitCommand:
 
         assert result.exit_code == 0
         content = gitignore.read_text()
-        assert "anamnesis.db" in content
+        assert ".anamnesis/" in content
 
     def test_init_current_directory(self, runner, tmp_path):
         """init uses current directory by default."""

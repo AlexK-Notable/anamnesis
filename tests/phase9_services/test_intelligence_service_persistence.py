@@ -239,3 +239,60 @@ class TestTypeConversion:
         assert restored.confidence == original.confidence
         assert restored.frequency == original.frequency
         assert restored.file_path == original.file_path
+
+    def test_insight_round_trip_preserves_data(self, backend):
+        """Insight data survives service→storage→service round trip."""
+        from anamnesis.services.type_converters import (
+            service_insight_to_storage,
+            storage_insight_to_service,
+        )
+
+        # Given: Service insight with full data
+        original_content = {
+            "title": "Null check missing",
+            "description": "Found unchecked null in 3 functions",
+            "affected_files": ["/src/handler.py"],
+            "suggested_action": "Add null guards",
+        }
+        storage = service_insight_to_storage(
+            insight_id="insight_test123",
+            insight_type="bug_pattern",
+            content=original_content,
+            confidence=0.85,
+            source_agent="test-agent",
+            impact_prediction={"severity": "medium"},
+        )
+
+        # When: Convert back to service type
+        restored = storage_insight_to_service(storage)
+
+        # Then: Key data preserved
+        assert restored.insight_id == "insight_test123"
+        assert restored.insight_type == "bug_pattern"
+        assert restored.confidence == 0.85
+        assert restored.source_agent == "test-agent"
+        assert restored.impact_prediction == {"severity": "medium"}
+        assert restored.content == original_content
+
+    def test_insight_persists_and_restores_via_load_from_backend(self, backend):
+        """Insights survive contribute → new service instance cycle."""
+        # Given: Service contributes an insight
+        service1 = IntelligenceService(backend=backend)
+        success, insight_id, _ = service1.contribute_insight(
+            insight_type="optimization",
+            content={"title": "Cache opportunity", "description": "Hot loop detected"},
+            confidence=0.92,
+            source_agent="perf-agent",
+        )
+        assert success
+
+        # When: New service auto-loads from backend on init
+        service2 = IntelligenceService(backend=backend)
+
+        # Then: Insight is restored automatically
+        assert len(service2._insights) >= 1
+        match = next((i for i in service2._insights if i.insight_id == insight_id), None)
+        assert match is not None
+        assert match.insight_type == "optimization"
+        assert match.source_agent == "perf-agent"
+        assert match.confidence == 0.92

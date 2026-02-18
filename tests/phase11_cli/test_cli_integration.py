@@ -162,7 +162,7 @@ class TestInitCommandIntegration:
 
             # Verify .gitignore was updated
             content = gitignore_path.read_text()
-            assert "anamnesis.db" in content
+            assert ".anamnesis/" in content
             assert "*.pyc" in content  # Original content preserved
 
 

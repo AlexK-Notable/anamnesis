@@ -249,9 +249,9 @@ def init(path: str) -> None:
     gitignore_path = resolved_path / ".gitignore"
     if gitignore_path.exists():
         content = gitignore_path.read_text()
-        if "anamnesis.db" not in content:
+        if ".anamnesis/" not in content:
             with gitignore_path.open("a") as f:
-                f.write("\n# Anamnesis\nanamnesis.db\n.anamnesis/cache/\n")
+                f.write("\n# Anamnesis\n.anamnesis/\n")
 
     click.echo("✅ Anamnesis initialized!")
     click.echo(f"Configuration saved to: {config_path}")

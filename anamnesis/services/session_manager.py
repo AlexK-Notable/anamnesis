@@ -151,6 +151,16 @@ class SessionManager:
         self._backend = backend
         self._active_session_id: Optional[str] = None
 
+        # Recover active session from persistent backend (post-restart)
+        try:
+            active = self._backend.get_active_sessions()
+            if active:
+                # Pick most recently started session
+                active.sort(key=lambda s: s.started_at, reverse=True)
+                self._active_session_id = active[0].id
+        except Exception:
+            pass  # Non-critical; worst case end_session() needs explicit ID
+
     @property
     def backend(self) -> "SyncSQLiteBackend":
         """Get the storage backend."""

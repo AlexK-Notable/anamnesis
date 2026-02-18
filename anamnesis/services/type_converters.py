@@ -16,6 +16,7 @@ from anamnesis.utils.logger import logger
 
 if TYPE_CHECKING:
     from anamnesis.intelligence.pattern_engine import DetectedPattern
+    from anamnesis.services.intelligence_service import AIInsight as ServiceAIInsight
     from anamnesis.storage.schema import (
         AIInsight as StorageAIInsight,
         DeveloperPattern as StorageDeveloperPattern,
@@ -180,7 +181,7 @@ def service_insight_to_storage(
 
     # Try to convert insight_type to enum
     try:
-        insight_type_enum = InsightType(insight_type.upper())
+        insight_type_enum = InsightType(insight_type)
     except ValueError:
         logger.debug("Unknown insight_type '{}' — keeping as string", insight_type)
         insight_type_enum = insight_type
@@ -209,4 +210,56 @@ def service_insight_to_storage(
         suggested_action=suggested_action,
         metadata=metadata,
         created_at=created_at or utcnow(),
+    )
+
+
+def storage_insight_to_service(insight: "StorageAIInsight") -> "ServiceAIInsight":
+    """Convert storage AIInsight to service AIInsight.
+
+    Reverses the transformation done by service_insight_to_storage(),
+    reconstructing the content dict from storage fields and extracting
+    agent metadata.
+
+    Args:
+        insight: Storage AI insight
+
+    Returns:
+        Service AI insight (lightweight)
+    """
+    from anamnesis.services.intelligence_service import AIInsight as ServiceAIInsight
+
+    # Reconstruct content dict from storage fields
+    content: dict = {}
+    if insight.metadata.get("original_content"):
+        content = insight.metadata["original_content"]
+    else:
+        content = {
+            "title": insight.title,
+            "description": insight.description,
+            "affected_files": insight.affected_files,
+            "suggested_action": insight.suggested_action,
+        }
+
+    # Extract agent metadata
+    metadata = insight.metadata or {}
+    source_agent = metadata.get("source_agent", "unknown")
+    impact_prediction = metadata.get("impact_prediction")
+
+    # Derive validation_status from storage booleans
+    if insight.resolved:
+        validation_status = "resolved"
+    elif insight.acknowledged:
+        validation_status = "acknowledged"
+    else:
+        validation_status = "pending"
+
+    return ServiceAIInsight(
+        insight_id=insight.id,
+        insight_type=enum_value(insight.insight_type),
+        content=content,
+        confidence=insight.confidence,
+        source_agent=source_agent,
+        created_at=insight.created_at,
+        validation_status=validation_status,
+        impact_prediction=impact_prediction,
     )

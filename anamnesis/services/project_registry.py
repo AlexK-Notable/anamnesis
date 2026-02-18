@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from anamnesis.services.session_manager import SessionManager
     from anamnesis.services.symbol_service import SymbolService
     from anamnesis.search.service import SearchService
+    from anamnesis.storage.sync_backend import SyncSQLiteBackend
 
 
 @dataclass
@@ -56,6 +57,7 @@ class ProjectContext:
     _semantic_initialized: bool = field(default=False, repr=False)
     _lsp_manager: Optional["LspManager"] = field(default=None, repr=False)
     _symbol_service: Optional["SymbolService"] = field(default=None, repr=False)
+    _backend: Optional["SyncSQLiteBackend"] = field(default=None, repr=False)
     _init_lock: threading.RLock = field(
         default_factory=threading.RLock, repr=False, compare=False
     )
@@ -65,6 +67,27 @@ class ProjectContext:
         """Short project name (directory basename)."""
         return Path(self.path).name
 
+    def _get_backend(self) -> "SyncSQLiteBackend":
+        """Get or create the shared persistent SQLite backend.
+
+        Creates ``{project}/.anamnesis/intelligence.db`` on first access.
+        Uses double-checked locking via ``_init_lock``. The backend is
+        shared by SessionManager, IntelligenceService, and LearningService.
+        """
+        if self._backend is not None:
+            return self._backend
+        with self._init_lock:
+            if self._backend is None:
+                from anamnesis.storage.sync_backend import SyncSQLiteBackend
+
+                db_dir = Path(self.path) / ".anamnesis"
+                db_dir.mkdir(parents=True, exist_ok=True)
+                db_path = str(db_dir / "intelligence.db")
+                backend = SyncSQLiteBackend(db_path)
+                backend.connect()
+                self._backend = backend
+            return self._backend
+
     def get_learning_service(self) -> "LearningService":
         """Get or create the learning service for this project."""
         if self._learning_service is not None:
@@ -73,7 +96,7 @@ class ProjectContext:
             if self._learning_service is None:
                 from anamnesis.services.learning_service import LearningService
 
-                self._learning_service = LearningService()
+                self._learning_service = LearningService(backend=self._get_backend())
             return self._learning_service
 
     def get_intelligence_service(self) -> "IntelligenceService":
@@ -84,7 +107,9 @@ class ProjectContext:
             if self._intelligence_service is None:
                 from anamnesis.services.intelligence_service import IntelligenceService
 
-                self._intelligence_service = IntelligenceService()
+                self._intelligence_service = IntelligenceService(
+                    backend=self._get_backend()
+                )
             return self._intelligence_service
 
     def get_codebase_service(self) -> "CodebaseService":
@@ -101,19 +126,16 @@ class ProjectContext:
     def get_session_manager(self) -> "SessionManager":
         """Get or create the session manager for this project.
 
-        Each project gets its own in-memory SQLite backend,
-        isolating sessions per project.
+        Uses the shared persistent backend, so sessions and decisions
+        survive server restarts.
         """
         if self._session_manager is not None:
             return self._session_manager
         with self._init_lock:
             if self._session_manager is None:
                 from anamnesis.services.session_manager import SessionManager
-                from anamnesis.storage.sync_backend import SyncSQLiteBackend
 
-                backend = SyncSQLiteBackend(":memory:")
-                backend.connect()
-                self._session_manager = SessionManager(backend)
+                self._session_manager = SessionManager(self._get_backend())
             return self._session_manager
 
     def get_memory_service(self) -> MemoryService:
@@ -199,16 +221,17 @@ class ProjectContext:
         except Exception:
             logger.warning("Error shutting down LSP for %s", self.path, exc_info=True)
 
-        # Session backend (stops background thread, closes DB)
+        # Shared backend (stops background thread, closes DB)
         try:
-            if self._session_manager is not None:
-                self._session_manager._backend.close()
+            if self._backend is not None:
+                self._backend.close()
         except Exception:
             logger.warning(
-                "Error closing session backend for %s", self.path, exc_info=True
+                "Error closing backend for %s", self.path, exc_info=True
             )
 
         # Clear all service references
+        self._backend = None
         self._learning_service = None
         self._intelligence_service = None
         self._codebase_service = None
@@ -272,6 +295,7 @@ class ProjectContext:
                 self.activated_at.isoformat() if self.activated_at else None
             ),
             "services": {
+                "backend": self._backend is not None,
                 "learning": self._learning_service is not None,
                 "intelligence": self._intelligence_service is not None,
                 "codebase": self._codebase_service is not None,

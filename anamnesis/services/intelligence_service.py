@@ -161,7 +161,13 @@ class IntelligenceService:
         self._concepts: list[StorageSemanticConcept] = []
         self._patterns: list = []  # DetectedPattern or UnifiedPattern
         self._insights: list[AIInsight] = []
+        # Ephemeral current-session context; intentionally not persisted
+        # (stale after restart, rebuilt from contribute_insight session_update)
         self._work_sessions: dict[str, dict] = {}
+
+        # Auto-populate caches from persistent backend
+        if self._backend:
+            self.load_from_backend()
 
     @property
     def semantic_engine(self) -> SemanticEngine:
@@ -245,7 +251,7 @@ class IntelligenceService:
                     self._backend.save_pattern(storage_pattern)
 
     def load_from_backend(self) -> None:
-        """Load concepts and patterns from backend into memory cache.
+        """Load concepts, patterns, and insights from backend into memory cache.
 
         Call this to restore state after service restart. Keeps storage
         types directly — no conversion to intermediate engine types.
@@ -253,15 +259,23 @@ class IntelligenceService:
         if not self._backend:
             return
 
-        from anamnesis.services.type_converters import storage_pattern_to_detected
+        from anamnesis.services.type_converters import (
+            storage_insight_to_service,
+            storage_pattern_to_detected,
+        )
 
         # Load concepts directly as storage types (no engine conversion)
-        self._concepts = self._backend.search_concepts("", limit=10000)
+        self._concepts = self._backend.search_concepts("", limit=100_000)
+        self._index_concepts_for_search(self._concepts)
 
         # Load patterns as engine types (PatternEngine needs DetectedPattern)
         storage_patterns = self._backend.get_all_patterns()
         self._patterns = [storage_pattern_to_detected(p) for p in storage_patterns]
         self._pattern_engine.load_unified_patterns(self._patterns)
+
+        # Load unresolved insights (resolved ones stay in DB only)
+        storage_insights = self._backend.get_unresolved_insights()
+        self._insights = [storage_insight_to_service(i) for i in storage_insights]
 
     def get_semantic_insights(
         self,

@@ -61,8 +61,7 @@ uv.lock
 in-memoria.db
 
 # Anamnesis
-anamnesis.db
-.anamnesis/cache/
+.anamnesis/
 .serena/
 in-memoria-vectors.db/
 .hypothesis/

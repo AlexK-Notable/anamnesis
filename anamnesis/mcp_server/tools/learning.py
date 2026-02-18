@@ -50,8 +50,14 @@ def _auto_learn_if_needed_impl(
 
     if has_existing and not force:
         learned_data = learning_service.get_learned_data(resolved_path)
-        concepts_count = len(learned_data.get("concepts", [])) if learned_data else 0
-        patterns_count = len(learned_data.get("patterns", [])) if learned_data else 0
+        if learned_data:
+            concepts_count = len(learned_data.get("concepts", []))
+            patterns_count = len(learned_data.get("patterns", []))
+        else:
+            # Data in backend but not in-memory (post-restart)
+            status = intelligence_service._get_learning_status(resolved_path)
+            concepts_count = status.get("concepts_stored", 0)
+            patterns_count = status.get("patterns_stored", 0)
 
         return _success_response(
             {
