@@ -426,7 +426,7 @@ class ProjectRegistry:
                 fd.flush()
                 os.fsync(fd.fileno())
                 fd.close()
-                os.rename(fd.name, self._persist_path)
+                os.replace(fd.name, self._persist_path)
             except BaseException:
                 fd.close()
                 try:
