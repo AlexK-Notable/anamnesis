@@ -5,16 +5,28 @@ Provides versioned schema migrations with:
 - Automatic migration detection and execution
 - Rollback support
 - Migration status tracking
+- Pre-migration backup
+- Advisory file locking for concurrent protection
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import os
+import shutil
+import sys
+from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
 from anamnesis.constants import utcnow
+
+if sys.platform != "win32":
+    import fcntl
+else:
+    fcntl = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +84,14 @@ class DatabaseConnection(Protocol):
 
     async def fetchall(self, sql: str, params: tuple | None = None) -> list[Any]:
         """Fetch all rows."""
+        ...
+
+    async def execute_raw(self, sql: str) -> None:
+        """Execute raw SQL bypassing parameter binding.
+
+        Used for transaction control statements (BEGIN, COMMIT, ROLLBACK)
+        that must go directly to SQLite without sqlite3 module interference.
+        """
         ...
 
 
@@ -374,6 +394,67 @@ class MigrationStatus:
         }
 
 
+class MigrationLock:
+    """File-based advisory lock to prevent concurrent migrations.
+
+    Uses fcntl.flock() on Unix. On Windows or for in-memory DBs, degrades to a no-op.
+    """
+
+    def __init__(self, db_path: str):
+        self._lock_path = (
+            f"{db_path}.migration-lock"
+            if db_path not in (":memory:", "")
+            else ""
+        )
+
+    @contextmanager
+    def acquire(self, timeout: float = 30.0):
+        """Acquire the migration lock with timeout.
+
+        Yields once the lock is held (or after graceful degradation).
+        """
+        if not self._lock_path or fcntl is None:
+            yield
+            return
+
+        import time as _time
+
+        fd = None
+        acquired = False
+        try:
+            fd = os.open(self._lock_path, os.O_CREAT | os.O_RDWR)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+            except (OSError, BlockingIOError):
+                logger.info("Migration lock held, waiting up to %.1fs...", timeout)
+                start = _time.monotonic()
+                while _time.monotonic() - start < timeout:
+                    try:
+                        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        acquired = True
+                        break
+                    except (OSError, BlockingIOError):
+                        _time.sleep(0.5)
+                if not acquired:
+                    logger.warning(
+                        "Could not acquire migration lock after %.1fs. "
+                        "Proceeding without lock.", timeout,
+                    )
+            yield
+        finally:
+            if fd is not None:
+                if acquired:
+                    try:
+                        fcntl.flock(fd, fcntl.LOCK_UN)
+                    except OSError:
+                        pass
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+
+
 class DatabaseMigrator:
     """Handles database schema migrations.
 
@@ -577,7 +658,7 @@ class DatabaseMigrator:
 
         results: list[MigrationResult] = []
 
-        # Apply migrations in order
+        # Apply migrations in order, each wrapped in an explicit transaction
         for migration in self.migrations:
             if migration.version <= current_version:
                 continue
@@ -586,12 +667,15 @@ class DatabaseMigrator:
 
             start_time = time.time()
             try:
+                # Begin explicit transaction for atomic migration
+                await conn.execute_raw("BEGIN IMMEDIATE")
+
                 # Split and execute each statement individually
                 statements = self._split_sql_statements(migration.up_sql)
                 for statement in statements:
                     await conn.execute(statement)
 
-                # Record migration
+                # Record migration within the same transaction
                 execution_time = (time.time() - start_time) * 1000
                 await conn.execute(
                     "INSERT INTO _migrations (version, name, checksum, applied_at, execution_time_ms) "
@@ -605,6 +689,9 @@ class DatabaseMigrator:
                     ),
                 )
 
+                # Commit atomically: all statements + _migrations record
+                await conn.execute_raw("COMMIT")
+
                 results.append(MigrationResult(
                     success=True,
                     version=migration.version,
@@ -614,6 +701,13 @@ class DatabaseMigrator:
                 logger.info(f"Applied migration {migration.version}: {migration.name}")
 
             except Exception as e:
+                try:
+                    await conn.execute_raw("ROLLBACK")
+                except Exception as rb_err:
+                    logger.error(
+                        "Rollback failed for migration %d: %s",
+                        migration.version, rb_err,
+                    )
                 results.append(MigrationResult(
                     success=False,
                     version=migration.version,
@@ -662,16 +756,22 @@ class DatabaseMigrator:
 
             start_time = time.time()
             try:
+                # Begin explicit transaction for atomic rollback
+                await conn.execute_raw("BEGIN IMMEDIATE")
+
                 # Split and execute each statement individually
                 statements = self._split_sql_statements(migration.down_sql)
                 for statement in statements:
                     await conn.execute(statement)
 
-                # Remove migration record
+                # Remove migration record within the same transaction
                 await conn.execute(
                     "DELETE FROM _migrations WHERE version = ?",
                     (migration.version,),
                 )
+
+                # Commit atomically
+                await conn.execute_raw("COMMIT")
 
                 results.append(MigrationResult(
                     success=True,
@@ -682,6 +782,13 @@ class DatabaseMigrator:
                 logger.info(f"Rolled back migration {migration.version}: {migration.name}")
 
             except Exception as e:
+                try:
+                    await conn.execute_raw("ROLLBACK")
+                except Exception as rb_err:
+                    logger.error(
+                        "Rollback failed for migration %d rollback: %s",
+                        migration.version, rb_err,
+                    )
                 results.append(MigrationResult(
                     success=False,
                     version=migration.version,
@@ -694,21 +801,85 @@ class DatabaseMigrator:
 
         return results
 
-    async def ensure_schema(self, conn: DatabaseConnection) -> list[MigrationResult]:
+    async def ensure_schema(
+        self, conn: DatabaseConnection, db_path: str = ":memory:",
+    ) -> list[MigrationResult]:
         """Ensure the database schema is up to date.
 
-        Convenience method that applies all pending migrations.
+        Creates a pre-migration backup for file-based databases, validates
+        checksums of applied migrations, then applies any pending migrations.
 
         Args:
             conn: Database connection.
+            db_path: Path to the database file (for backup). Defaults to ":memory:".
 
         Returns:
             List of migration results.
         """
         status = await self.get_status(conn)
+
+        # Validate checksums of already-applied migrations (warn-only)
+        if status.applied_migrations:
+            issues = await self.validate_migrations(conn)
+            for issue in issues:
+                if issue["type"] == "checksum_mismatch":
+                    logger.warning(
+                        "Migration checksum mismatch: %s (v%s). "
+                        "SQL has changed since application.",
+                        issue.get("name", "?"), issue.get("version", "?"),
+                    )
+                elif issue["type"] == "unknown_migration":
+                    logger.warning(
+                        "Unknown migration in database: v%s (%s). "
+                        "May indicate downgrade from newer version.",
+                        issue.get("version", "?"), issue.get("name", "?"),
+                    )
+                else:
+                    logger.warning(
+                        "Migration validation issue: %s",
+                        issue.get("message", "unknown"),
+                    )
+
         if status.is_current:
             return []
-        return await self.migrate(conn)
+
+        # Create backup before applying pending migrations
+        backup_path = self.backup_database(db_path)
+        if backup_path:
+            logger.info(
+                "Backup at %s before %d pending migration(s)",
+                backup_path, status.pending_migrations,
+            )
+
+        results = await self.migrate(conn)
+
+        if any(not r.success for r in results) and backup_path:
+            logger.error("Migration failed. Backup available at: %s", backup_path)
+
+        return results
+
+    @staticmethod
+    def backup_database(db_path: str) -> str | None:
+        """Create a pre-migration backup of the database file.
+
+        Returns:
+            Path to backup file, or None for in-memory databases or on failure.
+        """
+        if db_path in (":memory:", ""):
+            return None
+        source = Path(db_path)
+        if not source.exists():
+            return None
+
+        timestamp = utcnow().strftime("%Y%m%dT%H%M%S")
+        backup_path = source.with_suffix(f".pre-migration-{timestamp}.db")
+        try:
+            shutil.copy2(str(source), str(backup_path))
+            logger.info("Pre-migration backup created: %s", backup_path)
+            return str(backup_path)
+        except OSError as exc:
+            logger.warning("Failed to create pre-migration backup: %s", exc)
+            return None
 
     def verify_checksum(self, migration: Migration, stored_checksum: str) -> bool:
         """Verify a migration's checksum.

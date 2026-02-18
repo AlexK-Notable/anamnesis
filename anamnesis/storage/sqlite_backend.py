@@ -74,6 +74,14 @@ class ConnectionWrapper:
         cursor = await self._conn.execute(sql, params or ())
         return await cursor.fetchall()
 
+    async def execute_raw(self, sql: str) -> None:
+        """Execute raw SQL bypassing parameter binding.
+
+        Used for transaction control statements (BEGIN, COMMIT, ROLLBACK)
+        that must go directly to SQLite without sqlite3 module interference.
+        """
+        await self._conn.execute(sql)
+
     async def commit(self) -> None:
         """Commit the current transaction."""
         await self._conn.commit()
@@ -118,10 +126,16 @@ class SQLiteBackend:
         # Enable foreign keys and WAL mode for better performance
         await self._conn.execute("PRAGMA foreign_keys = ON")
         await self._conn.execute("PRAGMA journal_mode = WAL")
+        # Allow up to 5 seconds of retry on SQLITE_BUSY before failing
+        await self._conn.execute("PRAGMA busy_timeout = 5000")
 
-        # Run migrations
+        # Run migrations under advisory lock
+        from .migrations import MigrationLock
+
         wrapper = ConnectionWrapper(self._conn)
-        await self._migrator.ensure_schema(wrapper)
+        lock = MigrationLock(self.db_path)
+        with lock.acquire(timeout=30.0):
+            await self._migrator.ensure_schema(wrapper, db_path=self.db_path)
         await self._conn.commit()
 
         logger.info(f"Connected to database: {self.db_path}")

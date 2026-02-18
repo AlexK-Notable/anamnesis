@@ -49,6 +49,7 @@ def _make_collection_info(
     indexed_vectors_count: int = 90,
     points_count: int = 100,
     status_value: str = "green",
+    vector_size: int = 384,
 ) -> SimpleNamespace:
     """Simulate the CollectionInfo object returned by client.get_collection()."""
     return SimpleNamespace(
@@ -56,6 +57,11 @@ def _make_collection_info(
         indexed_vectors_count=indexed_vectors_count,
         points_count=points_count,
         status=SimpleNamespace(value=status_value),
+        config=SimpleNamespace(
+            params=SimpleNamespace(
+                vectors=SimpleNamespace(size=vector_size),
+            )
+        ),
     )
 
 
@@ -190,6 +196,9 @@ class TestConnectionLifecycle:
         mock_client_instance.get_collections.return_value = SimpleNamespace(
             collections=[SimpleNamespace(name=config.collection_name)]
         )
+        mock_client_instance.get_collection.return_value = _make_collection_info(
+            name=config.collection_name, vector_size=config.vector_size,
+        )
 
         mock_cls_constructor = MagicMock(return_value=mock_client_instance)
         with patch.dict(
@@ -217,6 +226,9 @@ class TestConnectionLifecycle:
         mock_client_instance = MagicMock(name="client_instance")
         mock_client_instance.get_collections.return_value = SimpleNamespace(
             collections=[SimpleNamespace(name="test_coll")]
+        )
+        mock_client_instance.get_collection.return_value = _make_collection_info(
+            name="test_coll", vector_size=server_config.vector_size,
         )
 
         mock_cls_constructor = MagicMock(return_value=mock_client_instance)
@@ -276,6 +288,10 @@ class TestEnsureCollection:
         """When collection already exists, create_collection is NOT called."""
         mock_qdrant_client.get_collections.return_value = SimpleNamespace(
             collections=[SimpleNamespace(name=store_connected._config.collection_name)]
+        )
+        mock_qdrant_client.get_collection.return_value = _make_collection_info(
+            name=store_connected._config.collection_name,
+            vector_size=store_connected._config.vector_size,
         )
         # Patch the qdrant_client.models import inside _ensure_collection
         mock_models = MagicMock()
@@ -695,3 +711,68 @@ class TestDefaultConfig:
         store = QdrantVectorStore(cfg)
         assert store._config.collection_name == "custom"
         assert store._config.vector_size == 768
+
+
+# ===========================================================================
+# 12. Dimension validation
+# ===========================================================================
+
+
+class TestDimensionValidation:
+    """Tests for _validate_collection_dimensions."""
+
+    async def test_matching_dimensions_pass(self, store_connected, mock_qdrant_client):
+        """Matching dimensions do not raise."""
+        mock_qdrant_client.get_collection.return_value = _make_collection_info(
+            name="test_collection", vector_size=store_connected._config.vector_size,
+        )
+        # Should not raise
+        await store_connected._validate_collection_dimensions()
+
+    async def test_mismatched_dimensions_raise(self, store_connected, mock_qdrant_client):
+        """Mismatched dimensions raise RuntimeError."""
+        mock_qdrant_client.get_collection.return_value = _make_collection_info(
+            name="test_collection", vector_size=768,
+        )
+        with pytest.raises(RuntimeError, match="Vector dimension mismatch"):
+            await store_connected._validate_collection_dimensions()
+
+    async def test_dict_vectors_config(self, store_connected, mock_qdrant_client):
+        """Handles dict-style vectors_config (named vector spaces)."""
+        mock_qdrant_client.get_collection.return_value = SimpleNamespace(
+            config=SimpleNamespace(
+                params=SimpleNamespace(
+                    vectors={"": SimpleNamespace(size=384)},
+                )
+            ),
+        )
+        # Should not raise — dimensions match
+        await store_connected._validate_collection_dimensions()
+
+    async def test_dict_vectors_config_mismatch(self, store_connected, mock_qdrant_client):
+        """Dict-style vectors_config with wrong size raises."""
+        mock_qdrant_client.get_collection.return_value = SimpleNamespace(
+            config=SimpleNamespace(
+                params=SimpleNamespace(
+                    vectors={"": SimpleNamespace(size=1024)},
+                )
+            ),
+        )
+        with pytest.raises(RuntimeError, match="Vector dimension mismatch"):
+            await store_connected._validate_collection_dimensions()
+
+    async def test_unknown_vectors_format_warns(self, store_connected, mock_qdrant_client):
+        """Unknown vectors_config format logs warning but does not raise."""
+        mock_qdrant_client.get_collection.return_value = SimpleNamespace(
+            config=SimpleNamespace(
+                params=SimpleNamespace(vectors=42),  # Unexpected type
+            ),
+        )
+        # Should not raise — stored_dim is None, so comparison is skipped
+        await store_connected._validate_collection_dimensions()
+
+    async def test_get_collection_exception_warns(self, store_connected, mock_qdrant_client):
+        """Exception during dimension check logs warning but does not raise."""
+        mock_qdrant_client.get_collection.side_effect = Exception("network error")
+        # Should not raise — caught by the outer except
+        await store_connected._validate_collection_dimensions()

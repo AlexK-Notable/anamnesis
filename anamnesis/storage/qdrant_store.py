@@ -148,7 +148,7 @@ class QdrantVectorStore:
             raise
 
     async def _ensure_collection(self) -> None:
-        """Create collection if it doesn't exist."""
+        """Create collection if it doesn't exist, validate dimensions if it does."""
         if self._client is None:
             raise RuntimeError("Client not initialized")
 
@@ -196,6 +196,43 @@ class QdrantVectorStore:
             )
 
             logger.info(f"Created collection with indexes: {self._config.collection_name}")
+        else:
+            await self._validate_collection_dimensions()
+
+    async def _validate_collection_dimensions(self) -> None:
+        """Validate that existing collection dimensions match configured vector_size.
+
+        Raises:
+            RuntimeError: If dimensions mismatch, indicating the embedding model
+                changed without re-indexing the vector store.
+        """
+        try:
+            info = await asyncio.to_thread(
+                self._client.get_collection, self._config.collection_name
+            )
+            vectors_config = info.config.params.vectors
+            if hasattr(vectors_config, "size"):
+                stored_dim = vectors_config.size
+            elif isinstance(vectors_config, dict):
+                default = vectors_config.get("", vectors_config.get(None))
+                stored_dim = default.size if default else None
+            else:
+                stored_dim = None
+
+            if stored_dim is not None and stored_dim != self._config.vector_size:
+                raise RuntimeError(
+                    f"Vector dimension mismatch: collection has {stored_dim}d vectors, "
+                    f"but embedding model produces {self._config.vector_size}d vectors. "
+                    f"Delete and re-index the collection to resolve."
+                )
+            elif stored_dim is not None:
+                logger.debug("Qdrant dimension validation passed: %dd", stored_dim)
+        except RuntimeError:
+            raise
+        except Exception as e:
+            logger.warning(
+                "Could not validate Qdrant collection dimensions: %s", e
+            )
 
     def _generate_id(self, file_path: str, name: str, concept_type: str) -> str:
         """Generate deterministic UUID for deduplication.
