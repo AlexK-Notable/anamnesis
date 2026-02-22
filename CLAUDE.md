@@ -249,7 +249,7 @@ Build responses with `_success_response(data, **metadata)` and `_failure_respons
 
 ## Current State (2026-02-22)
 
-- Version: 0.1.0
+- Version: 0.2.0
 - 29 MCP tools registered (consolidated from 41 → 37 → 28, +1 go_to_definition)
 - 2145 tests passing (+ 2 xpassed MCP protocol tests)
 - All synergy features (S1-S5) complete

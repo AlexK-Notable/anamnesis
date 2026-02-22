@@ -1,6 +1,6 @@
 [project]
 name = "anamnesis"
-version = "0.1.0"
+version = "0.2.0"
 description = "Semantic code analysis and intelligence - Python port of In-Memoria"
 requires-python = ">=3.11"
 readme = "README.md"
