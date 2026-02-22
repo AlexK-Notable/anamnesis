@@ -18,6 +18,7 @@ from anamnesis.parsing.tree_sitter_wrapper import (
     TreeSitterQuery,
     is_language_supported,
 )
+from anamnesis.utils.helpers import enum_value
 
 
 @dataclass
@@ -46,7 +47,7 @@ class ExtractedSymbol:
         """Convert to dictionary."""
         result = {
             "name": self.name,
-            "kind": self.kind.value if isinstance(self.kind, NodeType) else self.kind,
+            "kind": enum_value(self.kind),
             "file_path": self.file_path,
             "start_line": self.start_line,
             "end_line": self.end_line,
@@ -205,11 +206,11 @@ class LanguageParser(ABC):
         """Find all nodes of given types in the AST."""
         results = []
         types_set = {
-            t.value if isinstance(t, NodeType) else t for t in node_types
+            enum_value(t) for t in node_types
         }
 
         def _search(n: ParsedNode) -> None:
-            node_type = n.node_type.value if isinstance(n.node_type, NodeType) else n.node_type
+            node_type = enum_value(n.node_type)
             if node_type in types_set:
                 results.append(n)
             for child in n.children:

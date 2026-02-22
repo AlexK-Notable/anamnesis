@@ -196,12 +196,11 @@ class TestPatternSearchBackend:
         )
         results = await backend.search(query)
 
-        # Should find AuthenticationService - check results or matched content
-        assert isinstance(results, list)  # May find 0 if pattern doesn't match exact format
-        if len(results) > 0:
-            # If we found results, verify they're meaningful
-            file_paths = [r.file_path for r in results]
-            assert any("service" in fp.lower() for fp in file_paths) or len(results) == 0
+        # Should find AuthenticationService
+        assert isinstance(results, list)
+        assert len(results) > 0, "Expected pattern to match AuthenticationService"
+        file_paths = [r.file_path for r in results]
+        assert any("service" in fp.lower() for fp in file_paths)
 
     @pytest.mark.asyncio
     async def test_pattern_search_finds_async_methods(self, sample_python_files: Path):

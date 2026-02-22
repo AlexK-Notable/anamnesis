@@ -449,7 +449,7 @@ class ComplexityAnalyzer:
         Returns:
             FileComplexity with aggregated metrics.
         """
-        from anamnesis.extractors.symbol_extractor import SymbolKind
+        from anamnesis.extraction.types import SymbolKind
 
         lines = source.split("\n")
         loc = self._calculate_loc(lines)

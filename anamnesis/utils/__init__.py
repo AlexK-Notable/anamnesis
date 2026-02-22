@@ -72,9 +72,7 @@ from .language_registry import (
 from .error_classifier import (
     ErrorCategory,
     ErrorClassification,
-    ErrorClassifier,
     classify_error,
-    get_default_classifier,
     is_retryable as is_error_retryable,
 )
 
@@ -156,9 +154,7 @@ __all__ = [
     # Error Classifier (Phase 2)
     "ErrorCategory",
     "ErrorClassification",
-    "ErrorClassifier",
     "classify_error",
-    "get_default_classifier",
     "is_error_retryable",
     # TOON Encoder (Phase 13)
     "ResponseFormat",

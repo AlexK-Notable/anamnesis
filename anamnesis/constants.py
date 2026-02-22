@@ -47,13 +47,3 @@ DEFAULT_IGNORE_DIRS: set[str] = {
     ".pytest_cache",
     ".ruff_cache",
 }
-
-# Glob patterns for file watching ignore rules (CLI init, watcher config)
-DEFAULT_WATCH_IGNORE_PATTERNS: list[str] = [
-    "**/node_modules/**",
-    "**/.git/**",
-    "**/__pycache__/**",
-    "**/.venv/**",
-    "**/venv/**",
-    "**/*.pyc",
-]

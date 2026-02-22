@@ -4,7 +4,6 @@ import gc
 import sys
 import time
 from pathlib import Path
-from typing import Optional
 
 from anamnesis.constants import utcnow
 from anamnesis.mcp_server._shared import (
@@ -29,7 +28,7 @@ from anamnesis.utils.helpers import enum_value
 @_with_error_handling("get_system_status")
 def _get_system_status_impl(
     sections: str = "summary,metrics",
-    path: Optional[str] = None,
+    path: str | None = None,
     include_breakdown: bool = True,
     run_benchmark: bool = False,
 ) -> dict:
@@ -184,7 +183,7 @@ def _get_system_status_impl(
 @mcp.tool
 def get_system_status(
     sections: str = "summary,metrics",
-    path: Optional[str] = None,
+    path: str | None = None,
     include_breakdown: bool = True,
     run_benchmark: bool = False,
 ) -> dict:

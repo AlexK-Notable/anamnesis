@@ -538,7 +538,7 @@ class DatabaseMigrator:
             )
             return [row[0] for row in rows]
         except Exception as e:
-            logger.debug(f"Failed to fetch applied migration versions: {e}")
+            logger.debug("Failed to fetch applied migration versions: %s", e)
             return []
 
     async def get_current_version(self, conn: DatabaseConnection) -> int:
@@ -564,7 +564,7 @@ class DatabaseMigrator:
             )
             return result[0] if result and result[0] else 0
         except Exception as e:
-            logger.debug(f"Failed to get current schema version: {e}")
+            logger.debug("Failed to get current schema version: %s", e)
             return 0
 
     async def get_status(self, conn: DatabaseConnection) -> MigrationStatus:
@@ -586,7 +586,7 @@ class DatabaseMigrator:
             )
             applied = [row[0] for row in rows]
         except Exception as e:
-            logger.debug(f"Failed to fetch applied migrations for status: {e}")
+            logger.debug("Failed to fetch applied migrations for status: %s", e)
 
 
         # Find pending migrations
@@ -698,7 +698,7 @@ class DatabaseMigrator:
                     name=migration.name,
                     execution_time_ms=execution_time,
                 ))
-                logger.info(f"Applied migration {migration.version}: {migration.name}")
+                logger.info("Applied migration %s: %s", migration.version, migration.name)
 
             except Exception as e:
                 try:
@@ -715,7 +715,7 @@ class DatabaseMigrator:
                     execution_time_ms=(time.time() - start_time) * 1000,
                     error=str(e),
                 ))
-                logger.error(f"Migration {migration.version} failed: {e}")
+                logger.error("Migration %s failed: %s", migration.version, e)
                 break  # Stop on first failure
 
         return results
@@ -779,7 +779,7 @@ class DatabaseMigrator:
                     name=migration.name,
                     execution_time_ms=(time.time() - start_time) * 1000,
                 ))
-                logger.info(f"Rolled back migration {migration.version}: {migration.name}")
+                logger.info("Rolled back migration %s: %s", migration.version, migration.name)
 
             except Exception as e:
                 try:
@@ -796,7 +796,7 @@ class DatabaseMigrator:
                     execution_time_ms=(time.time() - start_time) * 1000,
                     error=str(e),
                 ))
-                logger.error(f"Rollback of migration {migration.version} failed: {e}")
+                logger.error("Rollback of migration %s failed: %s", migration.version, e)
                 break
 
         return results

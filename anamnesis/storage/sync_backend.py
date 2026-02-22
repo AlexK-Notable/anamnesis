@@ -11,7 +11,7 @@ import logging
 import threading
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Generator
 
 from .schema import (
     AIInsight,
@@ -147,7 +147,7 @@ class SyncSQLiteBackend:
         """Save a semantic concept."""
         self._run(self._async_backend.save_concept(concept))
 
-    def get_concept(self, concept_id: str) -> Optional[SemanticConcept]:
+    def get_concept(self, concept_id: str) -> SemanticConcept | None:
         """Get concept by ID."""
         return self._run(self._async_backend.get_concept(concept_id))
 
@@ -179,7 +179,7 @@ class SyncSQLiteBackend:
         """Save a developer pattern."""
         self._run(self._async_backend.save_pattern(pattern))
 
-    def get_pattern(self, pattern_id: str) -> Optional[DeveloperPattern]:
+    def get_pattern(self, pattern_id: str) -> DeveloperPattern | None:
         """Get pattern by ID."""
         return self._run(self._async_backend.get_pattern(pattern_id))
 
@@ -207,11 +207,11 @@ class SyncSQLiteBackend:
         """Save file intelligence."""
         self._run(self._async_backend.save_file_intelligence(file_intel))
 
-    def get_file_intelligence(self, file_path: str) -> Optional[FileIntelligence]:
+    def get_file_intelligence(self, file_path: str) -> FileIntelligence | None:
         """Get file intelligence by path."""
         return self._run(self._async_backend.get_file_intelligence(file_path))
 
-    def get_file_intelligence_by_id(self, intel_id: str) -> Optional[FileIntelligence]:
+    def get_file_intelligence_by_id(self, intel_id: str) -> FileIntelligence | None:
         """Get file intelligence by ID."""
         return self._run(self._async_backend.get_file_intelligence_by_id(intel_id))
 
@@ -231,7 +231,7 @@ class SyncSQLiteBackend:
         """Save a shared pattern."""
         self._run(self._async_backend.save_shared_pattern(pattern))
 
-    def get_shared_pattern(self, pattern_id: str) -> Optional[SharedPattern]:
+    def get_shared_pattern(self, pattern_id: str) -> SharedPattern | None:
         """Get shared pattern by ID."""
         return self._run(self._async_backend.get_shared_pattern(pattern_id))
 
@@ -251,7 +251,7 @@ class SyncSQLiteBackend:
         """Save an AI insight."""
         self._run(self._async_backend.save_insight(insight))
 
-    def get_insight(self, insight_id: str) -> Optional[AIInsight]:
+    def get_insight(self, insight_id: str) -> AIInsight | None:
         """Get insight by ID."""
         return self._run(self._async_backend.get_insight(insight_id))
 
@@ -283,11 +283,11 @@ class SyncSQLiteBackend:
         """Save project metadata."""
         self._run(self._async_backend.save_project_metadata(metadata))
 
-    def get_project_metadata(self, project_id: str) -> Optional[ProjectMetadata]:
+    def get_project_metadata(self, project_id: str) -> ProjectMetadata | None:
         """Get project metadata by ID."""
         return self._run(self._async_backend.get_project_metadata(project_id))
 
-    def get_project_by_path(self, project_path: str) -> Optional[ProjectMetadata]:
+    def get_project_by_path(self, project_path: str) -> ProjectMetadata | None:
         """Get project metadata by path."""
         return self._run(self._async_backend.get_project_by_path(project_path))
 
@@ -303,7 +303,7 @@ class SyncSQLiteBackend:
         """Save a feature map."""
         self._run(self._async_backend.save_feature_map(feature_map))
 
-    def get_feature_map(self, feature_id: str) -> Optional[FeatureMap]:
+    def get_feature_map(self, feature_id: str) -> FeatureMap | None:
         """Get feature map by ID."""
         return self._run(self._async_backend.get_feature_map(feature_id))
 
@@ -327,7 +327,7 @@ class SyncSQLiteBackend:
         """Save an entry point."""
         self._run(self._async_backend.save_entry_point(entry_point))
 
-    def get_entry_point(self, entry_point_id: str) -> Optional[EntryPoint]:
+    def get_entry_point(self, entry_point_id: str) -> EntryPoint | None:
         """Get entry point by ID."""
         return self._run(self._async_backend.get_entry_point(entry_point_id))
 
@@ -351,11 +351,11 @@ class SyncSQLiteBackend:
         """Save a key directory."""
         self._run(self._async_backend.save_key_directory(key_dir))
 
-    def get_key_directory(self, dir_id: str) -> Optional[KeyDirectory]:
+    def get_key_directory(self, dir_id: str) -> KeyDirectory | None:
         """Get key directory by ID."""
         return self._run(self._async_backend.get_key_directory(dir_id))
 
-    def get_key_directory_by_path(self, path: str) -> Optional[KeyDirectory]:
+    def get_key_directory_by_path(self, path: str) -> KeyDirectory | None:
         """Get key directory by path."""
         return self._run(self._async_backend.get_key_directory_by_path(path))
 
@@ -375,7 +375,7 @@ class SyncSQLiteBackend:
         """Save a work session."""
         self._run(self._async_backend.save_work_session(session))
 
-    def get_work_session(self, session_id: str) -> Optional[WorkSession]:
+    def get_work_session(self, session_id: str) -> WorkSession | None:
         """Get work session by ID."""
         return self._run(self._async_backend.get_work_session(session_id))
 
@@ -403,7 +403,7 @@ class SyncSQLiteBackend:
         """Save a project decision."""
         self._run(self._async_backend.save_project_decision(decision))
 
-    def get_project_decision(self, decision_id: str) -> Optional[ProjectDecision]:
+    def get_project_decision(self, decision_id: str) -> ProjectDecision | None:
         """Get project decision by ID."""
         return self._run(self._async_backend.get_project_decision(decision_id))
 

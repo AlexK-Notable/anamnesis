@@ -260,9 +260,9 @@ class TestSearch:
         """Results are sorted by similarity descending."""
         results = engine.search("authentication logic", limit=10)
 
-        if len(results) > 1:
-            similarities = [r.similarity for r in results]
-            assert similarities == sorted(similarities, reverse=True)
+        assert len(results) > 1, "Expected multiple results for similarity sort check"
+        similarities = [r.similarity for r in results]
+        assert similarities == sorted(similarities, reverse=True)
 
 
 class TestClear:
@@ -371,12 +371,12 @@ class TestIntegration:
         results = engine.search("user authentication login")
 
         # Should find auth-related concepts higher
-        if results:
-            top_concepts = [r.concept for r in results[:2]]
-            assert any(
-                "auth" in c.lower() or "login" in c.lower()
-                for c in top_concepts
-            )
+        assert results, "Expected semantic search to return results"
+        top_concepts = [r.concept for r in results[:2]]
+        assert any(
+            "auth" in c.lower() or "login" in c.lower()
+            for c in top_concepts
+        )
 
     @pytest.mark.slow
     def test_model_loads_on_demand(self):

@@ -6,7 +6,7 @@ PatternMatch result type used by both regex and AST pattern matching.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Iterator, Optional
+from typing import Iterator
 
 
 @dataclass
@@ -25,7 +25,7 @@ class PatternMatch:
     matched_text: str
     context_before: str  # 2-3 lines before match
     context_after: str  # 2-3 lines after match
-    pattern_name: Optional[str] = None
+    pattern_name: str | None = None
     capture_groups: dict = field(default_factory=dict)
 
     @property

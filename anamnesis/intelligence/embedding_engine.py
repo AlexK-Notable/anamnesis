@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from anamnesis.constants import utcnow
 
@@ -54,11 +54,11 @@ class EmbeddingConfig:
 
     # HuggingFace-specific options
     trust_remote_code: bool = False  # For custom model architectures
-    revision: Optional[str] = None  # Specific commit/tag
-    token: Optional[str] = None  # HuggingFace token for private models
+    revision: str | None = None  # Specific commit/tag
+    token: str | None = None  # HuggingFace token for private models
 
     # Cache and device
-    cache_dir: Optional[str] = None
+    cache_dir: str | None = None
     device: str = "cpu"  # "cpu", "cuda", "mps", or "auto"
 
     # Inference settings
@@ -67,7 +67,7 @@ class EmbeddingConfig:
     max_sequence_length: int = 512
 
     # Dimension override (auto-detected from model if None)
-    embedding_dimension: Optional[int] = None
+    embedding_dimension: int | None = None
 
     # Performance options
     use_fp16: bool = False  # Half precision for faster inference
@@ -132,16 +132,16 @@ class EmbeddingEngine:
         results = engine.search("authentication logic", limit=5)
     """
 
-    def __init__(self, config: Optional[EmbeddingConfig] = None):
+    def __init__(self, config: EmbeddingConfig | None = None):
         """Initialize embedding engine.
 
         Args:
             config: Optional configuration. Uses defaults if not provided.
         """
         self._config = config or EmbeddingConfig()
-        self._model: Optional["SentenceTransformer"] = None
+        self._model: SentenceTransformer | None = None
         self._model_loaded = False
-        self._model_error: Optional[str] = None
+        self._model_error: str | None = None
 
         # In-memory index
         self._concepts: dict[str, IndexedConcept] = {}
@@ -176,7 +176,7 @@ class EmbeddingEngine:
 
         try:
             device = self._config.get_effective_device()
-            logger.info(f"Loading embedding model: {self._config.model_name} on {device}")
+            logger.info("Loading embedding model: %s on %s", self._config.model_name, device)
 
             # Check if we have non-default HuggingFace options that require
             # direct instantiation (the shared registry only handles simple
@@ -285,7 +285,7 @@ class EmbeddingEngine:
         # Default for all-MiniLM-L6-v2
         return 384
 
-    def _generate_embedding(self, text: str) -> Optional[np.ndarray]:
+    def _generate_embedding(self, text: str) -> np.ndarray | None:
         """Generate embedding for a single text.
 
         Args:
@@ -304,7 +304,7 @@ class EmbeddingEngine:
         )
         return embedding
 
-    def _generate_embeddings_batch(self, texts: list[str]) -> Optional[np.ndarray]:
+    def _generate_embeddings_batch(self, texts: list[str]) -> np.ndarray | None:
         """Generate embeddings for multiple texts.
 
         Args:
@@ -346,7 +346,7 @@ class EmbeddingEngine:
         name: str,
         concept_type: str,
         file_path: str,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> str:
         """Add a concept to the index.
 
@@ -384,7 +384,7 @@ class EmbeddingEngine:
 
     def add_concepts_batch(
         self,
-        concepts: list[tuple[str, str, str, Optional[dict]]],
+        concepts: list[tuple[str, str, str, dict | None]],
     ) -> list[str]:
         """Add multiple concepts efficiently.
 
@@ -440,7 +440,7 @@ class EmbeddingEngine:
             return True
         return False
 
-    def get_concept(self, concept_id: str) -> Optional[IndexedConcept]:
+    def get_concept(self, concept_id: str) -> IndexedConcept | None:
         """Get a concept by ID.
 
         Args:
@@ -455,8 +455,8 @@ class EmbeddingEngine:
         self,
         query: str,
         limit: int = 10,
-        concept_type: Optional[str] = None,
-        file_path_filter: Optional[str] = None,
+        concept_type: str | None = None,
+        file_path_filter: str | None = None,
     ) -> list[SemanticSearchResult]:
         """Search for semantically similar concepts.
 

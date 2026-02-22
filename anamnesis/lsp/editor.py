@@ -118,7 +118,7 @@ class CodeEditor:
         end = sym.location.end_line + 1  # inclusive → exclusive
 
         if start < 0 or end > len(lines):
-            return {"success": False, "error": f"Symbol location out of range: {start}-{end}"}
+            raise ValueError(f"Symbol location out of range: {start}-{end}")
 
         # Build new content
         old_lines = lines[start:end]
@@ -261,17 +261,13 @@ class CodeEditor:
                 new_name,
             )
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"LSP rename failed: {e}",
-            }
+            raise RuntimeError(f"LSP rename failed: {e}") from e
 
         if workspace_edit is None:
-            return {
-                "success": False,
-                "error": "LSP server returned no rename edits. "
-                         "The symbol may not support renaming.",
-            }
+            raise RuntimeError(
+                "LSP server returned no rename edits. "
+                "The symbol may not support renaming."
+            )
 
         # Apply the workspace edit
         changes = workspace_edit.get("changes", {})

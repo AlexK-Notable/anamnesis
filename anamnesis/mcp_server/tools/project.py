@@ -10,36 +10,9 @@ from anamnesis.mcp_server._shared import (
     mcp,
 )
 
-# =============================================================================
-# Raw helpers (undecorated — called by the merged dispatch tool)
-# =============================================================================
-
-
-def _get_project_config_helper() -> dict:
-    """Return current project config (no error wrapping)."""
-    return _success_response({"registry": _registry.to_dict()})
-
-
-def _activate_project_helper(path: str) -> dict:
-    """Activate a project by path (no error wrapping)."""
-    ctx = _registry.activate(path)
-    return _success_response(
-        {"activated": ctx.to_dict(), "registry": _registry.to_dict()},
-    )
-
-
-def _list_projects_helper() -> dict:
-    """List all known projects (no error wrapping)."""
-    projects = _registry.list_projects()
-    return _success_response(
-        [p.to_dict() for p in projects],
-        total=len(projects),
-        active_path=_registry.active_path,
-    )
-
 
 # =============================================================================
-# Merged Implementation
+# Implementation
 # =============================================================================
 
 
@@ -47,25 +20,24 @@ def _list_projects_helper() -> dict:
 def _manage_project_impl(action: str = "status", path: str = "") -> dict:
     """Implementation for manage_project tool — dispatches by action."""
     if action == "status":
-        config = _get_project_config_helper()
-        projects = _list_projects_helper()
-        config_data = config.get("data", {})
-        projects_data = projects.get("data", [])
-        projects_meta = projects.get("metadata", {})
+        projects = _registry.list_projects()
         return _success_response(
             {
-                "registry": config_data.get("registry"),
-                "projects": projects_data,
+                "registry": _registry.to_dict(),
+                "projects": [p.to_dict() for p in projects],
             },
-            total=projects_meta.get("total", 0),
-            active_path=projects_meta.get("active_path"),
+            total=len(projects),
+            active_path=_registry.active_path,
         )
     elif action == "activate":
         if not path:
             return _failure_response(
                 "path is required when action='activate'"
             )
-        return _activate_project_helper(path)
+        ctx = _registry.activate(path)
+        return _success_response(
+            {"activated": ctx.to_dict(), "registry": _registry.to_dict()},
+        )
     else:
         return _failure_response(
             f"Unknown action '{action}'. Choose from: status, activate"

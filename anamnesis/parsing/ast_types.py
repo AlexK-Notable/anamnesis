@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from anamnesis.utils.helpers import enum_value
+
 
 class NodeType(str, Enum):
     """Common AST node types across languages."""
@@ -101,7 +103,7 @@ class ParsedNode:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         result = {
-            "node_type": self.node_type.value if isinstance(self.node_type, NodeType) else self.node_type,
+            "node_type": enum_value(self.node_type),
             "text": self.text,
             "start_line": self.start_line,
             "end_line": self.end_line,
@@ -223,12 +225,12 @@ class ASTContext:
 
     def get_symbols_by_type(self, node_type: NodeType | str) -> list[ParsedNode]:
         """Get all symbols of a specific type."""
-        type_key = node_type.value if isinstance(node_type, NodeType) else node_type
+        type_key = enum_value(node_type)
         return self._symbols.get(type_key, [])
 
     def add_symbol(self, node: ParsedNode) -> None:
         """Register a symbol in the context."""
-        type_key = node.node_type.value if isinstance(node.node_type, NodeType) else node.node_type
+        type_key = enum_value(node.node_type)
         if type_key not in self._symbols:
             self._symbols[type_key] = []
         self._symbols[type_key].append(node)

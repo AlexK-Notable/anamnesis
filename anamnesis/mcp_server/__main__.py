@@ -11,7 +11,7 @@ import os
 import sys
 from pathlib import Path
 
-from anamnesis.mcp_server.server import _set_current_path, mcp
+from anamnesis.mcp_server._shared import _set_current_path, mcp
 
 
 def main() -> None:

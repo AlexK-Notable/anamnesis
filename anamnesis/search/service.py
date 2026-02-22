@@ -7,7 +7,6 @@ search, routing queries to the appropriate backend.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from loguru import logger
 
@@ -52,9 +51,9 @@ class SearchService(ISearchService):
     def __init__(
         self,
         base_path: str,
-        text_backend: Optional[SearchBackend] = None,
-        pattern_backend: Optional[SearchBackend] = None,
-        semantic_backend: Optional[SearchBackend] = None,
+        text_backend: SearchBackend | None = None,
+        pattern_backend: SearchBackend | None = None,
+        semantic_backend: SearchBackend | None = None,
     ):
         """Initialize search service.
 
@@ -68,7 +67,7 @@ class SearchService(ISearchService):
             semantic_backend: Optional semantic search backend.
         """
         self._base_path = Path(base_path)
-        self._backends: dict[SearchType, Optional[SearchBackend]] = {
+        self._backends: dict[SearchType, SearchBackend | None] = {
             SearchType.TEXT: text_backend,
             SearchType.PATTERN: pattern_backend,
             SearchType.SEMANTIC: semantic_backend,
@@ -79,8 +78,8 @@ class SearchService(ISearchService):
         cls,
         base_path: str,
         enable_semantic: bool = True,
-        embedding_config: Optional[EmbeddingConfig] = None,
-        qdrant_config: Optional[QdrantConfig] = None,
+        embedding_config: EmbeddingConfig | None = None,
+        qdrant_config: QdrantConfig | None = None,
     ) -> "SearchService":
         """Create and initialize a search service with all backends.
 
@@ -110,7 +109,7 @@ class SearchService(ISearchService):
                 )
                 logger.info("Semantic search enabled")
             except Exception as e:
-                logger.warning(f"Semantic search disabled: {e}")
+                logger.warning("Semantic search disabled: %s", e)
 
         return cls(
             base_path,
@@ -174,7 +173,7 @@ class SearchService(ISearchService):
         try:
             return await backend.search(query)
         except Exception as e:
-            logger.error(f"Search failed: {e}")
+            logger.error("Search failed: %s", e)
             # Fall back to text search on error
             if query.search_type != SearchType.TEXT:
                 logger.info("Falling back to text search")
@@ -202,13 +201,13 @@ class SearchService(ISearchService):
                 try:
                     await backend.index(file_path, content, metadata)
                 except Exception as e:
-                    logger.warning(f"Failed to index {file_path} for {search_type}: {e}")
+                    logger.warning("Failed to index %s for %s: %s", file_path, search_type, e)
 
     async def index_directory(
         self,
-        directory: Optional[str] = None,
-        patterns: Optional[list[str]] = None,
-        exclude: Optional[list[str]] = None,
+        directory: str | None = None,
+        patterns: list[str] | None = None,
+        exclude: list[str] | None = None,
     ) -> int:
         """Index all files in a directory for semantic search.
 
@@ -282,6 +281,6 @@ class SearchService(ISearchService):
                 try:
                     await backend.close()
                 except Exception as e:
-                    logger.warning(f"Error closing backend: {e}")
+                    logger.warning("Error closing backend: %s", e)
 
 

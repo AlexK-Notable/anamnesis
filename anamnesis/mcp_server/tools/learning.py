@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-from typing import Optional
 
 from anamnesis.services import LearningOptions
 
@@ -29,7 +28,7 @@ from anamnesis.mcp_server._shared import (
 
 @_with_error_handling("auto_learn_if_needed")
 def _auto_learn_if_needed_impl(
-    path: Optional[str] = None,
+    path: str | None = None,
     force: bool = False,
     max_files: int = 1000,
     include_progress: bool = True,
@@ -165,7 +164,7 @@ def _auto_learn_if_needed_impl(
 
 @mcp.tool
 def auto_learn_if_needed(
-    path: Optional[str] = None,
+    path: str | None = None,
     force: bool = False,
     max_files: int = 1000,
     include_progress: bool = True,

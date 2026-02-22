@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from anamnesis.parsing.ast_types import ASTContext, NodeType, ParsedNode
+from anamnesis.utils.helpers import enum_value
 
 
 class ImportKind(StrEnum):
@@ -105,7 +106,7 @@ class ExtractedImport:
         """Convert to dictionary for serialization."""
         result: dict[str, Any] = {
             "module": self.module,
-            "kind": self.kind.value if isinstance(self.kind, ImportKind) else self.kind,
+            "kind": enum_value(self.kind),
             "file_path": self.file_path,
             "start_line": self.start_line,
             "end_line": self.end_line,

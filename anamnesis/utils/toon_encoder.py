@@ -15,14 +15,13 @@ Usage:
     encoder = ToonEncoder()
     toon_output = encoder.encode(response_dict)
 
-    # Check eligibility before encoding
-    if encoder.is_toon_eligible("SearchCodebaseResponse", data):
+    # Check structural eligibility before encoding
+    if is_structurally_toon_eligible(data):
         output = encoder.encode(data)
 
 Design Decisions:
 - Wraps the toon-format library for actual encoding
 - Uses shared serialize_to_primitives() for dataclass conversion
-- Tier-based eligibility (1=always, 2=conditional, 3=never)
 - Structure-aware detection of nested arrays (TOON's weakness)
 """
 
@@ -49,45 +48,6 @@ class ToonEncodingError(Exception):
     def __init__(self, message: str, original_error: Exception | None = None):
         super().__init__(message)
         self.original_error = original_error
-
-
-# Response types and their TOON eligibility tier
-# Tier 1: Excellent fit (flat uniform arrays, verified 20%+ savings)
-# Tier 2: Conditional fit (depends on array size)
-# Tier 3: Poor fit (nested arrays, complex structures - use JSON)
-#
-# IMPORTANT: TOON only saves tokens for FLAT arrays of uniform objects.
-# Responses with nested arrays (relationships[], examples[]) perform WORSE
-# than JSON and must be Tier 3.
-RESPONSE_TIERS: dict[str, Literal[1, 2, 3]] = {
-    # Tier 1: Verified TOON benefit (flat arrays only)
-    "SearchCodebaseResponse": 1,  # Verified: +39.6% savings, flat results[]
-    # Tier 2: Conditional fit (depends on array size)
-    "AnalyzeCodebaseResponse": 2,
-    "LearnCodebaseResponse": 2,
-    "ProjectBlueprintResponse": 2,
-    # Tier 3: Poor fit - use JSON
-    # These have nested arrays that break TOON efficiency:
-    "SemanticInsightsResponse": 3,  # Has nested relationships[] - measured -6% (TOON worse)
-    "PatternRecommendationsResponse": 3,  # Has nested examples[] - measured -2% (TOON worse)
-    "IntelligenceMetricsResponse": 3,  # No significant arrays
-    "DeveloperProfileResponse": 3,
-    "CodingApproachResponse": 3,
-    "ContributeInsightsResponse": 3,
-    "AutoLearnResponse": 3,
-    "SystemStatusResponse": 3,
-    "PerformanceStatusResponse": 3,
-    "HealthCheckResponse": 3,
-}
-
-# Fields within responses that should use tabular TOON encoding
-TABULAR_FIELDS: dict[str, list[str]] = {
-    "SemanticInsightsResponse": ["insights"],
-    "PatternRecommendationsResponse": ["recommendations"],
-    "SearchCodebaseResponse": ["results"],
-    "IntelligenceMetricsResponse": [],  # Uses breakdown tables
-    "AnalyzeCodebaseResponse": ["concepts", "patterns"],
-}
 
 
 def has_nested_arrays(data: Any, max_depth: int = 3) -> bool:
@@ -129,8 +89,7 @@ def has_nested_arrays(data: Any, max_depth: int = 3) -> bool:
 def is_structurally_toon_eligible(data: Any, min_array_size: int = 5) -> bool:
     """Check if data would benefit from TOON encoding by inspecting structure.
 
-    Unlike is_toon_eligible() which uses hardcoded type names, this function
-    analyzes the actual data shape at runtime. This enables automatic TOON
+    Analyzes the actual data shape at runtime. This enables automatic TOON
     selection for any dict response without requiring type registration.
 
     TOON benefits require ALL of:
@@ -247,59 +206,6 @@ class ToonEncoder:
             return toon_decode(toon_str)
         except Exception as e:
             raise ToonEncodingError(f"Failed to decode TOON: {e}", e) from e
-
-    def is_toon_eligible(
-        self,
-        response_type: str,
-        data: dict[str, Any] | None = None,
-    ) -> bool:
-        """Check if a response type is eligible for TOON encoding.
-
-        Uses both tier classification and runtime structure analysis.
-        Even Tier 1 responses will be rejected if data contains nested arrays.
-
-        Args:
-            response_type: The response type name.
-            data: Optional response data to check structure and array sizes.
-
-        Returns:
-            True if TOON encoding would be beneficial.
-        """
-        tier = RESPONSE_TIERS.get(response_type, 3)
-
-        # Tier 3 responses are never TOON-eligible
-        if tier == 3:
-            return False
-
-        # If we have data, check for nested arrays (structure-aware validation)
-        if data is not None:
-            # Nested arrays break TOON efficiency regardless of tier
-            if has_nested_arrays(data):
-                return False
-
-            # For Tier 2, also check minimum array size
-            if tier == 2:
-                tabular_fields = TABULAR_FIELDS.get(response_type, [])
-                for field in tabular_fields:
-                    if field in data and isinstance(data[field], list):
-                        if len(data[field]) >= self.min_array_size:
-                            return True
-                return False
-
-        # Tier 1 eligible when no data to check, or data passed structure check
-        # Tier 2 eligible by default when no data provided
-        return True
-
-    def get_tier(self, response_type: str) -> Literal[1, 2, 3]:
-        """Get the TOON tier for a response type.
-
-        Args:
-            response_type: The response type name.
-
-        Returns:
-            Tier 1, 2, or 3.
-        """
-        return RESPONSE_TIERS.get(response_type, 3)
 
     def _prepare_for_encoding(self, data: Any) -> Any:
         """Prepare data for TOON encoding.

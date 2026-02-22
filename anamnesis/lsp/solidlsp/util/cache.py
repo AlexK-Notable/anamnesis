@@ -5,14 +5,14 @@ object, automatically invalidating stale entries on version mismatch.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from anamnesis.lsp.solidlsp.compat import dump_pickle, load_pickle
 
 log = logging.getLogger(__name__)
 
 
-def load_cache(path: str, version: Any) -> Optional[Any]:
+def load_cache(path: str, version: Any) -> Any | None:
     data = load_pickle(path)
     if not isinstance(data, dict) or "__cache_version" not in data:
         log.info("Cache is outdated (expected version %s). Ignoring cache at %s", version, path)

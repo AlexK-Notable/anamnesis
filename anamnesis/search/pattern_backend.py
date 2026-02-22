@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Optional
 
 from loguru import logger
 
@@ -71,7 +70,7 @@ class PatternSearchBackend(SearchBackend):
         results = []
 
         if not self._base_path.is_dir():
-            logger.warning(f"Search path is not a directory: {self._base_path}")
+            logger.warning("Search path is not a directory: %s", self._base_path)
             return results
 
         # Determine which matchers to use
@@ -122,7 +121,7 @@ class PatternSearchBackend(SearchBackend):
                         break
 
             except (OSError, UnicodeDecodeError) as e:
-                logger.debug(f"Skipping file {file_path}: {e}")
+                logger.debug("Skipping file %s: %s", file_path, e)
                 continue
 
         # Sort by score
@@ -150,7 +149,7 @@ class PatternSearchBackend(SearchBackend):
         """
         return True
 
-    def _get_files_to_search(self, language: Optional[str]) -> list[Path]:
+    def _get_files_to_search(self, language: str | None) -> list[Path]:
         """Get list of files to search.
 
         Args:
@@ -225,9 +224,9 @@ class PatternSearchBackend(SearchBackend):
                 ):
                     matches.append(match)
             except re.error as e:
-                logger.debug(f"Invalid regex '{query}': {e}")
+                logger.debug("Invalid regex '%s': %s", query, e)
             except TimeoutError:
-                logger.warning(f"Regex search timed out for pattern '{query[:100]}'")
+                logger.warning("Regex search timed out for pattern '%s'", query[:100])
 
         return matches
 
@@ -283,7 +282,7 @@ class PatternSearchBackend(SearchBackend):
 
         return (count_score * 0.6) + (diversity_score * 0.4)
 
-    def get_available_patterns(self, language: Optional[str] = None) -> dict:
+    def get_available_patterns(self, language: str | None = None) -> dict:
         """Get available patterns for documentation.
 
         Args:

@@ -138,14 +138,14 @@ class SQLiteBackend:
             await self._migrator.ensure_schema(wrapper, db_path=self.db_path)
         await self._conn.commit()
 
-        logger.info(f"Connected to database: {self.db_path}")
+        logger.info("Connected to database: %s", self.db_path)
 
     async def close(self) -> None:
         """Close the database connection."""
         if self._conn is not None:
             await self._conn.close()
             self._conn = None
-            logger.info(f"Closed database connection: {self.db_path}")
+            logger.info("Closed database connection: %s", self.db_path)
 
     async def __aenter__(self) -> SQLiteBackend:
         """Async context manager entry."""

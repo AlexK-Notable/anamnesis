@@ -346,7 +346,7 @@ class TestMetacognitionTools:
 
     def test_reflect_collected_information(self):
         """reflect(focus='collected_information') returns a prompt."""
-        from anamnesis.mcp_server.server import _reflect_impl
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
 
         result = _reflect_impl(focus="collected_information")
         assert result["success"] is True
@@ -357,7 +357,7 @@ class TestMetacognitionTools:
 
     def test_reflect_task_adherence(self):
         """reflect(focus='task_adherence') returns a prompt."""
-        from anamnesis.mcp_server.server import _reflect_impl
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
 
         result = _reflect_impl(focus="task_adherence")
         assert result["success"] is True
@@ -368,7 +368,7 @@ class TestMetacognitionTools:
 
     def test_reflect_whether_done(self):
         """reflect(focus='whether_done') returns a prompt."""
-        from anamnesis.mcp_server.server import _reflect_impl
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
 
         result = _reflect_impl(focus="whether_done")
         assert result["success"] is True
@@ -386,17 +386,17 @@ class TestMetacognitionTools:
 @pytest.fixture(autouse=True)
 def reset_server_state(tmp_path):
     """Reset server global state and use tmp_path for memory storage."""
-    import anamnesis.mcp_server.server as server_module
+    import anamnesis.mcp_server._shared as shared_module
 
     # Reset registry and activate tmp_path as the project
-    server_module._registry.reset()
+    shared_module._registry.reset()
     # Create the tmp_path as a valid project directory
-    server_module._registry.activate(str(tmp_path))
+    shared_module._registry.activate(str(tmp_path))
 
     yield
 
     # Clean up
-    server_module._registry.reset()
+    shared_module._registry.reset()
 
 
 class TestWriteMemoryTool:
@@ -404,7 +404,7 @@ class TestWriteMemoryTool:
 
     def test_write_returns_success(self):
         """write_memory returns success with memory details."""
-        from anamnesis.mcp_server.server import _write_memory_impl
+        from anamnesis.mcp_server.tools.memory import _write_memory_impl
 
         result = _write_memory_impl("test-note", "# Test\nContent here.")
         assert result["success"] is True
@@ -413,7 +413,7 @@ class TestWriteMemoryTool:
 
     def test_write_invalid_name_returns_error(self):
         """write_memory with invalid name returns error."""
-        from anamnesis.mcp_server.server import _write_memory_impl
+        from anamnesis.mcp_server.tools.memory import _write_memory_impl
 
         result = _write_memory_impl("../evil", "content")
         assert result["success"] is False
@@ -424,7 +424,7 @@ class TestReadMemoryTool:
 
     def test_read_existing(self):
         """read_memory returns content for existing memory."""
-        from anamnesis.mcp_server.server import (
+        from anamnesis.mcp_server.tools.memory import (
             _read_memory_impl,
             _write_memory_impl,
         )
@@ -436,7 +436,7 @@ class TestReadMemoryTool:
 
     def test_read_nonexistent(self):
         """read_memory returns error for nonexistent memory."""
-        from anamnesis.mcp_server.server import _read_memory_impl
+        from anamnesis.mcp_server.tools.memory import _read_memory_impl
 
         result = _read_memory_impl("nope")
         assert result["success"] is False
@@ -448,7 +448,7 @@ class TestListMemoriesTool:
 
     def test_list_empty(self):
         """search_memories(query=None) returns empty when no memories exist."""
-        from anamnesis.mcp_server.server import _search_memories_impl
+        from anamnesis.mcp_server.tools.memory import _search_memories_impl
 
         result = _search_memories_impl(query=None)
         assert result["success"] is True
@@ -457,7 +457,7 @@ class TestListMemoriesTool:
 
     def test_list_after_writes(self):
         """search_memories(query=None) returns entries after writing."""
-        from anamnesis.mcp_server.server import (
+        from anamnesis.mcp_server.tools.memory import (
             _search_memories_impl,
             _write_memory_impl,
         )
@@ -475,7 +475,7 @@ class TestDeleteMemoryTool:
 
     def test_delete_existing(self):
         """delete_memory returns success for existing memory."""
-        from anamnesis.mcp_server.server import (
+        from anamnesis.mcp_server.tools.memory import (
             _delete_memory_impl,
             _write_memory_impl,
         )
@@ -487,7 +487,7 @@ class TestDeleteMemoryTool:
 
     def test_delete_nonexistent(self):
         """delete_memory returns error for nonexistent memory."""
-        from anamnesis.mcp_server.server import _delete_memory_impl
+        from anamnesis.mcp_server.tools.memory import _delete_memory_impl
 
         result = _delete_memory_impl("nope")
         assert result["success"] is False
@@ -498,7 +498,7 @@ class TestEditMemoryTool:
 
     def test_edit_returns_updated(self):
         """edit_memory returns updated content."""
-        from anamnesis.mcp_server.server import (
+        from anamnesis.mcp_server.tools.memory import (
             _edit_memory_impl,
             _write_memory_impl,
         )
@@ -510,14 +510,14 @@ class TestEditMemoryTool:
 
     def test_edit_nonexistent(self):
         """edit_memory returns error for nonexistent memory."""
-        from anamnesis.mcp_server.server import _edit_memory_impl
+        from anamnesis.mcp_server.tools.memory import _edit_memory_impl
 
         result = _edit_memory_impl("nope", "old", "new")
         assert result["success"] is False
 
     def test_edit_text_not_found(self):
         """edit_memory returns error when text not found."""
-        from anamnesis.mcp_server.server import (
+        from anamnesis.mcp_server.tools.memory import (
             _edit_memory_impl,
             _write_memory_impl,
         )
@@ -537,14 +537,14 @@ class TestToolRegistration:
 
     def test_metacognition_tools_registered(self):
         """Consolidated reflect tool is registered."""
-        from anamnesis.mcp_server.server import mcp
+        from anamnesis.mcp_server._shared import mcp
 
         tool_names = set(mcp._tool_manager._tools.keys())
         assert "reflect" in tool_names
 
     def test_memory_tools_registered(self):
         """Memory tools are registered (list_memories merged into search_memories)."""
-        from anamnesis.mcp_server.server import mcp
+        from anamnesis.mcp_server._shared import mcp
 
         tool_names = set(mcp._tool_manager._tools.keys())
         assert "write_memory" in tool_names
@@ -555,7 +555,7 @@ class TestToolRegistration:
 
     def test_total_tool_count(self):
         """Server has expected total tool count after consolidation + API split."""
-        from anamnesis.mcp_server.server import mcp
+        from anamnesis.mcp_server._shared import mcp
 
         tool_count = len(mcp._tool_manager._tools)
         # 37 → 28 → 29: 9 merges reducing tool count, +1 go_to_definition

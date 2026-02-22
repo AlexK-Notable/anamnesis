@@ -110,32 +110,6 @@ def make_symbol():
 class TestSolidLSPVendoring:
     """Verify vendored SolidLSP imports work."""
 
-    def test_import_solid_language_server(self):
-        from anamnesis.lsp.solidlsp import SolidLanguageServer
-        assert SolidLanguageServer is not None
-
-    def test_import_ls_config(self):
-        from anamnesis.lsp.solidlsp.ls_config import Language, LanguageServerConfig
-        assert Language.PYTHON is not None
-        assert LanguageServerConfig is not None
-
-    def test_import_ls_types(self):
-        from anamnesis.lsp.solidlsp import ls_types
-        assert ls_types is not None
-
-    def test_import_ls_exceptions(self):
-        from anamnesis.lsp.solidlsp.ls_exceptions import SolidLSPException
-        assert SolidLSPException is not None
-
-    def test_import_settings(self):
-        from anamnesis.lsp.solidlsp.settings import SolidLSPSettings
-        settings = SolidLSPSettings()
-        assert settings is not None
-
-    def test_import_lsp_protocol_handler(self):
-        from anamnesis.lsp.solidlsp.lsp_protocol_handler import lsp_types
-        assert hasattr(lsp_types, "SymbolKind")
-
     def test_python_language_server_class(self):
         """Verify Python LS class can be resolved."""
         from anamnesis.lsp.solidlsp.ls_config import Language
@@ -854,10 +828,10 @@ class TestProjectContextLsp:
 
 
 class TestMCPToolRegistration:
-    """Verify MCP tool _impl functions exist in server module."""
+    """Verify MCP tool _impl functions exist in tool modules."""
 
     def test_tool_functions_exist(self):
-        import anamnesis.mcp_server.server as srv
+        import anamnesis.mcp_server.tools.lsp as lsp_mod
 
         tool_names = [
             "_find_symbol_impl",
@@ -869,12 +843,5 @@ class TestMCPToolRegistration:
             "_manage_lsp_impl",
         ]
         for name in tool_names:
-            assert hasattr(srv, name), f"Missing {name}"
-            assert callable(getattr(srv, name)), f"{name} is not callable"
-
-    def test_helper_functions_exist(self):
-        import anamnesis.mcp_server.server as srv
-
-        helpers = ["_get_lsp_manager", "_get_symbol_retriever", "_get_code_editor"]
-        for name in helpers:
-            assert hasattr(srv, name), f"Missing {name}"
+            assert hasattr(lsp_mod, name), f"Missing {name}"
+            assert callable(getattr(lsp_mod, name)), f"{name} is not callable"

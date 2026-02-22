@@ -171,7 +171,7 @@ class TestDecoratorToonIntegration:
 
     def _make_decorated(self, toon_auto=True):
         """Create a decorated function for testing."""
-        from anamnesis.mcp_server.server import _with_error_handling
+        from anamnesis.mcp_server._shared import _with_error_handling
 
         @_with_error_handling("test_operation", toon_auto=toon_auto)
         def tool_impl(data):
@@ -212,7 +212,7 @@ class TestDecoratorToonIntegration:
 
     def test_exception_returns_error_dict(self):
         """Tool raising exception returns error dict (unchanged behavior)."""
-        from anamnesis.mcp_server.server import _with_error_handling
+        from anamnesis.mcp_server._shared import _with_error_handling
 
         @_with_error_handling("test_op")
         def failing_tool():
@@ -242,7 +242,7 @@ class TestDecoratorToonIntegration:
         }
 
         with patch(
-            "anamnesis.mcp_server.server._toon_encoder.encode",
+            "anamnesis.mcp_server._shared._toon_encoder.encode",
             side_effect=Exception("encoding broke"),
         ):
             result = tool(data)
@@ -251,7 +251,7 @@ class TestDecoratorToonIntegration:
 
     def test_string_return_passed_through(self):
         """If the tool already returns a string, it passes through unchanged."""
-        from anamnesis.mcp_server.server import _with_error_handling
+        from anamnesis.mcp_server._shared import _with_error_handling
 
         @_with_error_handling("test_op")
         def string_tool():

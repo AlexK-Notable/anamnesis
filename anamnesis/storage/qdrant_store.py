@@ -10,11 +10,10 @@ This module provides a Qdrant-backed vector store that supports:
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
@@ -32,11 +31,11 @@ class QdrantConfig:
     """
 
     # Local embedded mode (default) - best for single-machine, multi-agent
-    path: Optional[str] = ".anamnesis/qdrant"
+    path: str | None = ".anamnesis/qdrant"
 
     # Remote server mode (for distributed deployments)
-    url: Optional[str] = None
-    api_key: Optional[str] = None
+    url: str | None = None
+    api_key: str | None = None
 
     # Collection settings
     collection_name: str = "code_embeddings"
@@ -89,14 +88,14 @@ class QdrantVectorStore:
         results = await store.search(query_vector=[0.1, 0.2, ...], limit=10)
     """
 
-    def __init__(self, config: Optional[QdrantConfig] = None):
+    def __init__(self, config: QdrantConfig | None = None):
         """Initialize Qdrant vector store.
 
         Args:
             config: Optional configuration. Uses defaults if not provided.
         """
         self._config = config or QdrantConfig()
-        self._client: Optional["QdrantClient"] = None
+        self._client: QdrantClient | None = None
         self._initialized = False
 
     @property
@@ -117,7 +116,7 @@ class QdrantVectorStore:
 
             if self._config.url:
                 # Remote server mode
-                logger.info(f"Connecting to Qdrant server: {self._config.url}")
+                logger.info("Connecting to Qdrant server: %s", self._config.url)
                 self._client = QdrantClient(
                     url=self._config.url,
                     api_key=self._config.api_key,
@@ -129,7 +128,7 @@ class QdrantVectorStore:
                 path = Path(self._config.path)
                 path.mkdir(parents=True, exist_ok=True)
 
-                logger.info(f"Initializing embedded Qdrant at: {path}")
+                logger.info("Initializing embedded Qdrant at: %s", path)
                 self._client = QdrantClient(
                     path=str(path),
                     prefer_grpc=self._config.prefer_grpc,
@@ -137,14 +136,14 @@ class QdrantVectorStore:
 
             await self._ensure_collection()
             self._initialized = True
-            logger.info(f"Qdrant connected: {self._config.collection_name}")
+            logger.info("Qdrant connected: %s", self._config.collection_name)
 
         except ImportError:
             logger.error("qdrant-client not installed. Run: uv add qdrant-client")
             raise
 
         except Exception as e:
-            logger.error(f"Failed to connect to Qdrant: {e}")
+            logger.error("Failed to connect to Qdrant: %s", e)
             raise
 
     async def _ensure_collection(self) -> None:
@@ -159,7 +158,7 @@ class QdrantVectorStore:
         exists = any(c.name == self._config.collection_name for c in collections)
 
         if not exists:
-            logger.info(f"Creating Qdrant collection: {self._config.collection_name}")
+            logger.info("Creating Qdrant collection: %s", self._config.collection_name)
 
             await asyncio.to_thread(
                 self._client.create_collection,
@@ -195,7 +194,7 @@ class QdrantVectorStore:
                 field_schema=models.PayloadSchemaType.KEYWORD,
             )
 
-            logger.info(f"Created collection with indexes: {self._config.collection_name}")
+            logger.info("Created collection with indexes: %s", self._config.collection_name)
         else:
             await self._validate_collection_dimensions()
 
@@ -344,15 +343,15 @@ class QdrantVectorStore:
             points=qdrant_points,
         )
 
-        logger.debug(f"Batch upserted {len(points)} vectors")
+        logger.debug("Batch upserted %s vectors", len(points))
         return point_ids
 
     async def search(
         self,
         query_vector: list[float],
         limit: int = 10,
-        score_threshold: Optional[float] = 0.5,
-        filter_conditions: Optional[dict] = None,
+        score_threshold: float | None = 0.5,
+        filter_conditions: dict | None = None,
     ) -> list[dict]:
         """Search for similar vectors.
 
@@ -432,7 +431,7 @@ class QdrantVectorStore:
             ),
         )
 
-        logger.debug(f"Deleted vectors for file: {file_path}")
+        logger.debug("Deleted vectors for file: %s", file_path)
         return True
 
     async def delete_collection(self) -> bool:
@@ -447,7 +446,7 @@ class QdrantVectorStore:
             raise RuntimeError("Not connected. Call connect() first.")
 
         await asyncio.to_thread(self._client.delete_collection, self._config.collection_name)
-        logger.warning(f"Deleted collection: {self._config.collection_name}")
+        logger.warning("Deleted collection: %s", self._config.collection_name)
         return True
 
     async def get_stats(self) -> QdrantStats:
@@ -471,7 +470,7 @@ class QdrantVectorStore:
                 collection_name=self._config.collection_name,
             )
         except Exception as e:
-            logger.warning(f"Failed to get Qdrant stats: {e}")
+            logger.warning("Failed to get Qdrant stats: %s", e)
             return QdrantStats(status="error", collection_name=self._config.collection_name)
 
     async def close(self) -> None:

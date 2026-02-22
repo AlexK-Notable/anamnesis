@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from anamnesis.constants import utcnow
 from anamnesis.services.type_converters import generate_id
@@ -64,7 +64,7 @@ class SessionInfo:
     is_active: bool
     started_at: datetime
     updated_at: datetime
-    ended_at: Optional[datetime] = None
+    ended_at: datetime | None = None
     decision_count: int = 0
 
     def to_dict(self) -> dict:
@@ -149,7 +149,7 @@ class SessionManager:
             backend: Storage backend for persistence
         """
         self._backend = backend
-        self._active_session_id: Optional[str] = None
+        self._active_session_id: str | None = None
 
         # Recover active session from persistent backend (post-restart)
         try:
@@ -167,7 +167,7 @@ class SessionManager:
         return self._backend
 
     @property
-    def active_session_id(self) -> Optional[str]:
+    def active_session_id(self) -> str | None:
         """Get the currently active session ID (most recently started)."""
         return self._active_session_id
 
@@ -175,10 +175,10 @@ class SessionManager:
         self,
         name: str = "",
         feature: str = "",
-        files: Optional[list[str]] = None,
-        tasks: Optional[list[str]] = None,
+        files: list[str] | None = None,
+        tasks: list[str] | None = None,
         notes: str = "",
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
     ) -> SessionInfo:
         """Start a new work session.
 
@@ -225,7 +225,7 @@ class SessionManager:
             decision_count=0,
         )
 
-    def end_session(self, session_id: Optional[str] = None) -> bool:
+    def end_session(self, session_id: str | None = None) -> bool:
         """End a work session.
 
         Args:
@@ -244,7 +244,7 @@ class SessionManager:
 
         return success
 
-    def get_session(self, session_id: str) -> Optional[SessionInfo]:
+    def get_session(self, session_id: str) -> SessionInfo | None:
         """Get a session by ID.
 
         Args:
@@ -299,12 +299,12 @@ class SessionManager:
 
     def update_session(
         self,
-        session_id: Optional[str] = None,
-        files: Optional[list[str]] = None,
-        tasks: Optional[list[str]] = None,
-        notes: Optional[str] = None,
-        metadata: Optional[dict] = None,
-    ) -> Optional[SessionInfo]:
+        session_id: str | None = None,
+        files: list[str] | None = None,
+        tasks: list[str] | None = None,
+        notes: str | None = None,
+        metadata: dict | None = None,
+    ) -> SessionInfo | None:
         """Update an existing session.
 
         Args:
@@ -343,7 +343,7 @@ class SessionManager:
     def add_file_to_session(
         self,
         file_path: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> bool:
         """Add a file to a session's working files.
 
@@ -372,7 +372,7 @@ class SessionManager:
     def add_task_to_session(
         self,
         task: str,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
     ) -> bool:
         """Add a task to a session.
 
@@ -403,10 +403,10 @@ class SessionManager:
         decision: str,
         context: str = "",
         rationale: str = "",
-        session_id: Optional[str] = None,
-        related_files: Optional[list[str]] = None,
-        tags: Optional[list[str]] = None,
-        metadata: Optional[dict] = None,
+        session_id: str | None = None,
+        related_files: list[str] | None = None,
+        tags: list[str] | None = None,
+        metadata: dict | None = None,
     ) -> DecisionInfo:
         """Record a project decision.
 
@@ -451,7 +451,7 @@ class SessionManager:
             created_at=now,
         )
 
-    def get_decision(self, decision_id: str) -> Optional[DecisionInfo]:
+    def get_decision(self, decision_id: str) -> DecisionInfo | None:
         """Get a decision by ID.
 
         Args:

@@ -1,6 +1,6 @@
 """Search tools — codebase search."""
 
-from typing import Literal, Optional
+from typing import Literal
 
 from anamnesis.interfaces.search import SearchQuery, SearchType
 from anamnesis.utils.logger import logger
@@ -30,7 +30,7 @@ async def _search_codebase_impl(
     query: str,
     search_type: str = "text",
     limit: int = 50,
-    language: Optional[str] = None,
+    language: str | None = None,
 ) -> dict:
     """Implementation for search_codebase tool.
 
@@ -102,7 +102,7 @@ async def search_codebase(
     query: str,
     search_type: Literal["text", "pattern", "semantic"] = "text",
     limit: int = 50,
-    language: Optional[str] = None,
+    language: str | None = None,
 ) -> dict:
     """Search for code by text matching or patterns.
 

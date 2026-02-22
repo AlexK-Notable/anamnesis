@@ -6,7 +6,7 @@ Tests the tool implementations directly, not via MCP protocol.
 
 import pytest
 
-from anamnesis.mcp_server.server import (
+from anamnesis.mcp_server.tools.session import (
     _end_session_impl,
     _get_sessions_impl,
     _manage_decisions_impl,

@@ -7,7 +7,6 @@ in the SearchBackend interface.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from loguru import logger
 
@@ -50,7 +49,7 @@ class TextSearchBackend(SearchBackend):
         results = []
 
         if not self._base_path.is_dir():
-            logger.warning(f"Search path is not a directory: {self._base_path}")
+            logger.warning("Search path is not a directory: %s", self._base_path)
             return results
 
         # Build glob patterns based on language filter
@@ -69,7 +68,7 @@ class TextSearchBackend(SearchBackend):
 
                 try:
                     if file_path.stat().st_size > MAX_FILE_SIZE:
-                        logger.debug(f"Skipping oversized file: {file_path}")
+                        logger.debug("Skipping oversized file: %s", file_path)
                         continue
 
                     content = file_path.read_text(encoding="utf-8", errors="ignore")
@@ -93,7 +92,7 @@ class TextSearchBackend(SearchBackend):
                                 return results
 
                 except (OSError, UnicodeDecodeError) as e:
-                    logger.debug(f"Skipping file {file_path}: {e}")
+                    logger.debug("Skipping file %s: %s", file_path, e)
                     continue
 
         # Sort by score
@@ -121,7 +120,7 @@ class TextSearchBackend(SearchBackend):
         """
         return True
 
-    def _get_glob_patterns(self, language: Optional[str]) -> list[str]:
+    def _get_glob_patterns(self, language: str | None) -> list[str]:
         """Get glob patterns for file search.
 
         Args:

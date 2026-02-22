@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from anamnesis.constants import DEFAULT_IGNORE_DIRS
+from anamnesis.utils.helpers import enum_value
 
 
 class ConceptType(str, Enum):
@@ -58,7 +59,7 @@ class SemanticConcept:
         """Serialize to dictionary."""
         return {
             "name": self.name,
-            "concept_type": str(self.concept_type.value if isinstance(self.concept_type, ConceptType) else self.concept_type),
+            "concept_type": enum_value(self.concept_type),
             "confidence": self.confidence,
             "file_path": self.file_path,
             "line_range": list(self.line_range) if self.line_range else None,

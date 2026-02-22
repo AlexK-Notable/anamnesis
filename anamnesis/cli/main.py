@@ -2,7 +2,6 @@
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 
@@ -283,7 +282,7 @@ def search(
     query: str,
     search_type: str,
     limit: int,
-    language: Optional[str],
+    language: str | None,
     path: str,
     as_json: bool,
 ) -> None:

@@ -7,7 +7,6 @@ enabling natural language queries against indexed codebases.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 from loguru import logger
 
@@ -82,8 +81,8 @@ class SemanticSearchBackend(SearchBackend):
     async def create(
         cls,
         base_path: str,
-        embedding_config: Optional[EmbeddingConfig] = None,
-        qdrant_config: Optional[QdrantConfig] = None,
+        embedding_config: EmbeddingConfig | None = None,
+        qdrant_config: QdrantConfig | None = None,
     ) -> "SemanticSearchBackend":
         """Create and initialize a semantic search backend.
 
@@ -146,7 +145,7 @@ class SemanticSearchBackend(SearchBackend):
                 filter_conditions=filter_conditions if filter_conditions else None,
             )
         except Exception as e:
-            logger.error(f"Vector search failed: {e}")
+            logger.error("Vector search failed: %s", e)
             return []
 
         # Convert to SearchResult
@@ -223,13 +222,13 @@ class SemanticSearchBackend(SearchBackend):
         # Batch upsert to Qdrant
         if concepts:
             await self._vectors.upsert_batch(concepts)
-            logger.debug(f"Indexed {len(concepts)} concepts from {file_path}")
+            logger.debug("Indexed %s concepts from %s", len(concepts), file_path)
 
     async def index_directory(
         self,
-        directory: Optional[str] = None,
-        patterns: Optional[list[str]] = None,
-        exclude: Optional[list[str]] = None,
+        directory: str | None = None,
+        patterns: list[str] | None = None,
+        exclude: list[str] | None = None,
     ) -> int:
         """Index all files in a directory.
 
@@ -269,10 +268,10 @@ class SemanticSearchBackend(SearchBackend):
                     indexed_count += 1
 
                 except (OSError, UnicodeDecodeError) as e:
-                    logger.debug(f"Skipping file {file_path}: {e}")
+                    logger.debug("Skipping file %s: %s", file_path, e)
                     continue
 
-        logger.info(f"Indexed {indexed_count} files for semantic search")
+        logger.info("Indexed %s files for semantic search", indexed_count)
         return indexed_count
 
     def supports_incremental(self) -> bool:

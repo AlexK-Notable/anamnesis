@@ -5,15 +5,12 @@ Tests for the lightweight error classifier module:
 - Error categorization by exception type
 - Message-pattern fallback classification
 - Retryability determination
-- Default classifier singleton
 """
 
 from anamnesis.utils import (
     ErrorCategory,
     ErrorClassification,
-    ErrorClassifier,
     classify_error,
-    get_default_classifier,
     is_error_retryable,
 )
 
@@ -49,61 +46,61 @@ class TestErrorClassification:
             pass
 
 
-class TestErrorClassifier:
-    """Tests for type-based classification."""
+class TestTypeBasedClassification:
+    """Tests for type-based classification via classify_error()."""
 
     def test_connection_error_transient(self):
-        c = ErrorClassifier().classify(ConnectionError("refused"))
+        c = classify_error(ConnectionError("refused"))
         assert c.category == ErrorCategory.TRANSIENT
         assert c.is_retryable is True
 
     def test_timeout_error_transient(self):
-        c = ErrorClassifier().classify(TimeoutError("timed out"))
+        c = classify_error(TimeoutError("timed out"))
         assert c.category == ErrorCategory.TRANSIENT
         assert c.is_retryable is True
 
     def test_broken_pipe_transient(self):
-        c = ErrorClassifier().classify(BrokenPipeError())
+        c = classify_error(BrokenPipeError())
         assert c.category == ErrorCategory.TRANSIENT
         assert c.is_retryable is True
 
     def test_permission_error_transient(self):
-        c = ErrorClassifier().classify(PermissionError("access denied"))
+        c = classify_error(PermissionError("access denied"))
         assert c.category == ErrorCategory.TRANSIENT
         assert c.is_retryable is True
 
     def test_file_not_found_permanent(self):
-        c = ErrorClassifier().classify(FileNotFoundError("missing"))
+        c = classify_error(FileNotFoundError("missing"))
         assert c.category == ErrorCategory.PERMANENT
         assert c.is_retryable is False
 
     def test_not_a_directory_permanent(self):
-        c = ErrorClassifier().classify(NotADirectoryError())
+        c = classify_error(NotADirectoryError())
         assert c.category == ErrorCategory.PERMANENT
         assert c.is_retryable is False
 
     def test_value_error_client(self):
-        c = ErrorClassifier().classify(ValueError("bad"))
+        c = classify_error(ValueError("bad"))
         assert c.category == ErrorCategory.CLIENT_ERROR
         assert c.is_retryable is False
 
     def test_type_error_client(self):
-        c = ErrorClassifier().classify(TypeError("wrong"))
+        c = classify_error(TypeError("wrong"))
         assert c.category == ErrorCategory.CLIENT_ERROR
         assert c.is_retryable is False
 
     def test_key_error_client(self):
-        c = ErrorClassifier().classify(KeyError("missing"))
+        c = classify_error(KeyError("missing"))
         assert c.category == ErrorCategory.CLIENT_ERROR
         assert c.is_retryable is False
 
     def test_memory_error_system(self):
-        c = ErrorClassifier().classify(MemoryError("oom"))
+        c = classify_error(MemoryError("oom"))
         assert c.category == ErrorCategory.SYSTEM_ERROR
         assert c.is_retryable is False
 
     def test_io_error_system_retryable(self):
-        c = ErrorClassifier().classify(IOError("disk full"))
+        c = classify_error(IOError("disk full"))
         assert c.category == ErrorCategory.SYSTEM_ERROR
         assert c.is_retryable is True
 
@@ -111,7 +108,7 @@ class TestErrorClassifier:
         class CustomError(Exception):
             pass
 
-        c = ErrorClassifier().classify(CustomError("custom"))
+        c = classify_error(CustomError("custom"))
         assert c.category == ErrorCategory.UNKNOWN
         assert c.is_retryable is False
 
@@ -150,19 +147,3 @@ class TestConvenienceFunctions:
     def test_is_error_retryable(self):
         assert is_error_retryable(ConnectionError("test")) is True
         assert is_error_retryable(ValueError("test")) is False
-
-
-class TestDefaultClassifier:
-    """Tests for the global singleton classifier."""
-
-    def test_get_default_classifier(self):
-        clf = get_default_classifier()
-        assert isinstance(clf, ErrorClassifier)
-
-    def test_singleton(self):
-        assert get_default_classifier() is get_default_classifier()
-
-    def test_is_retryable_method(self):
-        clf = ErrorClassifier()
-        assert clf.is_retryable(ConnectionError("test")) is True
-        assert clf.is_retryable(ValueError("test")) is False

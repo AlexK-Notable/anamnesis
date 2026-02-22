@@ -12,8 +12,8 @@ uv sync --all-extras
 python -m anamnesis.mcp_server
 # or: anamnesis server
 
-# Run tests (use -n 6 per project convention, NOT -n auto)
-python -m pytest -n 6 -x -q tests/ --ignore=tests/test_lsp_pyright.py
+# Run tests (use -n 4 per project convention, NEVER -n auto)
+python -m pytest -n 4 -x -q tests/ --ignore=tests/test_lsp_pyright.py
 
 # Synergy tests only
 python -m pytest tests/test_phase5_synergies.py -v
@@ -172,13 +172,13 @@ Three files under `lsp_protocol_handler/` (`lsp_types.py`, `lsp_requests.py`, `s
 
 ### pytest-xdist Parallelism
 
-Use `-n 6` (user preference), not `-n auto`. Note: `pytest-xdist` is not in `pyproject.toml` -- install manually if needed.
+Use `-n 4` (hard limit), NEVER `-n auto`. Note: `pytest-xdist` is not in `pyproject.toml` -- install manually if needed.
 
 ### LSP Tests
 
 `tests/test_lsp_pyright.py` requires a running Pyright language server. Ignore it in normal test runs:
 ```bash
-python -m pytest -n 6 -x -q tests/ --ignore=tests/test_lsp_pyright.py
+python -m pytest -n 4 -x -q tests/ --ignore=tests/test_lsp_pyright.py
 ```
 
 ### Path Sanitization in Error Responses
@@ -189,7 +189,7 @@ The `_with_error_handling` decorator strips absolute filesystem paths from error
 
 ```bash
 # Full suite
-python -m pytest -n 6 -x -q tests/ --ignore=tests/test_lsp_pyright.py
+python -m pytest -n 4 -x -q tests/ --ignore=tests/test_lsp_pyright.py
 
 # Synergy features
 python -m pytest tests/test_phase5_synergies.py -v
@@ -201,7 +201,7 @@ python -m pytest tests/test_phase5_synergies.py::TestClassName -v
 python -m pytest tests/test_memory_and_metacognition.py::TestToolRegistration::test_total_tool_count -v
 
 # With coverage
-python -m pytest -n 6 --cov=anamnesis --cov-report=term-missing tests/ --ignore=tests/test_lsp_pyright.py
+python -m pytest -n 4 --cov=anamnesis --cov-report=term-missing tests/ --ignore=tests/test_lsp_pyright.py
 ```
 
 Test markers:
@@ -247,17 +247,17 @@ All tools return a standardized envelope:
 
 Build responses with `_success_response(data, **metadata)` and `_failure_response(message)`.
 
-## Current State (2026-02-08)
+## Current State (2026-02-22)
 
 - Version: 0.1.0
 - 29 MCP tools registered (consolidated from 41 → 37 → 28, +1 go_to_definition)
-- 2191 tests passing
+- 2145 tests passing (+ 2 xpassed MCP protocol tests)
 - All synergy features (S1-S5) complete
+- Persistent backends wired -- sessions, decisions, insights survive restarts
 - Standardized response envelope across all tools
+- Service layer raises exceptions (not hand-crafted dicts); `_with_error_handling` catches at tool layer
 - Literal type constraints on all dispatch parameters (FastMCP generates JSON schema enums)
 - Parameter naming normalized (name_path, relative_path, name)
-- Layer violations fixed (tool layer only calls services)
-- Backward-compat wrappers removed; all tests use canonical function names
-- Dead code removed (EmbeddingEngine._build_index, unused fields)
-- Flaky test patterns fixed (freezegun for cache timing, select timeout for MCP protocol)
-- Comprehensive code review remediation (Phases 1-4 complete)
+- No mock theatre or dead code modules (ChangeAnalyzer, LineRange/types/ deleted)
+- Optional[X] normalized to X | None; f-string logging converted to lazy-%
+- enum_value() adopted; enum imports use canonical extraction/types.py

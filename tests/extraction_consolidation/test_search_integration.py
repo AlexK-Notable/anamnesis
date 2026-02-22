@@ -783,12 +783,12 @@ class TestSemanticSearchWithQdrant:
             limit=20,
         ))
 
-        if len(results) >= 2:
-            scores = [r.score for r in results]
-            for i in range(len(scores) - 1):
-                assert scores[i] >= scores[i + 1], (
-                    f"Results not sorted by score: {scores}"
-                )
+        assert len(results) >= 2, "Expected at least 2 results for sort order check"
+        scores = [r.score for r in results]
+        for i in range(len(scores) - 1):
+            assert scores[i] >= scores[i + 1], (
+                f"Results not sorted by score: {scores}"
+            )
 
     # ------------------------------------------------------------------
     # 7. High similarity threshold filters results

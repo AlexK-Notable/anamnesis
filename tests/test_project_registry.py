@@ -387,39 +387,39 @@ class TestMCPProjectTools:
     @pytest.fixture(autouse=True)
     def reset_server_state(self):
         """Reset server global state between tests."""
-        import anamnesis.mcp_server.server as server_module
+        import anamnesis.mcp_server._shared as shared_module
 
         # Disable disk persistence for the global registry during tests
-        orig_persist = server_module._registry._persist_path
-        server_module._registry._persist_path = None
-        server_module._registry.reset()
+        orig_persist = shared_module._registry._persist_path
+        shared_module._registry._persist_path = None
+        shared_module._registry.reset()
         yield
-        server_module._registry.reset()
-        server_module._registry._persist_path = orig_persist
+        shared_module._registry.reset()
+        shared_module._registry._persist_path = orig_persist
 
     def test_activate_project_via_dedicated_tool(self, project_a):
-        from anamnesis.mcp_server.server import _manage_project_impl
+        from anamnesis.mcp_server.tools.project import _manage_project_impl
 
         result = _manage_project_impl(action="activate", path=project_a)
         assert result["success"] is True
         assert result["data"]["activated"]["name"] == "project_a"
 
     def test_activate_project_invalid_path(self):
-        from anamnesis.mcp_server.server import _manage_project_impl
+        from anamnesis.mcp_server.tools.project import _manage_project_impl
 
         result = _manage_project_impl(action="activate", path="/nonexistent/path")
         assert result["success"] is False
         assert "error" in result
 
     def test_get_current_config_empty(self):
-        from anamnesis.mcp_server.server import _manage_project_impl
+        from anamnesis.mcp_server.tools.project import _manage_project_impl
 
         result = _manage_project_impl(action="status")
         assert result["success"] is True
         assert result["data"]["registry"]["project_count"] == 0
 
     def test_get_current_config_with_projects(self, project_a, project_b):
-        from anamnesis.mcp_server.server import _manage_project_impl
+        from anamnesis.mcp_server.tools.project import _manage_project_impl
 
         _manage_project_impl(action="activate", path=project_a)
         _manage_project_impl(action="activate", path=project_b)
@@ -429,7 +429,7 @@ class TestMCPProjectTools:
         assert result["data"]["registry"]["active_project"] == "project_b"
 
     def test_list_projects_tool(self, project_a, project_b):
-        from anamnesis.mcp_server.server import _manage_project_impl
+        from anamnesis.mcp_server.tools.project import _manage_project_impl
 
         _manage_project_impl(action="activate", path=project_a)
         _manage_project_impl(action="activate", path=project_b)
@@ -440,10 +440,8 @@ class TestMCPProjectTools:
 
     def test_project_switch_affects_services(self, project_a, project_b):
         """Switching active project changes which services are returned."""
-        from anamnesis.mcp_server.server import (
-            _manage_project_impl,
-            _get_learning_service,
-        )
+        from anamnesis.mcp_server.tools.project import _manage_project_impl
+        from anamnesis.mcp_server._shared import _get_learning_service
 
         _manage_project_impl(action="activate", path=project_a)
         svc_a = _get_learning_service()
@@ -455,7 +453,7 @@ class TestMCPProjectTools:
 
     def test_set_current_path_backward_compat(self, project_a):
         """_set_current_path still works as before."""
-        from anamnesis.mcp_server.server import (
+        from anamnesis.mcp_server._shared import (
             _get_current_path,
             _set_current_path,
         )
@@ -468,7 +466,7 @@ class TestMCPToolRegistration:
     """Tests that project tools are registered."""
 
     def test_project_tools_registered(self):
-        from anamnesis.mcp_server.server import mcp
+        from anamnesis.mcp_server._shared import mcp
 
         tools = mcp._tool_manager._tools
         assert "manage_project" in tools

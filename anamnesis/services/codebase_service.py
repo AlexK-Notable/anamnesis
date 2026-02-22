@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from anamnesis.constants import utcnow
 
@@ -20,11 +20,11 @@ class AnalysisResult:
     """Result of codebase analysis."""
 
     success: bool
-    analysis: Optional[CodebaseAnalysis] = None
-    complexity: Optional[FileComplexity] = None
-    dependency_graph: Optional[DependencyGraph] = None
+    analysis: CodebaseAnalysis | None = None
+    complexity: FileComplexity | None = None
+    dependency_graph: DependencyGraph | None = None
     time_elapsed_ms: int = 0
-    error: Optional[str] = None
+    error: str | None = None
     insights: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -46,7 +46,7 @@ class FileAnalysis:
 
     file_path: str
     language: str
-    complexity: Optional[FileComplexity] = None
+    complexity: FileComplexity | None = None
     concepts: list[dict] = field(default_factory=list)
     patterns: list[dict] = field(default_factory=list)
     imports: list[str] = field(default_factory=list)
@@ -78,8 +78,8 @@ class CodebaseService:
 
     def __init__(
         self,
-        semantic_engine: Optional[SemanticEngine] = None,
-        complexity_analyzer: Optional[ComplexityAnalyzer] = None,
+        semantic_engine: SemanticEngine | None = None,
+        complexity_analyzer: ComplexityAnalyzer | None = None,
     ):
         """Initialize codebase service.
 
@@ -207,7 +207,7 @@ class CodebaseService:
         file_path: str | Path,
         include_complexity: bool = True,
         use_cache: bool = True,
-    ) -> Optional[FileAnalysis]:
+    ) -> FileAnalysis | None:
         """Analyze a single file.
 
         Args:
@@ -279,7 +279,7 @@ class CodebaseService:
 
     def _analyze_codebase_complexity(
         self, path: Path, max_files: int
-    ) -> Optional[FileComplexity]:
+    ) -> FileComplexity | None:
         """Analyze codebase complexity."""
         from anamnesis.analysis.complexity_analyzer import LinesOfCode, MaintainabilityIndex
 
@@ -350,7 +350,7 @@ class CodebaseService:
 
     def _build_dependency_graph(
         self, path: Path, analysis: CodebaseAnalysis
-    ) -> Optional[DependencyGraph]:
+    ) -> DependencyGraph | None:
         """Build dependency graph from analysis."""
         graph = DependencyGraph()
 
@@ -456,7 +456,7 @@ class CodebaseService:
 
         return health
 
-    def clear_cache(self, path: Optional[str] = None) -> None:
+    def clear_cache(self, path: str | None = None) -> None:
         """Clear analysis cache.
 
         Args:

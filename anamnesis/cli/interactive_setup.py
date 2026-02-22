@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import click
 
@@ -15,7 +15,7 @@ class InteractiveSetup:
     def __init__(self):
         """Initialize interactive setup."""
         self.config: dict[str, Any] = {}
-        self.project_path: Optional[Path] = None
+        self.project_path: Path | None = None
 
     def run(self) -> None:
         """Run the interactive setup wizard."""

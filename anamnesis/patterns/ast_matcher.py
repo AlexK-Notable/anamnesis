@@ -8,7 +8,7 @@ language-aware pattern matching.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterator, Optional
+from typing import TYPE_CHECKING, Iterator
 
 from loguru import logger
 
@@ -257,7 +257,7 @@ class ASTPatternMatcher(PatternMatcher):
         """
         self._parsers: dict[str, "Parser"] = {}
         self._languages: dict[str, "Language"] = {}
-        self._available: Optional[bool] = None
+        self._available: bool | None = None
 
     def _check_availability(self) -> bool:
         """Check if tree-sitter is available.
@@ -309,14 +309,14 @@ class ASTPatternMatcher(PatternMatcher):
 
             self._parsers[language] = parser
             self._languages[language] = lang
-            logger.debug(f"Initialized tree-sitter parser for {language}")
+            logger.debug("Initialized tree-sitter parser for %s", language)
             return True
 
         except Exception as e:
-            logger.warning(f"Failed to initialize tree-sitter for {language}: {e}")
+            logger.warning("Failed to initialize tree-sitter for %s: %s", language, e)
             return False
 
-    def _get_language_for_file(self, file_path: str) -> Optional[str]:
+    def _get_language_for_file(self, file_path: str) -> str | None:
         """Detect language from file path.
 
         Args:
@@ -467,7 +467,7 @@ class ASTPatternMatcher(PatternMatcher):
                         )
 
         except Exception as e:
-            logger.warning(f"AST query failed for {file_path}: {e}")
+            logger.warning("AST query failed for %s: %s", file_path, e)
 
     def match_custom_query(
         self,

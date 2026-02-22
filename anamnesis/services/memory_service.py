@@ -14,7 +14,6 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from anamnesis.utils.logger import logger
 
@@ -25,8 +24,8 @@ class MemoryInfo:
 
     name: str
     content: str
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
+    created_at: datetime | None
+    updated_at: datetime | None
     size_bytes: int
 
     def to_dict(self) -> dict:
@@ -45,8 +44,8 @@ class MemoryListEntry:
     """Summary entry for memory listing (without full content)."""
 
     name: str
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
+    created_at: datetime | None
+    updated_at: datetime | None
     size_bytes: int
 
     def to_dict(self) -> dict:
@@ -89,7 +88,7 @@ class MemoryService:
         """
         self._project_path = Path(project_path).resolve()
         self._memories_dir = self._project_path / self.MEMORIES_DIR
-        self._index: Optional[MemoryIndex] = None
+        self._index: MemoryIndex | None = None
 
     def _get_index(self) -> MemoryIndex:
         """Get or create the memory index, indexing existing memories."""
@@ -195,7 +194,7 @@ class MemoryService:
         stat = path.stat()
         now = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
 
-        logger.info(f"Memory written: {clean_name} ({stat.st_size} bytes)")
+        logger.info("Memory written: %s (%s bytes)", clean_name, stat.st_size)
 
         # Update search index
         if self._index is not None:
@@ -209,7 +208,7 @@ class MemoryService:
             size_bytes=stat.st_size,
         )
 
-    def read_memory(self, name: str) -> Optional[MemoryInfo]:
+    def read_memory(self, name: str) -> MemoryInfo | None:
         """Read a memory file.
 
         Args:
@@ -286,7 +285,7 @@ class MemoryService:
         # Update search index
         if self._index is not None:
             self._index.remove(clean_name)
-        logger.info(f"Memory deleted: {clean_name}")
+        logger.info("Memory deleted: %s", clean_name)
         return True
 
     def edit_memory(
@@ -294,7 +293,7 @@ class MemoryService:
         name: str,
         old_text: str,
         new_text: str,
-    ) -> Optional[MemoryInfo]:
+    ) -> MemoryInfo | None:
         """Edit a memory by replacing text.
 
         Args:
@@ -336,7 +335,7 @@ class MemoryService:
             self._index.index(clean_name, new_content)
 
         stat = path.stat()
-        logger.info(f"Memory edited: {clean_name}")
+        logger.info("Memory edited: %s", clean_name)
 
         return MemoryInfo(
             name=clean_name,

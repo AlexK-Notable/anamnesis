@@ -73,7 +73,7 @@ class DetectedPattern:
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         return {
-            "pattern_type": str(self.pattern_type.value if isinstance(self.pattern_type, PatternType) else self.pattern_type),
+            "pattern_type": enum_value(self.pattern_type),
             "description": self.description,
             "confidence": self.confidence,
             "file_path": self.file_path,
@@ -126,7 +126,7 @@ class PatternRecommendation:
     def to_dict(self) -> dict[str, Any]:
         """Serialize to dictionary."""
         d: dict[str, Any] = {
-            "pattern_type": str(self.pattern_type.value if isinstance(self.pattern_type, PatternType) else self.pattern_type),
+            "pattern_type": enum_value(self.pattern_type),
             "description": self.description,
             "confidence": self.confidence,
             "reasoning": self.reasoning,
@@ -151,7 +151,7 @@ def _pattern_type_key(pattern: Any) -> str:
     # DetectedPattern path
     pt = getattr(pattern, "pattern_type", None)
     if pt is not None:
-        return str(pt.value if isinstance(pt, PatternType) else pt)
+        return enum_value(pt)
 
     # UnifiedPattern path
     kind = getattr(pattern, "kind", None)

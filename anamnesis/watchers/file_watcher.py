@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from anamnesis.constants import utcnow
 from anamnesis.utils.language_registry import EXTENSION_TO_LANGUAGE
@@ -29,10 +29,10 @@ class FileChange:
 
     type: str  # 'add', 'change', 'unlink', 'addDir', 'unlinkDir'
     path: str
-    stats: Optional[dict[str, Any]] = None
-    content: Optional[str] = None
-    hash: Optional[str] = None
-    language: Optional[str] = None
+    stats: dict[str, Any] | None = None
+    content: str | None = None
+    hash: str | None = None
+    language: str | None = None
     timestamp: datetime = field(default_factory=utcnow)
 
     def to_dict(self) -> dict[str, Any]:
@@ -152,8 +152,8 @@ class FileWatcher:
     def __init__(
         self,
         path: str,
-        patterns: Optional[list[str]] = None,
-        ignored: Optional[list[str]] = None,
+        patterns: list[str] | None = None,
+        ignored: list[str] | None = None,
         debounce_ms: int = 500,
         include_content: bool = True,
         recursive: bool = True,
@@ -177,8 +177,8 @@ class FileWatcher:
             recursive=recursive,
         )
 
-        self._observer: Optional[Observer] = None
-        self._event_handler: Optional[AnamnesisEventHandler] = None
+        self._observer: Observer | None = None
+        self._event_handler: AnamnesisEventHandler | None = None
         self._debounce_timers: dict[str, threading.Timer] = {}
         self._file_hashes: dict[str, str] = {}
         self._lock = threading.Lock()
@@ -186,9 +186,9 @@ class FileWatcher:
         self._stop_event = threading.Event()
 
         # Callbacks
-        self.on_change: Optional[Callable[[dict], None]] = None
-        self.on_error: Optional[Callable[[Exception], None]] = None
-        self.on_ready: Optional[Callable[[], None]] = None
+        self.on_change: Callable[[dict], None] | None = None
+        self.on_error: Callable[[Exception], None] | None = None
+        self.on_ready: Callable[[], None] | None = None
 
     def start(self) -> None:
         """Start watching for file changes."""

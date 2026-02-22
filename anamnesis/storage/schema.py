@@ -13,6 +13,7 @@ from enum import Enum
 from typing import Any
 
 from anamnesis.constants import utcnow
+from anamnesis.utils.helpers import enum_value
 
 
 class ConceptType(str, Enum):
@@ -114,7 +115,7 @@ class SemanticConcept:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         data = asdict(self)
-        data["concept_type"] = str(self.concept_type.value if isinstance(self.concept_type, ConceptType) else self.concept_type)
+        data["concept_type"] = enum_value(self.concept_type)
         data["created_at"] = self.created_at.isoformat()
         data["updated_at"] = self.updated_at.isoformat()
         return data
@@ -176,7 +177,7 @@ class DeveloperPattern:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         data = asdict(self)
-        data["pattern_type"] = str(self.pattern_type.value if isinstance(self.pattern_type, PatternType) else self.pattern_type)
+        data["pattern_type"] = enum_value(self.pattern_type)
         data["created_at"] = self.created_at.isoformat()
         data["updated_at"] = self.updated_at.isoformat()
         return data
@@ -371,7 +372,7 @@ class AIInsight:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         data = asdict(self)
-        data["insight_type"] = str(self.insight_type.value if isinstance(self.insight_type, InsightType) else self.insight_type)
+        data["insight_type"] = enum_value(self.insight_type)
         data["created_at"] = self.created_at.isoformat()
         return data
 

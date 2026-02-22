@@ -316,7 +316,7 @@ class DependencyGraph:
 
     def _process_import(self, source_module: str, imp: ExtractedImport) -> None:
         """Process a single import and add to graph."""
-        from anamnesis.extractors.import_extractor import ImportKind
+        from anamnesis.extraction.types import ImportKind
 
         # Skip if we're excluding stdlib/external
         if imp.is_stdlib and not self.include_stdlib:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
-from typing import Iterator, Optional
+from typing import Iterator
 
 from anamnesis.utils.language_registry import (
     detect_language_from_extension,
@@ -27,7 +27,7 @@ class RegexPattern:
     pattern: str
     flags: int = 0
     description: str = ""
-    language: Optional[str] = None  # None means language-agnostic
+    language: str | None = None  # None means language-agnostic
 
 
 class RegexPatternMatcher(PatternMatcher):
@@ -192,7 +192,7 @@ class RegexPatternMatcher(PatternMatcher):
         ],
     }
 
-    def __init__(self, patterns: Optional[list[RegexPattern]] = None):
+    def __init__(self, patterns: list[RegexPattern] | None = None):
         """Initialize with custom patterns.
 
         Args:
@@ -208,8 +208,8 @@ class RegexPatternMatcher(PatternMatcher):
     @classmethod
     def with_builtins(
         cls,
-        languages: Optional[list[str]] = None,
-        additional: Optional[list[RegexPattern]] = None,
+        languages: list[str] | None = None,
+        additional: list[RegexPattern] | None = None,
     ) -> "RegexPatternMatcher":
         """Create matcher with builtin patterns.
 
@@ -246,7 +246,7 @@ class RegexPatternMatcher(PatternMatcher):
         self._patterns.append(pattern)
         self._compiled[pattern.name] = re.compile(pattern.pattern, pattern.flags)
 
-    def _get_language_for_file(self, file_path: str) -> Optional[str]:
+    def _get_language_for_file(self, file_path: str) -> str | None:
         """Detect language from file extension.
 
         Args:
@@ -426,7 +426,7 @@ class RegexPatternMatcher(PatternMatcher):
         try:
             compiled = re.compile(pattern, flags)
         except re.error as e:
-            logger.warning(f"Invalid regex pattern '{pattern}': {e}")
+            logger.warning("Invalid regex pattern '%s': %s", pattern, e)
             return
 
         max_matches = 10_000

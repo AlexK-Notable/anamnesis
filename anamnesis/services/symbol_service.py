@@ -9,7 +9,7 @@ lifecycle management (one instance per project, lazily initialized).
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from anamnesis.utils.logger import logger
 
@@ -90,7 +90,7 @@ class SymbolService:
     def find(
         self,
         name_path_pattern: str,
-        relative_path: Optional[str] = None,
+        relative_path: str | None = None,
         depth: int = 0,
         include_body: bool = False,
         include_info: bool = False,
@@ -302,7 +302,7 @@ class SymbolService:
         self,
         relative_path: str,
         symbol_kind: str,
-        context_symbol: Optional[str] = None,
+        context_symbol: str | None = None,
         max_examples: int = 3,
     ) -> dict:
         """Suggest a code pattern based on sibling symbols in the same file/class.
@@ -425,9 +425,15 @@ class SymbolService:
         classes = overview.get("Class", [])
         for cls in classes:
             if cls.get("name") == class_name:
-                # Methods are in children
-                return cls.get("children", {}).get("Method", []) + \
-                       cls.get("children", {}).get("Function", [])
+                children = cls.get("children", [])
+                if isinstance(children, list):
+                    # Flat list format from get_overview (tree-sitter / LSP)
+                    return [
+                        c for c in children
+                        if c.get("kind") in ("Method", "Function")
+                    ]
+                # Legacy dict-grouped format
+                return children.get("Method", []) + children.get("Function", [])
         return []
 
     def _detect_dominant_convention(self, names: list[str]) -> str:
@@ -540,7 +546,7 @@ class SymbolService:
         lang = detect_language_from_extension(ext)
         return lang if lang != "unknown" else "python"
 
-    def _read_source(self, relative_path: str) -> Optional[str]:
+    def _read_source(self, relative_path: str) -> str | None:
         """Read source code from a file relative to project root."""
         from pathlib import Path
 
@@ -553,7 +559,7 @@ class SymbolService:
     def analyze_file_complexity(
         self,
         relative_path: str,
-        source: Optional[str] = None,
+        source: str | None = None,
     ) -> dict:
         """Analyze complexity metrics for all symbols in a file.
 
@@ -571,10 +577,7 @@ class SymbolService:
         if source is None:
             source = self._read_source(relative_path)
             if source is None:
-                return {
-                    "success": False,
-                    "error": f"Cannot read file: {relative_path}",
-                }
+                raise FileNotFoundError(f"Cannot read file: {relative_path}")
 
         from anamnesis.analysis.complexity_analyzer import (
             ComplexityAnalyzer,
@@ -653,7 +656,7 @@ class SymbolService:
     def get_complexity_hotspots(
         self,
         relative_path: str,
-        source: Optional[str] = None,
+        source: str | None = None,
         min_level: str = "high",
     ) -> dict:
         """Find high-complexity symbols that are candidates for refactoring.
@@ -682,8 +685,6 @@ class SymbolService:
         }.get(min_level.lower(), 2)
 
         file_result = self.analyze_file_complexity(relative_path, source=source)
-        if not file_result.get("success"):
-            return file_result
 
         hotspots = []
         for func in file_result.get("functions", []):
@@ -717,7 +718,7 @@ class SymbolService:
     def suggest_refactorings(
         self,
         relative_path: str,
-        source: Optional[str] = None,
+        source: str | None = None,
         max_suggestions: int = 10,
     ) -> dict:
         """Suggest refactorings by combining complexity, convention, and pattern data.
@@ -735,8 +736,6 @@ class SymbolService:
         """
         # Get complexity data (S2)
         file_analysis = self.analyze_file_complexity(relative_path, source=source)
-        if not file_analysis.get("success"):
-            return file_analysis
 
         functions = file_analysis.get("functions", [])
         suggestions: list[dict] = []
@@ -835,7 +834,7 @@ class SymbolService:
         self,
         name_path: str,
         relative_path: str,
-        source: Optional[str] = None,
+        source: str | None = None,
     ) -> dict:
         """Investigate a single symbol with combined synergy data.
 
@@ -858,7 +857,7 @@ class SymbolService:
         if source is None:
             source = self._read_source(relative_path)
             if source is None:
-                return {"success": False, "error": f"Cannot read file: {relative_path}"}
+                raise FileNotFoundError(f"Cannot read file: {relative_path}")
 
         from anamnesis.analysis.complexity_analyzer import ComplexityAnalyzer
         from anamnesis.extraction.backends import get_shared_tree_sitter
@@ -879,10 +878,9 @@ class SymbolService:
                 break
 
         if target is None:
-            return {
-                "success": False,
-                "error": f"Symbol '{name_path}' not found in {relative_path}",
-            }
+            raise ValueError(
+                f"Symbol '{name_path}' not found in {relative_path}"
+            )
 
         # Complexity analysis
         lines = source.split("\n")

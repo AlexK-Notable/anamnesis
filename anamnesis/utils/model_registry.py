@@ -46,7 +46,7 @@ def get_shared_sentence_transformer(
 
         from sentence_transformers import SentenceTransformer
 
-        logger.info(f"Loading shared SentenceTransformer: {model_name} on {device}")
+        logger.info("Loading shared SentenceTransformer: %s on %s", model_name, device)
         model = SentenceTransformer(model_name, device=device)
         _model_cache[key] = model
         return model

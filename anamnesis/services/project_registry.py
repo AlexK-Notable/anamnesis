@@ -16,7 +16,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Union
 
 from anamnesis.constants import utcnow
 from anamnesis.services.memory_service import MemoryService
@@ -45,19 +45,19 @@ class ProjectContext:
     """
 
     path: str
-    activated_at: Optional[datetime] = None
-    _learning_service: Optional["LearningService"] = field(default=None, repr=False)
-    _intelligence_service: Optional["IntelligenceService"] = field(
+    activated_at: datetime | None = None
+    _learning_service: LearningService | None = field(default=None, repr=False)
+    _intelligence_service: IntelligenceService | None = field(
         default=None, repr=False
     )
-    _codebase_service: Optional["CodebaseService"] = field(default=None, repr=False)
-    _session_manager: Optional["SessionManager"] = field(default=None, repr=False)
-    _memory_service: Optional["MemoryService"] = field(default=None, repr=False)
-    _search_service: Optional["SearchService"] = field(default=None, repr=False)
+    _codebase_service: CodebaseService | None = field(default=None, repr=False)
+    _session_manager: SessionManager | None = field(default=None, repr=False)
+    _memory_service: MemoryService | None = field(default=None, repr=False)
+    _search_service: SearchService | None = field(default=None, repr=False)
     _semantic_initialized: bool = field(default=False, repr=False)
-    _lsp_manager: Optional["LspManager"] = field(default=None, repr=False)
-    _symbol_service: Optional["SymbolService"] = field(default=None, repr=False)
-    _backend: Optional["SyncSQLiteBackend"] = field(default=None, repr=False)
+    _lsp_manager: LspManager | None = field(default=None, repr=False)
+    _symbol_service: SymbolService | None = field(default=None, repr=False)
+    _backend: SyncSQLiteBackend | None = field(default=None, repr=False)
     _init_lock: threading.RLock = field(
         default_factory=threading.RLock, repr=False, compare=False
     )
@@ -332,13 +332,13 @@ class ProjectRegistry:
 
     def __init__(
         self,
-        persist_path: Optional[Union[str, Path]] = _DEFAULT_PERSIST_PATH,
+        persist_path: Union[str, Path] | None = _DEFAULT_PERSIST_PATH,
         allowed_roots: list[str] | None = None,
     ) -> None:
         self._projects: dict[str, ProjectContext] = {}
-        self._active_path: Optional[str] = None
+        self._active_path: str | None = None
         self._lock = threading.Lock()
-        self._persist_path: Optional[Path] = (
+        self._persist_path: Path | None = (
             Path(persist_path) if persist_path is not None else None
         )
         self._allowed_roots: list[str] | None = (
@@ -349,12 +349,12 @@ class ProjectRegistry:
         self._load()
 
     @property
-    def active_path(self) -> Optional[str]:
+    def active_path(self) -> str | None:
         """Get the active project path."""
         return self._active_path
 
     @property
-    def active_project(self) -> Optional[ProjectContext]:
+    def active_project(self) -> ProjectContext | None:
         """Get the active project context, or None if none activated."""
         if self._active_path is not None:
             return self._projects.get(self._active_path)
@@ -495,13 +495,13 @@ class ProjectRegistry:
         with self._lock:
             if resolved not in self._projects:
                 self._projects[resolved] = ProjectContext(path=resolved)
-                logger.info(f"New project registered: {resolved}")
+                logger.info("New project registered: %s", resolved)
 
             ctx = self._projects[resolved]
             ctx.activated_at = utcnow()
             self._active_path = resolved
 
-            logger.info(f"Project activated: {ctx.name} ({resolved})")
+            logger.info("Project activated: %s (%s)", ctx.name, resolved)
             self._save()
             return ctx
 
@@ -525,7 +525,7 @@ class ProjectRegistry:
         cwd = os.getcwd()
         return self.activate(cwd)
 
-    def get_project(self, path: str) -> Optional[ProjectContext]:
+    def get_project(self, path: str) -> ProjectContext | None:
         """Get a specific project context by path.
 
         Args:
@@ -571,7 +571,7 @@ class ProjectRegistry:
             del self._projects[resolved]
             if self._active_path == resolved:
                 self._active_path = None
-            logger.info(f"Project deactivated: {resolved}")
+            logger.info("Project deactivated: %s", resolved)
             self._save()
             return True
 

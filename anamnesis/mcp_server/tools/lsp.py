@@ -18,26 +18,6 @@ from anamnesis.mcp_server._shared import (
 
 
 # =============================================================================
-# LSP Helper Functions
-# =============================================================================
-
-
-def _get_lsp_manager():
-    """Get the LSP manager for the active project."""
-    return _get_active_context().get_lsp_manager()
-
-
-def _get_symbol_retriever():
-    """Get the SymbolRetriever via SymbolService for the active project."""
-    return _get_symbol_service().retriever
-
-
-def _get_code_editor():
-    """Get the CodeEditor via SymbolService for the active project."""
-    return _get_symbol_service().editor
-
-
-# =============================================================================
 # Implementations
 # =============================================================================
 
@@ -84,7 +64,8 @@ def _find_referencing_symbols_impl(
 ) -> dict:
     svc = _get_symbol_service()
     results = svc.find_referencing_symbols(
-        name_path, relative_path,
+        name_path,
+        relative_path,
         include_imports=include_imports,
         include_self=include_self,
     )
@@ -166,7 +147,7 @@ def _manage_lsp_impl(action: str = "status", language: str = "") -> dict:
     action="status": get current LSP server status.
     action="enable": start LSP server(s).
     """
-    mgr = _get_lsp_manager()
+    mgr = _get_active_context().get_lsp_manager()
 
     if action == "status":
         result = mgr.get_status()
@@ -187,8 +168,8 @@ def _manage_lsp_impl(action: str = "status", language: str = "") -> dict:
         results = {}
         for lang in ["python", "go", "rust", "typescript"]:
             results[lang] = mgr.start(lang)
-        started = [l for l, ok in results.items() if ok]
-        failed = [l for l, ok in results.items() if not ok]
+        started = [lang for lang, ok in results.items() if ok]
+        failed = [lang for lang, ok in results.items() if not ok]
         if not started:
             return _failure_response("No LSP servers could be started")
         return _success_response({"started": started, "failed": failed})
@@ -219,27 +200,6 @@ def _match_sibling_style_impl(
     return _success_response(raw)
 
 
-# Raw helpers (undecorated -- called by the merged analyze_code_quality dispatch)
-
-
-def _analyze_file_complexity_helper(relative_path: str) -> dict:
-    """Return per-function complexity metrics (no error wrapping)."""
-    svc = _get_symbol_service()
-    return svc.analyze_file_complexity(relative_path)
-
-
-def _suggest_refactorings_helper(relative_path: str, max_suggestions: int = 10) -> dict:
-    """Return refactoring suggestions (no error wrapping)."""
-    svc = _get_symbol_service()
-    return svc.suggest_refactorings(relative_path, max_suggestions=max_suggestions)
-
-
-def _get_complexity_hotspots_helper(relative_path: str, min_level: str = "high") -> dict:
-    """Return high-complexity hotspots (no error wrapping)."""
-    svc = _get_symbol_service()
-    return svc.get_complexity_hotspots(relative_path, min_level=min_level)
-
-
 @_with_error_handling("investigate_symbol")
 def _investigate_symbol_impl(
     name_path: str,
@@ -251,6 +211,15 @@ def _investigate_symbol_impl(
     if raw.get("success") is False:
         return _failure_response(raw.get("error", "Unknown error"))
     return _success_response(raw)
+
+
+# Raw helper (kept because it's called from two branches of analyze_code_quality)
+
+
+def _analyze_file_complexity_helper(relative_path: str) -> dict:
+    """Return per-function complexity metrics (no error wrapping)."""
+    svc = _get_symbol_service()
+    return svc.analyze_file_complexity(relative_path)
 
 
 def _check_conventions_helper(relative_path: str) -> dict:
@@ -285,7 +254,9 @@ def _check_conventions_helper(relative_path: str) -> dict:
                 elif isinstance(sym, dict) and "name" in sym:
                     names.append(sym["name"])
             symbols_checked += len(names)
-            violations = _check_names_against_convention(names, expected, kind)
+            violations = _check_names_against_convention(
+                names, expected, kind
+            )
             all_violations.extend(violations)
 
     return _success_response(
@@ -310,7 +281,9 @@ def _analyze_code_quality_impl(
 
     detail_level values: quick, standard, deep, conventions, diagnostics.
     """
-    max_suggestions = clamp_integer(max_suggestions, "max_suggestions", 1, 50)
+    max_suggestions = clamp_integer(
+        max_suggestions, "max_suggestions", 1, 50
+    )
 
     def _wrap(raw: dict) -> dict:
         """Normalize service-layer result into standard envelope."""
@@ -319,14 +292,24 @@ def _analyze_code_quality_impl(
         return _success_response(raw)
 
     if detail_level == "quick":
-        return _wrap(_get_complexity_hotspots_helper(relative_path, min_complexity_level))
+        svc = _get_symbol_service()
+        return _wrap(
+            svc.get_complexity_hotspots(
+                relative_path, min_level=min_complexity_level
+            )
+        )
     elif detail_level == "standard":
         return _wrap(_analyze_file_complexity_helper(relative_path))
     elif detail_level == "deep":
         complexity_result = _analyze_file_complexity_helper(relative_path)
         if complexity_result.get("success") is False:
-            return _failure_response(complexity_result.get("error", "Unknown error"))
-        refactoring_result = _suggest_refactorings_helper(relative_path, max_suggestions)
+            return _failure_response(
+                complexity_result.get("error", "Unknown error")
+            )
+        svc = _get_symbol_service()
+        refactoring_result = svc.suggest_refactorings(
+            relative_path, max_suggestions=max_suggestions
+        )
         for key in ("suggestions", "suggestion_count"):
             if key in refactoring_result:
                 complexity_result[key] = refactoring_result[key]
@@ -337,7 +320,11 @@ def _analyze_code_quality_impl(
     elif detail_level == "diagnostics":
         svc = _get_symbol_service()
         diagnostics = svc.get_diagnostics(relative_path)
-        if diagnostics and len(diagnostics) == 1 and "error" in diagnostics[0]:
+        if (
+            diagnostics
+            and len(diagnostics) == 1
+            and "error" in diagnostics[0]
+        ):
             return _failure_response(diagnostics[0]["error"])
         return _success_response(
             {"relative_path": relative_path, "diagnostics": diagnostics},
@@ -387,8 +374,12 @@ def find_symbol(
         List of matching symbols with location, kind, and optional body/info
     """
     return _find_symbol_impl(
-        name_path_pattern, relative_path, depth,
-        include_body, include_info, substring_matching,
+        name_path_pattern,
+        relative_path,
+        depth,
+        include_body,
+        include_info,
+        substring_matching,
     )
 
 
@@ -439,7 +430,8 @@ def find_referencing_symbols(
         List of references with file paths, line numbers, and code snippets
     """
     return _find_referencing_symbols_impl(
-        name_path, relative_path,
+        name_path,
+        relative_path,
         include_imports=include_imports,
         include_self=include_self,
     )
@@ -515,7 +507,9 @@ def insert_near_symbol(
     Returns:
         Success status with the insertion line number
     """
-    return _insert_near_symbol_impl(name_path, relative_path, body, position)
+    return _insert_near_symbol_impl(
+        name_path, relative_path, body, position
+    )
 
 
 @mcp.tool
@@ -541,7 +535,10 @@ def rename_symbol(
 
 
 @mcp.tool
-def manage_lsp(action: Literal["status", "enable"] = "status", language: str = "") -> dict:
+def manage_lsp(
+    action: Literal["status", "enable"] = "status",
+    language: str = "",
+) -> dict:
     """Manage LSP language servers: enable or check status.
 
     Use action="enable" to start LSP server(s) for enhanced code navigation.
@@ -588,14 +585,20 @@ def match_sibling_style(
     Returns:
         Naming convention, common patterns, example signatures, and confidence
     """
-    return _match_sibling_style_impl(relative_path, symbol_kind, context_symbol, max_examples)
+    return _match_sibling_style_impl(
+        relative_path, symbol_kind, context_symbol, max_examples
+    )
 
 
 @mcp.tool
 def analyze_code_quality(
     relative_path: str,
-    detail_level: Literal["quick", "standard", "deep", "conventions", "diagnostics"] = "standard",
-    min_complexity_level: Literal["low", "moderate", "high", "very_high"] = "high",
+    detail_level: Literal[
+        "quick", "standard", "deep", "conventions", "diagnostics"
+    ] = "standard",
+    min_complexity_level: Literal[
+        "low", "moderate", "high", "very_high"
+    ] = "high",
     max_suggestions: int = 10,
 ) -> dict:
     """Analyze code quality with complexity metrics, hotspots, conventions, and refactoring suggestions.

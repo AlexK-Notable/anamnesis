@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from anamnesis.constants import utcnow
 from anamnesis.intelligence.embedding_engine import (
@@ -54,7 +54,7 @@ class CodingApproachPrediction:
     reasoning: str
     suggested_patterns: list[str]
     estimated_complexity: str
-    file_routing: Optional[dict] = None
+    file_routing: dict | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -78,7 +78,7 @@ class DeveloperProfile:
     coding_style: dict[str, Any]
     expertise_areas: list[str]
     recent_focus: list[str]
-    current_work: Optional[dict] = None
+    current_work: dict | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -104,7 +104,7 @@ class AIInsight:
     source_agent: str
     created_at: datetime = field(default_factory=utcnow)
     validation_status: str = "pending"
-    impact_prediction: Optional[dict] = None
+    impact_prediction: dict | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -137,11 +137,11 @@ class IntelligenceService:
 
     def __init__(
         self,
-        semantic_engine: Optional[SemanticEngine] = None,
-        pattern_engine: Optional[PatternEngine] = None,
-        embedding_engine: Optional[EmbeddingEngine] = None,
-        embedding_config: Optional[EmbeddingConfig] = None,
-        backend: Optional["SyncSQLiteBackend"] = None,
+        semantic_engine: SemanticEngine | None = None,
+        pattern_engine: PatternEngine | None = None,
+        embedding_engine: EmbeddingEngine | None = None,
+        embedding_config: EmbeddingConfig | None = None,
+        backend: SyncSQLiteBackend | None = None,
     ):
         """Initialize intelligence service.
 
@@ -180,7 +180,7 @@ class IntelligenceService:
         return self._pattern_engine
 
     @property
-    def backend(self) -> Optional["SyncSQLiteBackend"]:
+    def backend(self) -> SyncSQLiteBackend | None:
         """Get storage backend."""
         return self._backend
 
@@ -279,8 +279,8 @@ class IntelligenceService:
 
     def get_semantic_insights(
         self,
-        query: Optional[str] = None,
-        concept_type: Optional[str] = None,
+        query: str | None = None,
+        concept_type: str | None = None,
         limit: int = 10,
     ) -> tuple[list[SemanticInsight], int]:
         """Get semantic insights about concepts.
@@ -344,11 +344,11 @@ class IntelligenceService:
     def get_pattern_recommendations(
         self,
         problem_description: str,
-        current_file: Optional[str] = None,
-        selected_code: Optional[str] = None,
+        current_file: str | None = None,
+        selected_code: str | None = None,
         include_related_files: bool = False,
         top_k: int = 5,
-    ) -> tuple[list[PatternRecommendation], str, Optional[list[str]]]:
+    ) -> tuple[list[PatternRecommendation], str, list[str] | None]:
         """Get pattern recommendations for a problem.
 
         Args:
@@ -392,9 +392,9 @@ class IntelligenceService:
     def predict_coding_approach(
         self,
         problem_description: str,
-        context: Optional[dict] = None,
+        context: dict | None = None,
         include_file_routing: bool = True,
-        project_path: Optional[str] = None,
+        project_path: str | None = None,
     ) -> CodingApproachPrediction:
         """Predict coding approach for a task.
 
@@ -427,7 +427,7 @@ class IntelligenceService:
 
         return approach
 
-    def _route_to_files(self, problem_description: str, project_path: str) -> Optional[dict]:
+    def _route_to_files(self, problem_description: str, project_path: str) -> dict | None:
         """Route request to relevant files."""
         desc_lower = problem_description.lower()
         target_files = []
@@ -474,7 +474,7 @@ class IntelligenceService:
         self,
         include_recent_activity: bool = False,
         include_work_context: bool = False,
-        project_path: Optional[str] = None,
+        project_path: str | None = None,
     ) -> DeveloperProfile:
         """Get developer profile from learned patterns.
 
@@ -630,8 +630,8 @@ class IntelligenceService:
         content: dict[str, Any],
         confidence: float,
         source_agent: str,
-        impact_prediction: Optional[dict] = None,
-        session_update: Optional[dict] = None,
+        impact_prediction: dict | None = None,
+        session_update: dict | None = None,
     ) -> tuple[bool, str, str]:
         """Contribute an AI insight.
 
@@ -711,7 +711,7 @@ class IntelligenceService:
 
     def get_project_blueprint(
         self,
-        path: Optional[str] = None,
+        path: str | None = None,
         include_feature_map: bool = True,
     ) -> dict:
         """Get project blueprint.
@@ -773,7 +773,7 @@ class IntelligenceService:
             ),
         }
 
-    def get_insights(self, insight_type: Optional[str] = None) -> list[AIInsight]:
+    def get_insights(self, insight_type: str | None = None) -> list[AIInsight]:
         """Get contributed insights.
 
         Returns insights from memory cache. Call load_from_backend() first
@@ -829,8 +829,8 @@ class IntelligenceService:
         self,
         query: str,
         limit: int = 10,
-        concept_type: Optional[str] = None,
-        file_path_filter: Optional[str] = None,
+        concept_type: str | None = None,
+        file_path_filter: str | None = None,
     ) -> list[SemanticSearchResult]:
         """Search for semantically similar concepts using embeddings.
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Callable
 
 from anamnesis.constants import DEFAULT_IGNORE_DIRS, MAX_FILE_SIZE, utcnow
 from anamnesis.utils.helpers import enum_value
@@ -25,7 +25,7 @@ class LearningOptions:
     """Options for learning from codebase."""
 
     force: bool = False
-    progress_callback: Optional[Callable[[int, int, str], None]] = None
+    progress_callback: Callable[[int, int, str], None] | None = None
     max_files: int = 1000
 
 
@@ -39,8 +39,8 @@ class LearningResult:
     features_learned: int = 0
     insights: list[str] = field(default_factory=list)
     time_elapsed_ms: int = 0
-    blueprint: Optional[dict] = None
-    error: Optional[str] = None
+    blueprint: dict | None = None
+    error: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary."""
@@ -71,9 +71,9 @@ class LearningService:
 
     def __init__(
         self,
-        semantic_engine: Optional[SemanticEngine] = None,
-        pattern_engine: Optional[PatternEngine] = None,
-        backend: Optional["SyncSQLiteBackend"] = None,
+        semantic_engine: SemanticEngine | None = None,
+        pattern_engine: PatternEngine | None = None,
+        backend: SyncSQLiteBackend | None = None,
         use_unified_pipeline: bool = True,
     ):
         """Initialize learning service.
@@ -96,7 +96,7 @@ class LearningService:
         self._orchestrator = None  # Lazy init to avoid import cost when unused
 
     @property
-    def backend(self) -> Optional["SyncSQLiteBackend"]:
+    def backend(self) -> SyncSQLiteBackend | None:
         """Get the storage backend."""
         return self._backend
 
@@ -137,7 +137,7 @@ class LearningService:
     def learn_from_codebase(
         self,
         path: str | Path,
-        options: Optional[LearningOptions] = None,
+        options: LearningOptions | None = None,
     ) -> LearningResult:
         """Learn from a codebase.
 
@@ -300,7 +300,7 @@ class LearningService:
                 error=f"Learning failed: {e}",
             )
 
-    def _check_existing_intelligence(self, path: str) -> Optional[dict]:
+    def _check_existing_intelligence(self, path: str) -> dict | None:
         """Check for existing learned intelligence.
         
         Checks both in-memory cache and backend storage.
@@ -584,11 +584,11 @@ class LearningService:
         """Calculate elapsed milliseconds."""
         return int((utcnow() - start_time).total_seconds() * 1000)
 
-    def get_learned_data(self, path: str) -> Optional[dict]:
+    def get_learned_data(self, path: str) -> dict | None:
         """Get learned data for a path."""
         return self._learned_data.get(str(Path(path).resolve()))
 
-    def clear_learned_data(self, path: Optional[str] = None) -> None:
+    def clear_learned_data(self, path: str | None = None) -> None:
         """Clear learned data."""
         if path:
             resolved = str(Path(path).resolve())

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import enum
 import threading
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from freezegun import freeze_time
 
@@ -384,9 +384,9 @@ class TestAnalyzeCodeQualityDispatch:
     """Tests for analyze_code_quality dispatch routing by detail_level.
 
     Dispatch:
-      quick   → _get_complexity_hotspots_helper
+      quick   → svc.get_complexity_hotspots
       standard → _analyze_file_complexity_helper
-      deep    → _analyze_file_complexity_helper + _suggest_refactorings_helper
+      deep    → _analyze_file_complexity_helper + svc.suggest_refactorings
     """
 
     def _call_impl(self, detail_level: str, relative_path: str = "test.py"):
@@ -397,11 +397,13 @@ class TestAnalyzeCodeQualityDispatch:
             detail_level=detail_level,
         )
 
-    @patch("anamnesis.mcp_server.tools.lsp._get_complexity_hotspots_helper")
-    def test_analyze_code_quality_quick_dispatches_to_hotspots(self, mock_helper):
-        mock_helper.return_value = {"success": True, "hotspots": []}
+    @patch("anamnesis.mcp_server.tools.lsp._get_symbol_service")
+    def test_analyze_code_quality_quick_dispatches_to_hotspots(self, mock_svc):
+        mock_svc.return_value.get_complexity_hotspots.return_value = {
+            "success": True, "hotspots": [],
+        }
         result = self._call_impl("quick")
-        mock_helper.assert_called_once()
+        mock_svc.return_value.get_complexity_hotspots.assert_called_once()
         assert result["success"] is True
 
     @patch("anamnesis.mcp_server.tools.lsp._analyze_file_complexity_helper")
@@ -411,16 +413,18 @@ class TestAnalyzeCodeQualityDispatch:
         mock_complexity.assert_called_once()
         assert result["success"] is True
 
-    @patch("anamnesis.mcp_server.tools.lsp._suggest_refactorings_helper")
+    @patch("anamnesis.mcp_server.tools.lsp._get_symbol_service")
     @patch("anamnesis.mcp_server.tools.lsp._analyze_file_complexity_helper")
     def test_analyze_code_quality_deep_dispatches_both(
-        self, mock_complexity, mock_refactor
+        self, mock_complexity, mock_svc
     ):
         mock_complexity.return_value = {"success": True, "summary": {}}
-        mock_refactor.return_value = {"success": True, "suggestions": []}
+        mock_svc.return_value.suggest_refactorings.return_value = {
+            "success": True, "suggestions": [],
+        }
         result = self._call_impl("deep")
         mock_complexity.assert_called_once()
-        mock_refactor.assert_called_once()
+        mock_svc.return_value.suggest_refactorings.assert_called_once()
         assert result["success"] is True
 
     def test_analyze_code_quality_invalid_detail_level(self):
@@ -438,8 +442,8 @@ class TestManageProjectDispatch:
     """Tests for manage_project dispatch routing by action.
 
     Dispatch:
-      status   → _get_project_config_helper + _list_projects_helper
-      activate → _activate_project_helper(path)
+      status   → _registry.to_dict + _registry.list_projects
+      activate → _registry.activate(path)
     """
 
     def _call_impl(self, action: str, path: str = ""):
@@ -447,31 +451,26 @@ class TestManageProjectDispatch:
 
         return _manage_project_impl(action=action, path=path)
 
-    @patch("anamnesis.mcp_server.tools.project._list_projects_helper")
-    @patch("anamnesis.mcp_server.tools.project._get_project_config_helper")
-    def test_manage_project_status_dispatches_to_config_and_list(self, mock_config, mock_list):
-        mock_config.return_value = {
-            "success": True,
-            "data": {"registry": {"active": "x"}},
-        }
-        mock_list.return_value = {
-            "success": True,
-            "data": [],
-            "metadata": {"total": 0, "active_path": "/x"},
-        }
+    @patch("anamnesis.mcp_server.tools.project._registry")
+    def test_manage_project_status_dispatches_to_config_and_list(self, mock_reg):
+        mock_reg.to_dict.return_value = {"active": "x"}
+        mock_project = MagicMock()
+        mock_project.to_dict.return_value = {"name": "proj"}
+        mock_reg.list_projects.return_value = [mock_project]
+        mock_reg.active_path = "/x"
         result = self._call_impl("status")
-        mock_config.assert_called_once()
-        mock_list.assert_called_once()
+        mock_reg.to_dict.assert_called_once()
+        mock_reg.list_projects.assert_called_once()
         assert result["success"] is True
 
-    @patch("anamnesis.mcp_server.tools.project._activate_project_helper")
-    def test_manage_project_activate_dispatches_with_path(self, mock_helper):
-        mock_helper.return_value = {
-            "success": True,
-            "data": {"activated": {}, "registry": {}},
-        }
+    @patch("anamnesis.mcp_server.tools.project._registry")
+    def test_manage_project_activate_dispatches_with_path(self, mock_reg):
+        mock_ctx = MagicMock()
+        mock_ctx.to_dict.return_value = {"name": "proj"}
+        mock_reg.activate.return_value = mock_ctx
+        mock_reg.to_dict.return_value = {"active": "proj"}
         result = self._call_impl("activate", path="/some/path")
-        mock_helper.assert_called_once_with("/some/path")
+        mock_reg.activate.assert_called_once_with("/some/path")
         assert result["success"] is True
 
     def test_manage_project_activate_without_path_returns_error(self):

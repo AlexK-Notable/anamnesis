@@ -7,7 +7,7 @@ the search_codebase MCP tool with text, pattern, and semantic search.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Protocol
+from typing import Protocol
 
 
 class SearchType(Enum):
@@ -36,10 +36,10 @@ class SearchQuery:
     query: str
     search_type: SearchType
     limit: int = 50
-    language: Optional[str] = None
+    language: str | None = None
 
     # Pattern-specific options
-    pattern_type: Optional[str] = None  # "regex", "ast", or None for both
+    pattern_type: str | None = None  # "regex", "ast", or None for both
 
     # Semantic-specific options
     similarity_threshold: float = 0.5

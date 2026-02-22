@@ -1,6 +1,6 @@
 """Memory and metacognition tools — CRUD for project memories + reflect."""
 
-from typing import Literal, Optional
+from typing import Literal
 
 from anamnesis.utils.security import (
     MAX_CONTENT_LENGTH,
@@ -82,7 +82,7 @@ def _edit_memory_impl(
 
 @_with_error_handling("search_memories")
 def _search_memories_impl(
-    query: Optional[str] = None,
+    query: str | None = None,
     limit: int = 5,
 ) -> dict:
     """Implementation for search_memories tool.
@@ -209,7 +209,7 @@ def edit_memory(
 
 @mcp.tool
 def search_memories(
-    query: Optional[str] = None,
+    query: str | None = None,
     limit: int = 5,
 ) -> dict:
     """Search project memories or list all memories.

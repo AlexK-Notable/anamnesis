@@ -98,42 +98,17 @@ def _classify(error: Exception) -> ErrorClassification:
 
 
 # ---------------------------------------------------------------------------
-# Public API  (unchanged call signatures)
+# Public API
 # ---------------------------------------------------------------------------
-
-
-class ErrorClassifier:
-    """Classifies errors into category + retryability."""
-
-    def classify(
-        self,
-        error: Exception,
-        context: dict[str, Any] | None = None,
-    ) -> ErrorClassification:
-        return _classify(error)
-
-    def is_retryable(self, error: Exception) -> bool:
-        return _classify(error).is_retryable
-
-
-_default_classifier: ErrorClassifier | None = None
-
-
-def get_default_classifier() -> ErrorClassifier:
-    """Get the global default error classifier (lazy singleton)."""
-    global _default_classifier
-    if _default_classifier is None:
-        _default_classifier = ErrorClassifier()
-    return _default_classifier
 
 
 def classify_error(
     error: Exception, context: dict[str, Any] | None = None
 ) -> ErrorClassification:
-    """Classify an error using the default classifier."""
+    """Classify an error into category and retryability."""
     return _classify(error)
 
 
 def is_retryable(error: Exception) -> bool:
-    """Check if an error is retryable using the default classifier."""
+    """Check if an error is retryable."""
     return _classify(error).is_retryable

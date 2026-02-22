@@ -1,6 +1,6 @@
 """Session tools — work session tracking and decision recording."""
 
-from typing import Literal, Optional
+from typing import Literal
 
 from anamnesis.utils.security import (
     MAX_NAME_LENGTH,
@@ -27,8 +27,8 @@ from anamnesis.mcp_server._shared import (
 def _start_session_impl(
     name: str = "",
     feature: str = "",
-    files: Optional[list[str]] = None,
-    tasks: Optional[list[str]] = None,
+    files: list[str] | None = None,
+    tasks: list[str] | None = None,
 ) -> dict:
     """Implementation for start_session tool."""
     if name:
@@ -50,7 +50,7 @@ def _start_session_impl(
 
 @_with_error_handling("end_session")
 def _end_session_impl(
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> dict:
     """Implementation for end_session tool."""
     session_manager = _get_session_manager()
@@ -73,7 +73,7 @@ def _end_session_impl(
 
 @_with_error_handling("get_sessions")
 def _get_sessions_impl(
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
     active_only: bool = False,
     limit: int = 10,
 ) -> dict:
@@ -115,9 +115,9 @@ def _manage_decisions_impl(
     decision: str = "",
     context: str = "",
     rationale: str = "",
-    session_id: Optional[str] = None,
-    related_files: Optional[list[str]] = None,
-    tags: Optional[list[str]] = None,
+    session_id: str | None = None,
+    related_files: list[str] | None = None,
+    tags: list[str] | None = None,
     limit: int = 10,
 ) -> dict:
     """Implementation for manage_decisions tool.
@@ -170,8 +170,8 @@ def _manage_decisions_impl(
 def start_session(
     name: str = "",
     feature: str = "",
-    files: Optional[list[str]] = None,
-    tasks: Optional[list[str]] = None,
+    files: list[str] | None = None,
+    tasks: list[str] | None = None,
 ) -> dict:
     """Start a new work session to track development context.
 
@@ -193,7 +193,7 @@ def start_session(
 
 @mcp.tool
 def end_session(
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
 ) -> dict:
     """End a work session.
 
@@ -211,7 +211,7 @@ def end_session(
 
 @mcp.tool
 def get_sessions(
-    session_id: Optional[str] = None,
+    session_id: str | None = None,
     active_only: bool = False,
     limit: int = 10,
 ) -> dict:
@@ -238,9 +238,9 @@ def manage_decisions(
     decision: str = "",
     context: str = "",
     rationale: str = "",
-    session_id: Optional[str] = None,
-    related_files: Optional[list[str]] = None,
-    tags: Optional[list[str]] = None,
+    session_id: str | None = None,
+    related_files: list[str] | None = None,
+    tags: list[str] | None = None,
     limit: int = 10,
 ) -> dict:
     """Record or list project decisions.
