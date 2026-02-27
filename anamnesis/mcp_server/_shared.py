@@ -536,6 +536,7 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                         log_tool_call(
                             operation_name, kwargs, duration_ms,
                             success=True, project_path=_project_path(),
+                            result=result,
                         )
                         return _apply_toon(result)
                     except Exception as e:
@@ -561,6 +562,7 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                         log_tool_call(
                             operation_name, kwargs, duration_ms,
                             success=True, project_path=_project_path(),
+                            result=result,
                         )
                         return _apply_toon(result)
                     except Exception as e:

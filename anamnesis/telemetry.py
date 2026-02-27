@@ -63,6 +63,7 @@ class ToolUsageLogger:
         success: bool,
         error: str | None = None,
         project: str | None = None,
+        result: object = None,
     ) -> None:
         """Write one tool invocation record to the JSONL file."""
         record = {
@@ -73,6 +74,7 @@ class ToolUsageLogger:
             "duration_ms": round(duration_ms, 2),
             "success": success,
             "error": error,
+            "result": result,
             "project": project,
         }
         try:
@@ -107,6 +109,7 @@ def log_tool_call(
     success: bool,
     error: str | None = None,
     project_path: str | None = None,
+    result: object = None,
 ) -> None:
     """Convenience wrapper: log a tool call if telemetry is enabled."""
     if not _telemetry_enabled():
@@ -114,4 +117,4 @@ def log_tool_call(
     if project_path is None:
         return  # No project active — nowhere to write.
     tl = get_telemetry_logger(Path(project_path))
-    tl.log_call(tool, args, duration_ms, success, error, project_path)
+    tl.log_call(tool, args, duration_ms, success, error, project_path, result)

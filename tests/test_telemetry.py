@@ -97,7 +97,8 @@ class TestTelemetryEnabled:
 class TestToolUsageLogger:
     def test_writes_valid_jsonl(self, tmp_path: Path):
         tl = ToolUsageLogger(tmp_path)
-        tl.log_call("write_memory", {"name": "test"}, 12.5, True, project="/proj")
+        result_data = {"success": True, "data": {"key": "value"}}
+        tl.log_call("write_memory", {"name": "test"}, 12.5, True, project="/proj", result=result_data)
 
         log_file = tmp_path / "tool_usage.jsonl"
         assert log_file.exists()
@@ -109,9 +110,17 @@ class TestToolUsageLogger:
         assert record["duration_ms"] == 12.5
         assert record["success"] is True
         assert record["error"] is None
+        assert record["result"] == {"success": True, "data": {"key": "value"}}
         assert record["project"] == "/proj"
         assert "timestamp" in record
         assert "correlation_id" in record
+
+    def test_result_none_when_omitted(self, tmp_path: Path):
+        tl = ToolUsageLogger(tmp_path)
+        tl.log_call("tool_x", {}, 1.0, True)
+
+        record = json.loads((tmp_path / "tool_usage.jsonl").read_text().strip())
+        assert record["result"] is None
 
     def test_appends_multiple_records(self, tmp_path: Path):
         tl = ToolUsageLogger(tmp_path)
@@ -240,6 +249,7 @@ class TestDecoratorIntegration:
         assert record["success"] is True
         assert record["duration_ms"] >= 0
         assert record["args"] == {"x": 42}
+        assert record["result"] == {"success": True, "data": 42}
 
     def test_sync_failure_logs_telemetry(self, tmp_path: Path):
         project = str(tmp_path)
@@ -267,6 +277,7 @@ class TestDecoratorIntegration:
         assert record["tool"] == "fail_op"
         assert record["success"] is False
         assert "deliberate error" in record["error"]
+        assert record["result"] is None
 
     @pytest.mark.asyncio
     async def test_async_success_logs_telemetry(self, tmp_path: Path):
@@ -295,6 +306,7 @@ class TestDecoratorIntegration:
         assert record["tool"] == "async_op"
         assert record["success"] is True
         assert record["args"] == {"msg": "hello"}
+        assert record["result"] == {"success": True, "data": "hello"}
 
     @pytest.mark.asyncio
     async def test_async_failure_logs_telemetry(self, tmp_path: Path):
@@ -323,3 +335,4 @@ class TestDecoratorIntegration:
         assert record["tool"] == "async_fail"
         assert record["success"] is False
         assert "async boom" in record["error"]
+        assert record["result"] is None
