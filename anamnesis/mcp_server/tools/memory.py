@@ -1,7 +1,18 @@
 """Memory and metacognition tools — CRUD for project memories + reflect."""
 
+import secrets
+from datetime import UTC, datetime
 from typing import Literal
 
+from anamnesis.mcp_server._shared import (
+    _REFLECT_PROMPTS,
+    _failure_response,
+    _get_memory_service,
+    _success_response,
+    _thought_chains,
+    _with_error_handling,
+    mcp,
+)
 from anamnesis.utils.security import (
     MAX_CONTENT_LENGTH,
     MAX_NAME_LENGTH,
@@ -9,16 +20,6 @@ from anamnesis.utils.security import (
     clamp_integer,
     validate_string_length,
 )
-
-from anamnesis.mcp_server._shared import (
-    _failure_response,
-    _get_memory_service,
-    _REFLECT_PROMPTS,
-    _success_response,
-    _with_error_handling,
-    mcp,
-)
-
 
 # =============================================================================
 # Memory Implementations
@@ -114,13 +115,73 @@ def _search_memories_impl(
 
 
 @_with_error_handling("reflect")
-def _reflect_impl(focus: str = "collected_information") -> dict:
-    """Implementation for reflect tool."""
+def _reflect_impl(
+    thought: str = "",
+    thought_number: int = 1,
+    total_thoughts: int = 1,
+    next_thought_needed: bool = False,
+    focus: str = "collected_information",
+    is_revision: bool = False,
+    revises_thought: int | None = None,
+    branch_id: str | None = None,
+    branch_from_thought: int | None = None,
+    chain_id: str | None = None,
+) -> dict:
+    """Implementation for reflect tool — legacy and sequential thinking modes."""
+    # Validate focus
     prompt = _REFLECT_PROMPTS.get(focus)
     if prompt is None:
-        return _failure_response(f"Unknown focus '{focus}'. Choose from: {', '.join(_REFLECT_PROMPTS.keys())}")
+        return _failure_response(
+            f"Unknown focus '{focus}'. Choose from: {', '.join(_REFLECT_PROMPTS)}"
+        )
+
+    # Legacy mode — no thought provided, return just the prompt
+    if not thought:
+        return _success_response({"focus": focus, "prompt": prompt})
+
+    # Sequential thinking mode — store thought in chain
+    if chain_id is None:
+        chain_id = f"chain_{secrets.token_hex(6)}"
+
+    # Auto-adjust total if thought_number exceeds it
+    if thought_number > total_thoughts:
+        total_thoughts = thought_number
+
+    # Build thought record
+    record: dict = {
+        "thought": thought,
+        "thought_number": thought_number,
+        "total_thoughts": total_thoughts,
+        "focus": focus,
+        "is_revision": is_revision,
+        "revises_thought": revises_thought,
+        "branch_id": branch_id,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+    # Store in chain
+    if chain_id not in _thought_chains:
+        _thought_chains[chain_id] = []
+    _thought_chains[chain_id].append(record)
+
+    chain = _thought_chains[chain_id]
+
+    # Collect metadata about chain shape
+    branches = sorted({t["branch_id"] for t in chain if t["branch_id"]})
+    revisions = sorted({t["revises_thought"] for t in chain if t["revises_thought"]})
+
     return _success_response(
-        {"focus": focus, "prompt": prompt},
+        {
+            "chain_id": chain_id,
+            "thought_number": thought_number,
+            "total_thoughts": total_thoughts,
+            "next_thought_needed": next_thought_needed,
+            "focus": focus,
+            "focus_prompt": prompt,
+            "chain_length": len(chain),
+            "branches": branches,
+            "revisions": revisions,
+        },
     )
 
 
@@ -236,20 +297,69 @@ def search_memories(
 
 @mcp.tool
 def reflect(
-    focus: Literal["collected_information", "task_adherence", "whether_done"] = "collected_information",
+    thought: str = "",
+    thought_number: int = 1,
+    total_thoughts: int = 1,
+    next_thought_needed: bool = False,
+    focus: Literal[
+        "collected_information", "task_adherence", "whether_done", "approach_selection"
+    ] = "collected_information",
+    is_revision: bool = False,
+    revises_thought: int | None = None,
+    branch_id: str | None = None,
+    branch_from_thought: int | None = None,
+    chain_id: str | None = None,
 ) -> dict:
-    """Reflect on your current work with metacognitive prompts.
+    """A sequential thinking tool for structured reflection during complex tasks.
 
-    Provides structured reflection prompts to help maintain quality and
-    focus during complex tasks. Call at natural checkpoints.
+    Use this to break down reasoning into steps, building a chain of thoughts.
+    Each call stores your thought and returns metadata to guide the next step.
+
+    **When to use:** At natural checkpoints — after exploration, before
+    implementation, when comparing approaches, before claiming done.
+
+    **How to think:** Provide your reasoning as `thought`. Set
+    `next_thought_needed=True` to continue the chain, `False` when you've
+    reached a conclusion. Adjust `total_thoughts` as your understanding evolves.
+
+    **Branching:** Use `branch_id` and `branch_from_thought` to explore
+    alternative approaches side by side. Good with focus="approach_selection".
+
+    **Revising:** Set `is_revision=True` and `revises_thought=N` to correct
+    an earlier thought when new information contradicts it.
+
+    **Legacy mode:** Omit `thought` to get just the focus prompt (backward
+    compatible with older callers).
 
     Args:
-        focus: What to reflect on:
-            - "collected_information": After search/exploration — is the info sufficient?
-            - "task_adherence": Before code changes — still on track with the goal?
-            - "whether_done": Before declaring done — truly complete and communicated?
+        thought: Your reasoning for this step. Omit for legacy prompt-only mode.
+        thought_number: Current step number (1-indexed).
+        total_thoughts: Estimated total steps. Auto-adjusts upward if exceeded.
+        next_thought_needed: True to continue reasoning, False when done.
+        focus: Reflection lens — each returns a guiding prompt alongside your thought:
+            - "collected_information": Is the gathered info sufficient and relevant?
+            - "task_adherence": Still on track with the original goal?
+            - "whether_done": Truly complete and communicated?
+            - "approach_selection": Weighing alternatives — which approach fits best?
+        is_revision: True if this thought revises an earlier one.
+        revises_thought: Which thought number is being revised.
+        branch_id: Name for an alternative exploration branch.
+        branch_from_thought: Which thought number the branch diverges from.
+        chain_id: Links thoughts across calls. Auto-generated on first call.
 
     Returns:
-        A reflective prompt to guide your thinking
+        Chain metadata: chain_id, thought_number, total_thoughts,
+        next_thought_needed, focus_prompt, chain_length, branches, revisions
     """
-    return _reflect_impl(focus)
+    return _reflect_impl(
+        thought=thought,
+        thought_number=thought_number,
+        total_thoughts=total_thoughts,
+        next_thought_needed=next_thought_needed,
+        focus=focus,
+        is_revision=is_revision,
+        revises_thought=revises_thought,
+        branch_id=branch_id,
+        branch_from_thought=branch_from_thought,
+        chain_id=chain_id,
+    )

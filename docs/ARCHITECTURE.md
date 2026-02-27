@@ -1,7 +1,7 @@
 # Anamnesis Architecture
 
 > This document describes the actual system design of Anamnesis as of
-> 2026-02-08. Every file path, class name, and relationship described here
+> 2026-02-26. Every file path, class name, and relationship described here
 > has been verified against the source code.
 
 ## System Overview
@@ -23,7 +23,7 @@ cross-project data contamination. The primary entry point is either the CLI
 2. **Searches** code -- text matching, regex/AST patterns, and embedding-based
    semantic similarity via Qdrant.
 3. **Navigates** symbols -- LSP-backed find, references, rename, and insert
-   operations via vendored Serena language server infrastructure.
+   operations via the solidlsp language server infrastructure (adopted from Serena).
 4. **Remembers** -- project-scoped markdown memories, session tracking,
    AI-contributed insights, and decision logging.
 5. **Analyzes** -- cyclomatic, cognitive, Halstead, and maintainability metrics
@@ -86,7 +86,7 @@ cross-project data contamination. The primary entry point is either the CLI
 |   SQLiteBackend     (async CRUD via aiosqlite)                      |
 |   SyncSQLiteBackend (thread-bridged wrapper for sync callers)       |
 |   QdrantVectorStore (embedded or remote vector DB)                  |
-|   schema.py (12 entity types), migrations.py                       |
+|   schema.py (11 entity types), migrations.py                       |
 +---------------------------------------------------------------------+
         |
         v
@@ -95,7 +95,7 @@ cross-project data contamination. The primary entry point is either the CLI
 |   LspManager       (language server lifecycle)                      |
 |   SymbolRetriever   (find, overview, references)                    |
 |   CodeEditor        (rename, replace body, insert)                  |
-|   solidlsp/         (vendored from Serena -- 24 files)              |
+|   solidlsp/         (adopted from Serena -- 24 files)               |
 +---------------------------------------------------------------------+
         |
         v
@@ -151,7 +151,7 @@ def _tool_name_impl(args) -> dict: <-- business logic
 | `intelligence_service.py` | `IntelligenceService` | Blueprint generation, semantic insights, pattern recommendations, approach prediction, developer profiling |
 | `codebase_service.py` | `CodebaseService` | Codebase analysis coordination (semantic + complexity + dependency) |
 | `memory_service.py` | `MemoryService` | CRUD for markdown memory files in `.anamnesis/memories/` |
-| `session_manager.py` | `SessionManager` | In-memory session lifecycle + decision tracking (backed by per-project SyncSQLiteBackend) |
+| `session_manager.py` | `SessionManager` | Persistent session lifecycle + decision tracking (backed by per-project SyncSQLiteBackend writing to `.anamnesis/intelligence.db`) |
 | `type_converters.py` | (functions) | Bridge between engine types and storage types |
 
 ### Intelligence Engines (`anamnesis/intelligence/`)
@@ -190,14 +190,14 @@ def _tool_name_impl(args) -> dict: <-- business logic
 | `pattern_extractor.py` | `PatternExtractor` | Tree-sitter based design pattern detection |
 | `import_extractor.py` | `ImportExtractor` | Tree-sitter based import statement extraction |
 
-These are the **internal implementation** of `TreeSitterBackend`. Despite a
-deprecation notice in `extractors/__init__.py`, they are actively used.
+These are the **internal implementation** of `TreeSitterBackend`. The unified
+extraction API in `anamnesis.extraction` should be preferred for new code.
 
 ### Storage (`anamnesis/storage/`)
 
 | File | Class | Responsibility |
 |------|-------|---------------|
-| `sqlite_backend.py` | `SQLiteBackend` | Async CRUD via `aiosqlite` for all 12 entity types. Includes `ConnectionWrapper` for migration protocol and `_safe_json_loads` for corruption resilience. |
+| `sqlite_backend.py` | `SQLiteBackend` | Async CRUD via `aiosqlite` for all 11 entity types. Includes `ConnectionWrapper` for migration protocol and `_safe_json_loads` for corruption resilience. |
 | `sync_backend.py` | `SyncSQLiteBackend` | Synchronous wrapper using a dedicated background thread with its own event loop. Bridges async storage to sync service layer. |
 | `qdrant_store.py` | `QdrantVectorStore` | Qdrant vector database for semantic search. Supports embedded mode (`.anamnesis/qdrant/`) and remote server mode. |
 | `schema.py` | 11 entity dataclasses | `SemanticConcept`, `DeveloperPattern`, `FileIntelligence`, `AIInsight`, `ProjectMetadata`, `WorkSession`, `EntryPoint`, `KeyDirectory`, `FeatureMap`, `SharedPattern`, `ProjectDecision` |
@@ -212,7 +212,7 @@ deprecation notice in `extractors/__init__.py`, they are actively used.
 | `editor.py` | `CodeEditor` | Symbol mutations: rename, replace body, insert before/after. Requires active LSP. |
 | `backend.py` | `LspExtractionBackend` | Extraction backend at priority=100. Prepared but **not wired** into the ExtractionOrchestrator by default. |
 | `utils.py` | (functions) | Path safety utilities (`safe_join`, `uri_to_relative`) |
-| `solidlsp/` | (24 files) | Vendored from the Serena project. Contains the LSP protocol layer, language server configurations, subprocess management, and caching. |
+| `solidlsp/` | (24 files) | Adopted from the Serena project as first-class Anamnesis code (2026-02-08). Contains the LSP protocol layer, language server configurations, subprocess management, and caching. |
 
 ### Search Pipeline (`anamnesis/search/`)
 
@@ -227,11 +227,11 @@ deprecation notice in `extractors/__init__.py`, they are actively used.
 
 | Package | Key Files | Responsibility |
 |---------|----------|---------------|
-| `utils/` | `toon_encoder.py`, `error_classifier.py`, `security.py`, `logger.py`, `serialization.py`, `language_registry.py` | TOON encoding, error classification (lookup table), path sanitization, language detection |
+| `utils/` | `toon_encoder.py`, `error_classifier.py`, `security.py`, `logger.py`, `serialization.py`, `language_registry.py`, `helpers.py`, `model_registry.py` | TOON encoding, error classification (lookup table), path sanitization, language detection, `enum_value()` helper, SentenceTransformer model caching |
 | `patterns/` | `matcher.py`, `ast_matcher.py`, `regex_matcher.py` | Pattern matching for search (AST + regex) |
 | `interfaces/` | `search.py`, `engines.py` | ABCs and Protocols (`SearchBackend`, `ISearchService`, `SemanticSearchResult`) |
 | `parsing/` | `tree_sitter_wrapper.py`, `language_parsers.py`, `ast_types.py` | Tree-sitter wrapper layer for parser management |
-| `cli/` | `main.py`, `interactive_setup.py`, `debug_tools.py` | Click-based CLI. Entry point: `anamnesis.cli.main:cli` |
+| `cli/` | `main.py`, `interactive_setup.py`, `debug_tools.py`, `_context.py` | Click-based CLI. Entry point: `anamnesis.cli.main:cli` |
 | `watchers/` | `file_watcher.py` | File system watching (via watchdog) |
 | `constants.py` | (module) | `utcnow()`, `DEFAULT_IGNORE_DIRS`, `DEFAULT_SOURCE_PATTERNS` |
 
@@ -250,7 +250,7 @@ ProjectRegistry (singleton in _shared.py)
   |     |     |-- _learning_service: LearningService (lazy)
   |     |     |-- _intelligence_service: IntelligenceService (lazy)
   |     |     |-- _codebase_service: CodebaseService (lazy)
-  |     |     |-- _session_manager: SessionManager (lazy, in-memory SQLite)
+  |     |     |-- _session_manager: SessionManager (lazy, persistent SQLite)
   |     |     |-- _memory_service: MemoryService (lazy, .anamnesis/memories/)
   |     |     |-- _search_service: SearchService (lazy)
   |     |     |-- _lsp_manager: LspManager (lazy)
@@ -514,19 +514,21 @@ might transitively trigger another service getter during initialization
 **Trade-off**: Slightly more complex initialization code. The double-checked
 pattern avoids lock contention on the fast path (already initialized).
 
-### 7. Vendored LSP Layer (solidlsp)
+### 7. Adopted LSP Layer (solidlsp)
 
-**Decision**: Vendor the LSP infrastructure from Serena rather than depending
-on it as a package.
+**Decision**: Adopt the LSP infrastructure from Serena as first-class
+Anamnesis code rather than depending on it as a package.
 
 **Rationale**: Serena's LSP layer is not published as an independent package.
-Vendoring gives Anamnesis full control over the LSP integration without
-depending on Serena's release cycle or API stability. The vendored code
-supports Pyright, gopls, rust-analyzer, and TypeScript language server.
+Initially vendored (2026-02-01), it was formally adopted as owned Anamnesis
+code (2026-02-08). This gives the project full control over the LSP
+integration without depending on Serena's release cycle or API stability.
+The code supports Pyright, gopls, rust-analyzer, and TypeScript language server.
 
-**Trade-off**: 24 vendored files that must be manually updated when upstream
-Serena changes. 11 of these files lack module docstrings (acceptable for
-vendored code).
+**Trade-off**: 24 adopted files that diverge from upstream Serena. There is
+no automated upstream sync; changes are maintained independently. Three files
+under `lsp_protocol_handler/` are OLSP-generated and should not be edited
+directly.
 
 
 ## Type System
@@ -614,7 +616,7 @@ Key concurrency points:
 | `mcp>=1.0.0` | MCP protocol types |
 | `tree-sitter>=0.22.0` | Source code parsing |
 | `tree-sitter-language-pack>=0.13.0` | Language grammars |
-| `pydantic>=2.0` | Data validation |
+| `pathspec>=0.12.1` | Gitignore pattern matching |
 
 ### Storage
 
@@ -636,9 +638,7 @@ Key concurrency points:
 |-----------|---------|
 | `click>=8.0.0` | CLI framework |
 | `loguru>=0.7.0` | Structured logging |
-| `tenacity>=8.0.0` | Retry logic |
 | `watchdog>=3.0.0` | File system watching |
-| `anyio>=4.0.0` | Async I/O compatibility |
 | `toon-format` | Token-efficient response encoding |
 
 ### Optional (LSP)
@@ -646,7 +646,6 @@ Key concurrency points:
 | Dependency | Purpose |
 |-----------|---------|
 | `overrides>=7.7.0` | Language server subclass contracts |
-| `pathspec>=0.12.1` | Gitignore pattern matching |
 | `psutil>=7.0.0` | Process management for LS lifecycle |
 
 
@@ -686,9 +685,9 @@ All are implemented and tested (54 synergy tests).
 5. **Unbounded caches**: `_analysis_cache`, `_concept_index`, and
    `_learned_data` in intelligence engines grow without bounds.
 
-6. **`extractors/__init__.py` deprecation notice**: Claims the package is
-   deprecated, but it is actively used as the internal implementation of
-   `TreeSitterBackend`.
+6. **`extractors/` package**: Actively used as the internal implementation of
+   `TreeSitterBackend`. The unified extraction API (`anamnesis.extraction`)
+   should be preferred for new code.
 
 
 ## Future Considerations

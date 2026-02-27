@@ -35,16 +35,16 @@ dependencies = [
 
     # TOON format for token-efficient LLM responses
     "toon-format @ git+https://github.com/toon-format/toon-python.git@6b26984a01279defdcf40ab9d09bc418fe8133ac",
+
+    # LSP support (baseline — used by 11 of 29 tools)
+    "overrides>=7.7.0",    # Used by language server subclasses
+    "psutil>=7.0.0",       # Process management for LS lifecycle
 ]
 
 [project.scripts]
 anamnesis = "anamnesis.cli.main:cli"
 
 [project.optional-dependencies]
-lsp = [
-    "overrides>=7.7.0",    # Used by language server subclasses
-    "psutil>=7.0.0",       # Process management for LS lifecycle
-]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

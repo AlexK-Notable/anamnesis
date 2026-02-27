@@ -23,8 +23,9 @@ from anamnesis.services import (
     SessionManager,
 )
 from anamnesis.services.project_registry import ProjectContext, ProjectRegistry
+from anamnesis.telemetry import log_tool_call
 from anamnesis.utils.error_classifier import classify_error
-from anamnesis.utils.logger import logger
+from anamnesis.utils.logger import generate_request_id, logger, with_correlation_id
 from anamnesis.utils.toon_encoder import ToonEncoder, is_structurally_toon_eligible
 
 # =============================================================================
@@ -266,11 +267,42 @@ Consider:
 If not fully done, identify what remains. If done, summarize the outcome.
 """
 
+_APPROACH_SELECTION_PROMPT = """\
+Think about the approaches available and which one best fits the situation.
+
+Consider:
+1. **Alternatives**: What approaches have you identified?
+   - Have you considered at least two distinct strategies?
+   - What are the trade-offs of each?
+   - Are there approaches you haven't considered yet?
+
+2. **Fit**: Which approach best matches the constraints?
+   - Does it align with existing patterns in the codebase?
+   - Does it minimize risk and complexity?
+   - Will it be maintainable by the team?
+
+3. **Confidence**: How certain are you in your choice?
+   - What could go wrong with your preferred approach?
+   - Is there a way to validate before committing?
+   - Would a different approach be safer to start with?
+
+Use branching to explore alternatives side by side if needed.
+"""
+
 _REFLECT_PROMPTS = {
     "collected_information": _THINK_COLLECTED_PROMPT,
     "task_adherence": _THINK_TASK_ADHERENCE_PROMPT,
     "whether_done": _THINK_DONE_PROMPT,
+    "approach_selection": _APPROACH_SELECTION_PROMPT,
 }
+
+# =============================================================================
+# Sequential Thinking State
+# =============================================================================
+
+# In-memory thought chains — ephemeral reasoning artifacts, not persisted.
+# Keyed by chain_id, each value is a list of thought dicts.
+_thought_chains: dict[str, list[dict]] = {}
 
 # =============================================================================
 # Utility Helpers
@@ -514,27 +546,64 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
             is_retryable=classification.is_retryable,
         )
 
+    def _project_path() -> str | None:
+        """Best-effort project path for telemetry (None if no project active)."""
+        try:
+            return _get_active_context().path
+        except Exception:
+            return None
+
     def decorator(func):
         if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
-                try:
-                    result = await func(*args, **kwargs)
-                    return _apply_toon(result)
-                except Exception as e:
-                    return _handle_exception(e)
+                req_id = generate_request_id()
+                start = time.monotonic()
+                with with_correlation_id(req_id, tool_name=operation_name):
+                    try:
+                        result = await func(*args, **kwargs)
+                        duration_ms = (time.monotonic() - start) * 1000
+                        log_tool_call(
+                            operation_name, kwargs, duration_ms,
+                            success=True, project_path=_project_path(),
+                            result=result,
+                        )
+                        return _apply_toon(result)
+                    except Exception as e:
+                        duration_ms = (time.monotonic() - start) * 1000
+                        log_tool_call(
+                            operation_name, kwargs, duration_ms,
+                            success=False, error=str(e),
+                            project_path=_project_path(),
+                        )
+                        return _handle_exception(e)
 
             return async_wrapper
         else:
 
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
-                try:
-                    result = func(*args, **kwargs)
-                    return _apply_toon(result)
-                except Exception as e:
-                    return _handle_exception(e)
+                req_id = generate_request_id()
+                start = time.monotonic()
+                with with_correlation_id(req_id, tool_name=operation_name):
+                    try:
+                        result = func(*args, **kwargs)
+                        duration_ms = (time.monotonic() - start) * 1000
+                        log_tool_call(
+                            operation_name, kwargs, duration_ms,
+                            success=True, project_path=_project_path(),
+                            result=result,
+                        )
+                        return _apply_toon(result)
+                    except Exception as e:
+                        duration_ms = (time.monotonic() - start) * 1000
+                        log_tool_call(
+                            operation_name, kwargs, duration_ms,
+                            success=False, error=str(e),
+                            project_path=_project_path(),
+                        )
+                        return _handle_exception(e)
 
             return wrapper
 

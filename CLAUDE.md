@@ -30,7 +30,7 @@ pyright anamnesis
 Three-sentence summary:
 
 1. `ProjectRegistry` manages multiple projects; each gets an isolated `ProjectContext` with lazily-initialized service instances (double-checked locking via `RLock`).
-2. MCP tools (`@mcp.tool` thin wrappers) call `_impl()` functions, which call services, which call engines/storage. The `_with_error_handling` decorator handles error classification, path sanitization, and optional TOON auto-encoding.
+2. MCP tools (`@mcp.tool` thin wrappers) call `_impl()` functions, which call services, which call engines/storage. The `_with_error_handling` decorator handles error classification, path sanitization, optional TOON auto-encoding, and telemetry logging.
 3. Code extraction flows through `ExtractionOrchestrator` which routes to backends by priority: `TreeSitterBackend` (50) for structural symbols, `RegexBackend` (10) for constants/framework detection.
 
 ### Call Chain
@@ -59,6 +59,7 @@ MCP Client -> FastMCP (mcp_server/_shared.py)
 | `patterns/` | Pattern matching (AST + regex) | `matcher.py`, `ast_matcher.py`, `regex_matcher.py` |
 | `utils/` | Cross-cutting concerns | `toon_encoder.py`, `error_classifier.py`, `security.py`, `language_registry.py` |
 | `cli/` | Click-based CLI | `main.py` (entry point: `anamnesis.cli.main:cli`) |
+| `telemetry.py` | Tool usage JSONL logging (top-level module) | `ToolUsageLogger`, `log_tool_call()` |
 
 ### Tool Modules (29 tools)
 
@@ -172,7 +173,7 @@ Three files under `lsp_protocol_handler/` (`lsp_types.py`, `lsp_requests.py`, `s
 
 ### pytest-xdist Parallelism
 
-Use `-n 4` (hard limit), NEVER `-n auto`. Note: `pytest-xdist` is not in `pyproject.toml` -- install manually if needed.
+Use `-n 4` (hard limit), NEVER `-n auto`. `pytest-xdist` is in `[dependency-groups] dev` in `pyproject.toml`.
 
 ### LSP Tests
 
@@ -215,7 +216,18 @@ asyncio mode is `auto` (set in `pyproject.toml`), so async test functions do not
 - `.anamnesis/` directory in the project root (created by `anamnesis init` or on first use)
   - `intelligence.db` -- SQLite database for concepts, patterns, sessions, memories
   - `qdrant/` -- embedded Qdrant vector storage for semantic search
+  - `tool_usage.jsonl` -- telemetry log (one JSON line per tool invocation)
 - Project registry: persisted as JSON by `ProjectRegistry`
+
+## Telemetry
+
+Every MCP tool invocation is logged to `.anamnesis/tool_usage.jsonl` as a JSON line containing: timestamp, correlation ID, tool name, truncated args, duration (ms), success/failure, full result dict, and project path. Wired into `_with_error_handling` so all 29 tools get telemetry automatically.
+
+- **Disable**: set `ANAMNESIS_TELEMETRY=false` (or `0` or `no`)
+- **Arg truncation**: string values clipped to 200 chars; sensitive args (`content`, `old_text`, `new_text`, `source`, `body`) annotated with `[truncated]`
+- **Results**: stored untruncated in the `result` field
+- **Implementation**: `anamnesis/telemetry.py` (~120 LOC) — `ToolUsageLogger` class + `log_tool_call()` convenience wrapper
+- **No-op when no project active** (nowhere to write)
 
 ## Entry Points
 
@@ -227,11 +239,11 @@ asyncio mode is `auto` (set in `pyproject.toml`), so async test functions do not
 
 ## Dependencies
 
-Core: `pydantic`, `tree-sitter`, `tree-sitter-language-pack`, `aiosqlite`, `numpy`, `qdrant-client`, `sentence-transformers`, `mcp`, `fastmcp`, `click`, `loguru`, `tenacity`, `watchdog`, `anyio`, `toon-format` (git dep)
+Core: `tree-sitter`, `tree-sitter-language-pack`, `aiosqlite`, `numpy`, `qdrant-client`, `sentence-transformers`, `mcp`, `fastmcp`, `click`, `loguru`, `pathspec`, `watchdog`, `toon-format` (git dep), `overrides`, `psutil`
 
 Optional groups:
-- `lsp`: `overrides`, `pathspec`, `psutil` -- needed for LSP features
 - `dev`: `pytest`, `pytest-asyncio`, `pytest-benchmark`, `pytest-cov`, `pytest-mock`, `freezegun`, `deepdiff`, `hypothesis`, `tiktoken`, `ruff`, `mypy`, `pyright`
+- `dependency-groups.dev`: `pytest-xdist` -- parallel test execution
 
 Install all: `uv sync --all-extras`
 

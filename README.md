@@ -132,7 +132,7 @@ uv sync --all-extras
 ### Run Tests
 
 ```bash
-python -m pytest -n 6 -x -q tests/ --ignore=tests/test_lsp_pyright.py
+python -m pytest -n 4 -x -q tests/ --ignore=tests/test_lsp_pyright.py
 ```
 
 ### Lint
@@ -173,19 +173,23 @@ anamnesis check .           # Run diagnostics
 | Synergy features S1-S5 (complexity, refactoring, investigation) | Complete |
 | MCP server with 29 tools | Complete |
 
-2173 tests passing across the full suite.
+2175 tests passing across the full suite.
+
+## Telemetry
+
+Every tool invocation is logged to `.anamnesis/tool_usage.jsonl` (one JSON line per call) with tool name, args, duration, result, and correlation ID. Disable with `ANAMNESIS_TELEMETRY=false`.
 
 ## Dependencies
 
 | Category | Packages |
 |----------|----------|
-| **Core** | pydantic, tree-sitter, tree-sitter-language-pack |
+| **Core** | tree-sitter, tree-sitter-language-pack, pathspec |
 | **Storage** | aiosqlite, numpy |
 | **Vector Search** | qdrant-client, sentence-transformers |
 | **MCP** | mcp, fastmcp |
 | **CLI** | click |
-| **Utils** | loguru, tenacity, watchdog, anyio, toon-format |
-| **LSP** (optional) | overrides, pathspec, psutil |
+| **Utils** | loguru, watchdog, toon-format |
+| **LSP** (optional) | overrides, psutil |
 
 See [pyproject.toml](pyproject.toml) for version constraints.
 
