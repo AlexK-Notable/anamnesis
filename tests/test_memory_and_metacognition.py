@@ -342,10 +342,12 @@ class TestMemoryServiceContentLimits:
 
 
 class TestMetacognitionTools:
-    """Tests for consolidated reflect tool (was 3 separate think_about_* tools)."""
+    """Tests for reflect tool — legacy prompt mode and sequential thinking."""
+
+    # --- Legacy mode (backward compatibility) ---
 
     def test_reflect_collected_information(self):
-        """reflect(focus='collected_information') returns a prompt."""
+        """Legacy: reflect(focus='collected_information') returns a prompt."""
         from anamnesis.mcp_server.tools.memory import _reflect_impl
 
         result = _reflect_impl(focus="collected_information")
@@ -356,7 +358,7 @@ class TestMetacognitionTools:
         assert "Confidence" in result["data"]["prompt"]
 
     def test_reflect_task_adherence(self):
-        """reflect(focus='task_adherence') returns a prompt."""
+        """Legacy: reflect(focus='task_adherence') returns a prompt."""
         from anamnesis.mcp_server.tools.memory import _reflect_impl
 
         result = _reflect_impl(focus="task_adherence")
@@ -367,7 +369,7 @@ class TestMetacognitionTools:
         assert "Progress" in result["data"]["prompt"]
 
     def test_reflect_whether_done(self):
-        """reflect(focus='whether_done') returns a prompt."""
+        """Legacy: reflect(focus='whether_done') returns a prompt."""
         from anamnesis.mcp_server.tools.memory import _reflect_impl
 
         result = _reflect_impl(focus="whether_done")
@@ -376,6 +378,263 @@ class TestMetacognitionTools:
         assert "Completeness" in result["data"]["prompt"]
         assert "Quality" in result["data"]["prompt"]
         assert "Communication" in result["data"]["prompt"]
+
+    def test_empty_thought_legacy_mode(self):
+        """Legacy: thought='' triggers legacy path (no chain storage)."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        result = _reflect_impl(thought="", focus="task_adherence")
+        assert result["success"] is True
+        # Legacy response has 'prompt', not 'chain_id'
+        assert "prompt" in result["data"]
+        assert "chain_id" not in result["data"]
+
+    # --- Sequential thinking mode ---
+
+    def test_sequential_chain_creation(self):
+        """First thought creates chain and returns chain_id."""
+        from anamnesis.mcp_server._shared import _thought_chains
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        result = _reflect_impl(
+            thought="Exploring the auth module structure.",
+            thought_number=1,
+            total_thoughts=3,
+            next_thought_needed=True,
+        )
+        assert result["success"] is True
+        data = result["data"]
+        assert data["chain_id"].startswith("chain_")
+        assert data["thought_number"] == 1
+        assert data["total_thoughts"] == 3
+        assert data["next_thought_needed"] is True
+        assert data["chain_length"] == 1
+        # Chain stored in module state
+        assert data["chain_id"] in _thought_chains
+
+    def test_sequential_chain_accumulation(self):
+        """Multiple thoughts accumulate in the same chain."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        r1 = _reflect_impl(
+            thought="Step 1: identify entry points.",
+            thought_number=1, total_thoughts=3, next_thought_needed=True,
+        )
+        chain_id = r1["data"]["chain_id"]
+
+        r2 = _reflect_impl(
+            thought="Step 2: trace call paths.",
+            thought_number=2, total_thoughts=3, next_thought_needed=True,
+            chain_id=chain_id,
+        )
+        assert r2["data"]["chain_length"] == 2
+
+        r3 = _reflect_impl(
+            thought="Step 3: conclusion reached.",
+            thought_number=3, total_thoughts=3, next_thought_needed=False,
+            chain_id=chain_id,
+        )
+        assert r3["data"]["chain_length"] == 3
+        assert r3["data"]["next_thought_needed"] is False
+
+    def test_chain_id_persistence(self):
+        """Same chain_id links thoughts across calls."""
+        from anamnesis.mcp_server._shared import _thought_chains
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        r1 = _reflect_impl(
+            thought="First thought.",
+            thought_number=1, total_thoughts=2, next_thought_needed=True,
+        )
+        chain_id = r1["data"]["chain_id"]
+
+        r2 = _reflect_impl(
+            thought="Second thought.",
+            thought_number=2, total_thoughts=2, next_thought_needed=False,
+            chain_id=chain_id,
+        )
+        assert r2["data"]["chain_id"] == chain_id
+        assert len(_thought_chains[chain_id]) == 2
+
+    def test_auto_chain_id_generation(self):
+        """Omitting chain_id generates one automatically."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        result = _reflect_impl(
+            thought="A standalone thought.",
+            thought_number=1, total_thoughts=1, next_thought_needed=False,
+        )
+        chain_id = result["data"]["chain_id"]
+        assert chain_id.startswith("chain_")
+        assert len(chain_id) == len("chain_") + 12  # token_hex(6) = 12 chars
+
+    def test_total_thoughts_adjustment(self):
+        """Exceeding total_thoughts auto-adjusts upward."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        result = _reflect_impl(
+            thought="Thought beyond original estimate.",
+            thought_number=5, total_thoughts=3, next_thought_needed=True,
+        )
+        assert result["data"]["total_thoughts"] == 5
+
+    def test_next_thought_needed_loop(self):
+        """next_thought_needed is returned correctly for True and False."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        r_true = _reflect_impl(
+            thought="Continuing...",
+            thought_number=1, total_thoughts=2, next_thought_needed=True,
+        )
+        assert r_true["data"]["next_thought_needed"] is True
+
+        r_false = _reflect_impl(
+            thought="Done.",
+            thought_number=2, total_thoughts=2, next_thought_needed=False,
+            chain_id=r_true["data"]["chain_id"],
+        )
+        assert r_false["data"]["next_thought_needed"] is False
+
+    def test_revision_tracking(self):
+        """Revision is linked to original thought in response."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        r1 = _reflect_impl(
+            thought="Initial analysis.",
+            thought_number=1, total_thoughts=2, next_thought_needed=True,
+        )
+        chain_id = r1["data"]["chain_id"]
+
+        r2 = _reflect_impl(
+            thought="Corrected analysis — earlier conclusion was wrong.",
+            thought_number=2, total_thoughts=2, next_thought_needed=False,
+            is_revision=True, revises_thought=1,
+            chain_id=chain_id,
+        )
+        assert r2["data"]["revisions"] == [1]
+
+    def test_branch_creation(self):
+        """branch_id creates a branch tracked in response."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        r1 = _reflect_impl(
+            thought="Main line of reasoning.",
+            thought_number=1, total_thoughts=2, next_thought_needed=True,
+        )
+        chain_id = r1["data"]["chain_id"]
+        assert r1["data"]["branches"] == []
+
+        r2 = _reflect_impl(
+            thought="Alternative: what if we use strategy B?",
+            thought_number=2, total_thoughts=3, next_thought_needed=True,
+            branch_id="strategy-b", branch_from_thought=1,
+            chain_id=chain_id,
+        )
+        assert "strategy-b" in r2["data"]["branches"]
+
+    def test_branch_from_thought(self):
+        """Branching from a specific thought records branch_id on the record."""
+        from anamnesis.mcp_server._shared import _thought_chains
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        r1 = _reflect_impl(
+            thought="Base thought.",
+            thought_number=1, total_thoughts=2, next_thought_needed=True,
+        )
+        chain_id = r1["data"]["chain_id"]
+
+        _reflect_impl(
+            thought="Branched exploration.",
+            thought_number=2, total_thoughts=3, next_thought_needed=True,
+            branch_id="alt-a", branch_from_thought=1,
+            chain_id=chain_id,
+        )
+        # Verify the stored record has branch_id
+        records = _thought_chains[chain_id]
+        assert records[1]["branch_id"] == "alt-a"
+
+    def test_multiple_branches(self):
+        """Multiple branches are all tracked in the response."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        r1 = _reflect_impl(
+            thought="Start.",
+            thought_number=1, total_thoughts=4, next_thought_needed=True,
+        )
+        chain_id = r1["data"]["chain_id"]
+
+        _reflect_impl(
+            thought="Branch A.",
+            thought_number=2, total_thoughts=4, next_thought_needed=True,
+            branch_id="branch-a", chain_id=chain_id,
+        )
+        r3 = _reflect_impl(
+            thought="Branch B.",
+            thought_number=3, total_thoughts=4, next_thought_needed=True,
+            branch_id="branch-b", chain_id=chain_id,
+        )
+        assert sorted(r3["data"]["branches"]) == ["branch-a", "branch-b"]
+
+    def test_focus_prompt_included(self):
+        """Sequential mode includes focus_prompt alongside chain metadata."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        result = _reflect_impl(
+            thought="Checking if I have enough info.",
+            thought_number=1, total_thoughts=1, next_thought_needed=False,
+            focus="collected_information",
+        )
+        assert "focus_prompt" in result["data"]
+        assert "Completeness" in result["data"]["focus_prompt"]
+
+    def test_approach_selection_focus(self):
+        """New approach_selection focus type works in both modes."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        # Legacy mode
+        legacy = _reflect_impl(focus="approach_selection")
+        assert legacy["success"] is True
+        assert "Alternatives" in legacy["data"]["prompt"]
+
+        # Sequential mode
+        seq = _reflect_impl(
+            thought="Weighing Redis vs in-memory cache.",
+            thought_number=1, total_thoughts=2, next_thought_needed=True,
+            focus="approach_selection",
+        )
+        assert seq["success"] is True
+        assert "Alternatives" in seq["data"]["focus_prompt"]
+
+    def test_invalid_focus_with_thought(self):
+        """Invalid focus returns error even with a thought provided."""
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        result = _reflect_impl(
+            thought="Some reasoning.",
+            thought_number=1, total_thoughts=1, next_thought_needed=False,
+            focus="nonexistent_focus",
+        )
+        assert result["success"] is False
+        assert "Unknown focus" in result["error"]
+
+    def test_chain_isolation(self):
+        """Different chain_ids don't interfere with each other."""
+        from anamnesis.mcp_server._shared import _thought_chains
+        from anamnesis.mcp_server.tools.memory import _reflect_impl
+
+        r1 = _reflect_impl(
+            thought="Chain A thought.",
+            thought_number=1, total_thoughts=1, next_thought_needed=False,
+        )
+        r2 = _reflect_impl(
+            thought="Chain B thought.",
+            thought_number=1, total_thoughts=1, next_thought_needed=False,
+        )
+        chain_a = r1["data"]["chain_id"]
+        chain_b = r2["data"]["chain_id"]
+        assert chain_a != chain_b
+        assert len(_thought_chains[chain_a]) == 1
+        assert len(_thought_chains[chain_b]) == 1
 
 
 # =============================================================================
@@ -397,6 +656,7 @@ def reset_server_state(tmp_path):
 
     # Clean up
     shared_module._registry.reset()
+    shared_module._thought_chains.clear()
 
 
 class TestWriteMemoryTool:

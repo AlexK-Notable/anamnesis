@@ -267,11 +267,42 @@ Consider:
 If not fully done, identify what remains. If done, summarize the outcome.
 """
 
+_APPROACH_SELECTION_PROMPT = """\
+Think about the approaches available and which one best fits the situation.
+
+Consider:
+1. **Alternatives**: What approaches have you identified?
+   - Have you considered at least two distinct strategies?
+   - What are the trade-offs of each?
+   - Are there approaches you haven't considered yet?
+
+2. **Fit**: Which approach best matches the constraints?
+   - Does it align with existing patterns in the codebase?
+   - Does it minimize risk and complexity?
+   - Will it be maintainable by the team?
+
+3. **Confidence**: How certain are you in your choice?
+   - What could go wrong with your preferred approach?
+   - Is there a way to validate before committing?
+   - Would a different approach be safer to start with?
+
+Use branching to explore alternatives side by side if needed.
+"""
+
 _REFLECT_PROMPTS = {
     "collected_information": _THINK_COLLECTED_PROMPT,
     "task_adherence": _THINK_TASK_ADHERENCE_PROMPT,
     "whether_done": _THINK_DONE_PROMPT,
+    "approach_selection": _APPROACH_SELECTION_PROMPT,
 }
+
+# =============================================================================
+# Sequential Thinking State
+# =============================================================================
+
+# In-memory thought chains — ephemeral reasoning artifacts, not persisted.
+# Keyed by chain_id, each value is a list of thought dicts.
+_thought_chains: dict[str, list[dict]] = {}
 
 # =============================================================================
 # Utility Helpers

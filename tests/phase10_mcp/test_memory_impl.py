@@ -179,23 +179,23 @@ class TestReflect:
     """Tests for _reflect_impl."""
 
     def test_collected_information(self):
-        result = _reflect_impl("collected_information")
+        result = _reflect_impl(focus="collected_information")
         assert result["success"] is True
         assert result["data"]["focus"] == "collected_information"
         assert len(result["data"]["prompt"]) > 0
 
     def test_task_adherence(self):
-        result = _reflect_impl("task_adherence")
+        result = _reflect_impl(focus="task_adherence")
         assert result["success"] is True
         assert result["data"]["focus"] == "task_adherence"
 
     def test_whether_done(self):
-        result = _reflect_impl("whether_done")
+        result = _reflect_impl(focus="whether_done")
         assert result["success"] is True
         assert result["data"]["focus"] == "whether_done"
 
     def test_unknown_focus_returns_failure(self):
-        result = _reflect_impl("invalid_focus")
+        result = _reflect_impl(focus="invalid_focus")
         assert result["success"] is False
         assert "unknown" in result["error"].lower()
 
