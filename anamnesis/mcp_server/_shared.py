@@ -23,8 +23,9 @@ from anamnesis.services import (
     SessionManager,
 )
 from anamnesis.services.project_registry import ProjectContext, ProjectRegistry
+from anamnesis.telemetry import log_tool_call
 from anamnesis.utils.error_classifier import classify_error
-from anamnesis.utils.logger import logger
+from anamnesis.utils.logger import generate_request_id, logger, with_correlation_id
 from anamnesis.utils.toon_encoder import ToonEncoder, is_structurally_toon_eligible
 
 # =============================================================================
@@ -514,27 +515,62 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
             is_retryable=classification.is_retryable,
         )
 
+    def _project_path() -> str | None:
+        """Best-effort project path for telemetry (None if no project active)."""
+        try:
+            return _get_active_context().path
+        except Exception:
+            return None
+
     def decorator(func):
         if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
-                try:
-                    result = await func(*args, **kwargs)
-                    return _apply_toon(result)
-                except Exception as e:
-                    return _handle_exception(e)
+                req_id = generate_request_id()
+                start = time.monotonic()
+                with with_correlation_id(req_id, tool_name=operation_name):
+                    try:
+                        result = await func(*args, **kwargs)
+                        duration_ms = (time.monotonic() - start) * 1000
+                        log_tool_call(
+                            operation_name, kwargs, duration_ms,
+                            success=True, project_path=_project_path(),
+                        )
+                        return _apply_toon(result)
+                    except Exception as e:
+                        duration_ms = (time.monotonic() - start) * 1000
+                        log_tool_call(
+                            operation_name, kwargs, duration_ms,
+                            success=False, error=str(e),
+                            project_path=_project_path(),
+                        )
+                        return _handle_exception(e)
 
             return async_wrapper
         else:
 
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
-                try:
-                    result = func(*args, **kwargs)
-                    return _apply_toon(result)
-                except Exception as e:
-                    return _handle_exception(e)
+                req_id = generate_request_id()
+                start = time.monotonic()
+                with with_correlation_id(req_id, tool_name=operation_name):
+                    try:
+                        result = func(*args, **kwargs)
+                        duration_ms = (time.monotonic() - start) * 1000
+                        log_tool_call(
+                            operation_name, kwargs, duration_ms,
+                            success=True, project_path=_project_path(),
+                        )
+                        return _apply_toon(result)
+                    except Exception as e:
+                        duration_ms = (time.monotonic() - start) * 1000
+                        log_tool_call(
+                            operation_name, kwargs, duration_ms,
+                            success=False, error=str(e),
+                            project_path=_project_path(),
+                        )
+                        return _handle_exception(e)
 
             return wrapper
 
