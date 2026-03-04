@@ -28,12 +28,8 @@ from anamnesis.mcp_server.tools.lsp import (  # noqa: F401
     _replace_symbol_body_impl,
 )
 from anamnesis.mcp_server.tools.memory import (  # noqa: F401
-    _delete_memory_impl,
-    _edit_memory_impl,
-    _read_memory_impl,
+    _manage_memories_impl,
     _reflect_impl,
-    _search_memories_impl,
-    _write_memory_impl,
 )
 from anamnesis.mcp_server.tools.monitoring import (  # noqa: F401
     _get_system_status_impl,
@@ -45,8 +41,6 @@ from anamnesis.mcp_server.tools.search import (  # noqa: F401
     _search_codebase_impl,
 )
 from anamnesis.mcp_server.tools.session import (  # noqa: F401
-    _end_session_impl,
-    _get_sessions_impl,
     _manage_decisions_impl,
-    _start_session_impl,
+    _manage_sessions_impl,
 )

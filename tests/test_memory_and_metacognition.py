@@ -660,130 +660,115 @@ def reset_server_state(tmp_path):
 
 
 class TestWriteMemoryTool:
-    """Tests for write_memory MCP tool implementation."""
+    """Tests for manage_memories(action='write') implementation."""
 
     def test_write_returns_success(self):
-        """write_memory returns success with memory details."""
-        from anamnesis.mcp_server.tools.memory import _write_memory_impl
+        """manage_memories write returns success with memory details."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        result = _write_memory_impl("test-note", "# Test\nContent here.")
+        result = _manage_memories_impl(action="write", name="test-note", content="# Test\nContent here.")
         assert result["success"] is True
         assert result["data"]["name"] == "test-note"
         assert result["data"]["content"] == "# Test\nContent here."
 
     def test_write_invalid_name_returns_error(self):
-        """write_memory with invalid name returns error."""
-        from anamnesis.mcp_server.tools.memory import _write_memory_impl
+        """manage_memories write with invalid name returns error."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        result = _write_memory_impl("../evil", "content")
+        result = _manage_memories_impl(action="write", name="../evil", content="content")
         assert result["success"] is False
 
 
 class TestReadMemoryTool:
-    """Tests for read_memory MCP tool implementation."""
+    """Tests for manage_memories(action='read') implementation."""
 
     def test_read_existing(self):
-        """read_memory returns content for existing memory."""
-        from anamnesis.mcp_server.tools.memory import (
-            _read_memory_impl,
-            _write_memory_impl,
-        )
+        """manage_memories read returns content for existing memory."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        _write_memory_impl("readable", "the content")
-        result = _read_memory_impl("readable")
+        _manage_memories_impl(action="write", name="readable", content="the content")
+        result = _manage_memories_impl(action="read", name="readable")
         assert result["success"] is True
         assert result["data"]["content"] == "the content"
 
     def test_read_nonexistent(self):
-        """read_memory returns error for nonexistent memory."""
-        from anamnesis.mcp_server.tools.memory import _read_memory_impl
+        """manage_memories read returns error for nonexistent memory."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        result = _read_memory_impl("nope")
+        result = _manage_memories_impl(action="read", name="nope")
         assert result["success"] is False
         assert "not found" in result["error"]
 
 
 class TestListMemoriesTool:
-    """Tests for list_memories MCP tool implementation."""
+    """Tests for manage_memories(action='search') list-all mode."""
 
     def test_list_empty(self):
-        """search_memories(query=None) returns empty when no memories exist."""
-        from anamnesis.mcp_server.tools.memory import _search_memories_impl
+        """manage_memories search with no query returns empty when no memories exist."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        result = _search_memories_impl(query=None)
+        result = _manage_memories_impl(action="search")
         assert result["success"] is True
         assert result["metadata"]["total"] == 0
         assert result["data"] == []
 
     def test_list_after_writes(self):
-        """search_memories(query=None) returns entries after writing."""
-        from anamnesis.mcp_server.tools.memory import (
-            _search_memories_impl,
-            _write_memory_impl,
-        )
+        """manage_memories search with no query returns entries after writing."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        _write_memory_impl("alpha", "first")
-        _write_memory_impl("beta", "second")
+        _manage_memories_impl(action="write", name="alpha", content="first")
+        _manage_memories_impl(action="write", name="beta", content="second")
 
-        result = _search_memories_impl(query=None)
+        result = _manage_memories_impl(action="search")
         assert result["success"] is True
         assert result["metadata"]["total"] == 2
 
 
 class TestDeleteMemoryTool:
-    """Tests for delete_memory MCP tool implementation."""
+    """Tests for manage_memories(action='delete') implementation."""
 
     def test_delete_existing(self):
-        """delete_memory returns success for existing memory."""
-        from anamnesis.mcp_server.tools.memory import (
-            _delete_memory_impl,
-            _write_memory_impl,
-        )
+        """manage_memories delete returns success for existing memory."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        _write_memory_impl("temp", "temporary")
-        result = _delete_memory_impl("temp")
+        _manage_memories_impl(action="write", name="temp", content="temporary")
+        result = _manage_memories_impl(action="delete", name="temp")
         assert result["success"] is True
         assert result["data"]["deleted"] == "temp"
 
     def test_delete_nonexistent(self):
-        """delete_memory returns error for nonexistent memory."""
-        from anamnesis.mcp_server.tools.memory import _delete_memory_impl
+        """manage_memories delete returns error for nonexistent memory."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        result = _delete_memory_impl("nope")
+        result = _manage_memories_impl(action="delete", name="nope")
         assert result["success"] is False
 
 
 class TestEditMemoryTool:
-    """Tests for edit_memory MCP tool implementation."""
+    """Tests for manage_memories(action='edit') implementation."""
 
     def test_edit_returns_updated(self):
-        """edit_memory returns updated content."""
-        from anamnesis.mcp_server.tools.memory import (
-            _edit_memory_impl,
-            _write_memory_impl,
-        )
+        """manage_memories edit returns updated content."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        _write_memory_impl("editable", "Hello World!")
-        result = _edit_memory_impl("editable", "World", "Universe")
+        _manage_memories_impl(action="write", name="editable", content="Hello World!")
+        result = _manage_memories_impl(action="edit", name="editable", old_text="World", new_text="Universe")
         assert result["success"] is True
         assert result["data"]["content"] == "Hello Universe!"
 
     def test_edit_nonexistent(self):
-        """edit_memory returns error for nonexistent memory."""
-        from anamnesis.mcp_server.tools.memory import _edit_memory_impl
+        """manage_memories edit returns error for nonexistent memory."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        result = _edit_memory_impl("nope", "old", "new")
+        result = _manage_memories_impl(action="edit", name="nope", old_text="old", new_text="new")
         assert result["success"] is False
 
     def test_edit_text_not_found(self):
-        """edit_memory returns error when text not found."""
-        from anamnesis.mcp_server.tools.memory import (
-            _edit_memory_impl,
-            _write_memory_impl,
-        )
+        """manage_memories edit returns error when text not found."""
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
-        _write_memory_impl("note", "Hello World")
-        result = _edit_memory_impl("note", "Goodbye", "Hi")
+        _manage_memories_impl(action="write", name="note", content="Hello World")
+        result = _manage_memories_impl(action="edit", name="note", old_text="Goodbye", new_text="Hi")
         assert result["success"] is False
 
 
@@ -803,20 +788,16 @@ class TestToolRegistration:
         assert "reflect" in tool_names
 
     def test_memory_tools_registered(self):
-        """Memory tools are registered (list_memories merged into search_memories)."""
+        """Consolidated manage_memories tool is registered."""
         from anamnesis.mcp_server._shared import mcp
 
         tool_names = set(mcp._tool_manager._tools.keys())
-        assert "write_memory" in tool_names
-        assert "read_memory" in tool_names
-        assert "search_memories" in tool_names
-        assert "delete_memory" in tool_names
-        assert "edit_memory" in tool_names
+        assert "manage_memories" in tool_names
 
     def test_total_tool_count(self):
-        """Server has expected total tool count after consolidation + API split."""
+        """Server has expected total tool count after legacy alias removal."""
         from anamnesis.mcp_server._shared import mcp
 
         tool_count = len(mcp._tool_manager._tools)
-        # 37 → 28 → 29: 9 merges reducing tool count, +1 go_to_definition
-        assert tool_count == 29
+        # 29 original - 5 legacy memory - 3 legacy session + manage_memories + manage_sessions = 23
+        assert tool_count == 23

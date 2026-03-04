@@ -23,90 +23,78 @@ from anamnesis.mcp_server._shared import (
 # =============================================================================
 
 
-@_with_error_handling("start_session")
-def _start_session_impl(
+@_with_error_handling("manage_sessions")
+def _manage_sessions_impl(
+    action: str = "list",
     name: str = "",
     feature: str = "",
     files: list[str] | None = None,
     tasks: list[str] | None = None,
-) -> dict:
-    """Implementation for start_session tool."""
-    if name:
-        validate_string_length(name, "name", max_length=MAX_NAME_LENGTH)
-    session_manager = _get_session_manager()
-
-    session = session_manager.start_session(
-        name=name,
-        feature=feature,
-        files=files or [],
-        tasks=tasks or [],
-    )
-
-    return _success_response(
-        session.to_dict(),
-        message=f"Session '{session.session_id}' started",
-    )
-
-
-@_with_error_handling("end_session")
-def _end_session_impl(
-    session_id: str | None = None,
-) -> dict:
-    """Implementation for end_session tool."""
-    session_manager = _get_session_manager()
-
-    target_id = session_id or session_manager.active_session_id
-    if not target_id:
-        return _failure_response("No active session to end")
-
-    success = session_manager.end_session(target_id)
-
-    if success:
-        ended_session = session_manager.get_session(target_id)
-        return _success_response(
-            ended_session.to_dict() if ended_session else None,
-            message=f"Session '{target_id}' ended",
-        )
-    else:
-        return _failure_response(f"Session '{target_id}' not found")
-
-
-@_with_error_handling("get_sessions")
-def _get_sessions_impl(
     session_id: str | None = None,
     active_only: bool = False,
     limit: int = 10,
 ) -> dict:
-    """Implementation for get_sessions tool.
+    """Implementation for manage_sessions tool.
 
-    If session_id is provided, return that single session.
-    If active_only, return active sessions.
-    Otherwise, return recent sessions up to limit.
+    action="start": start a new session (uses name, feature, files, tasks).
+    action="end": end a session (uses session_id, defaults to active).
+    action="list": list sessions (uses session_id, active_only, limit).
     """
     session_manager = _get_session_manager()
 
-    if session_id:
-        session = session_manager.get_session(session_id)
-        if session:
+    if action == "start":
+        if name:
+            validate_string_length(name, "name", max_length=MAX_NAME_LENGTH)
+        session = session_manager.start_session(
+            name=name,
+            feature=feature,
+            files=files or [],
+            tasks=tasks or [],
+        )
+        return _success_response(
+            session.to_dict(),
+            message=f"Session '{session.session_id}' started",
+        )
+    elif action == "end":
+        target_id = session_id or session_manager.active_session_id
+        if not target_id:
+            return _failure_response("No active session to end")
+        success = session_manager.end_session(target_id)
+        if success:
+            ended_session = session_manager.get_session(target_id)
             return _success_response(
-                [session.to_dict()],
-                total=1,
-                active_session_id=session_manager.active_session_id,
+                ended_session.to_dict() if ended_session else None,
+                message=f"Session '{target_id}' ended",
             )
         else:
-            return _failure_response(f"Session '{session_id}' not found", session=None)
-    elif active_only:
-        sessions = session_manager.get_active_sessions()
+            return _failure_response(f"Session '{target_id}' not found")
+    elif action == "list":
+        if session_id:
+            session = session_manager.get_session(session_id)
+            if session:
+                return _success_response(
+                    [session.to_dict()],
+                    total=1,
+                    active_session_id=session_manager.active_session_id,
+                )
+            else:
+                return _failure_response(
+                    f"Session '{session_id}' not found", session=None
+                )
+        elif active_only:
+            sessions = session_manager.get_active_sessions()
+        else:
+            limit = clamp_integer(limit, "limit", 1, 100)
+            sessions = session_manager.get_recent_sessions(limit=limit)
+        return _success_response(
+            [s.to_dict() for s in sessions],
+            total=len(sessions),
+            active_session_id=session_manager.active_session_id,
+        )
     else:
-        # If no session_id, check for active session first (backward compat for get_session())
-        limit = clamp_integer(limit, "limit", 1, 100)
-        sessions = session_manager.get_recent_sessions(limit=limit)
-
-    return _success_response(
-        [s.to_dict() for s in sessions],
-        total=len(sessions),
-        active_session_id=session_manager.active_session_id,
-    )
+        return _failure_response(
+            f"Unknown action '{action}'. Choose from: start, end, list"
+        )
 
 
 @_with_error_handling("manage_decisions")
@@ -161,75 +149,50 @@ def _manage_decisions_impl(
         )
 
 
+
 # =============================================================================
 # MCP Tool Registrations
 # =============================================================================
 
 
 @mcp.tool
-def start_session(
+def manage_sessions(
+    action: Literal["start", "end", "list"] = "list",
     name: str = "",
     feature: str = "",
     files: list[str] | None = None,
     tasks: list[str] | None = None,
-) -> dict:
-    """Start a new work session to track development context.
-
-    Use this to begin tracking a focused piece of work. Sessions help
-    organize decisions, files, and tasks related to a specific feature
-    or bug fix.
-
-    Args:
-        name: Name or description of the session
-        feature: Feature being worked on (e.g., "authentication", "search")
-        files: Initial list of files being worked on
-        tasks: Initial list of tasks to complete
-
-    Returns:
-        Session info with session_id and status
-    """
-    return _start_session_impl(name, feature, files, tasks)
-
-
-@mcp.tool
-def end_session(
-    session_id: str | None = None,
-) -> dict:
-    """End a work session.
-
-    Marks the session as completed and records the end time.
-    If no session_id is provided, ends the currently active session.
-
-    Args:
-        session_id: Session ID to end (optional, defaults to active session)
-
-    Returns:
-        Result with ended session info
-    """
-    return _end_session_impl(session_id)
-
-
-@mcp.tool
-def get_sessions(
     session_id: str | None = None,
     active_only: bool = False,
     limit: int = 10,
 ) -> dict:
-    """Get work sessions by ID, active status, or recent history.
+    """Manage work sessions — start, end, or list sessions.
 
-    Retrieves session details including files, tasks, and decision count.
-    If session_id is provided, returns that single session. If active_only
-    is True, returns only active sessions. Otherwise returns recent sessions.
+    Use action="start" to begin tracking a focused piece of work. Sessions
+    help organize decisions, files, and tasks related to a specific feature.
+
+    Use action="end" to mark a session as completed. Defaults to ending
+    the currently active session if no session_id is provided.
+
+    Use action="list" to retrieve sessions by ID, active status, or
+    recent history.
 
     Args:
-        session_id: Get a specific session by ID (optional)
-        active_only: Only return active sessions (default False)
-        limit: Maximum number of sessions to return (default 10)
+        action: "start" to begin, "end" to finish, "list" to retrieve sessions
+        name: Session name (for action="start")
+        feature: Feature being worked on (for action="start")
+        files: Initial list of files (for action="start")
+        tasks: Initial list of tasks (for action="start")
+        session_id: Session ID to end or get (for action="end" or "list")
+        active_only: Only return active sessions (for action="list")
+        limit: Maximum sessions to return (for action="list", default 10)
 
     Returns:
-        List of sessions with count and active session ID
+        Session info (start/end) or list of sessions (list)
     """
-    return _get_sessions_impl(session_id, active_only, limit)
+    return _manage_sessions_impl(
+        action, name, feature, files, tasks, session_id, active_only, limit
+    )
 
 
 @mcp.tool
