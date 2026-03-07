@@ -2,7 +2,7 @@
 
 > **Anamnesis** (Greek: ἀνάμνησις) — Plato's concept of recollection, the idea that learning is really remembering knowledge the soul already possesses.
 
-Codebase Intelligence MCP Server — learns your codebase's structure, patterns, and conventions, then exposes that knowledge through 29 tools for AI agents.
+Codebase Intelligence MCP Server — learns your codebase's structure, patterns, and conventions, then exposes that knowledge through 23 tools for AI agents.
 
 ## What It Does
 
@@ -62,14 +62,14 @@ After connecting, the typical workflow is:
 
 ## Tools
 
-29 tools across 8 modules:
+23 tools across 8 modules:
 
 | Module | Tools | What They Do |
 |--------|-------|--------------|
 | **lsp** (11) | `find_symbol`, `get_symbols_overview`, `find_referencing_symbols`, `go_to_definition`, `replace_symbol_body`, `insert_near_symbol`, `rename_symbol`, `manage_lsp`, `match_sibling_style`, `analyze_code_quality`, `investigate_symbol` | Symbol navigation, go-to-definition, code editing, complexity analysis, refactoring suggestions, LSP diagnostics |
-| **memory** (6) | `write_memory`, `read_memory`, `delete_memory`, `edit_memory`, `search_memories`, `reflect` | Persistent project knowledge and metacognition |
+| **memory** (2) | `manage_memories`, `reflect` | Persistent project knowledge (write/read/edit/delete/search) and metacognition |
 | **intelligence** (4) | `manage_concepts`, `get_coding_guidance`, `get_developer_profile`, `analyze_project` | Pattern analysis, approach prediction, project blueprinting |
-| **session** (4) | `start_session`, `end_session`, `get_sessions`, `manage_decisions` | Session lifecycle and decision tracking |
+| **session** (2) | `manage_sessions`, `manage_decisions` | Session lifecycle (start/end/list) and decision tracking |
 | **search** (1) | `search_codebase` | Text, pattern, and semantic code search |
 | **project** (1) | `manage_project` | Multi-project management (status, activate) |
 | **learning** (1) | `auto_learn_if_needed` | Codebase learning orchestration |
@@ -171,7 +171,7 @@ anamnesis check .           # Run diagnostics
 | Search pipeline (text, pattern, semantic) | Complete |
 | LSP integration (navigation + editing) | Complete |
 | Synergy features S1-S5 (complexity, refactoring, investigation) | Complete |
-| MCP server with 29 tools | Complete |
+| MCP server with 23 tools | Complete |
 
 2175 tests passing across the full suite.
 
