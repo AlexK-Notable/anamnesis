@@ -535,13 +535,7 @@ class TestLearnQueryRecommendE2E:
             _manage_concepts_impl,
         )
         from anamnesis.mcp_server.tools.learning import _auto_learn_if_needed_impl
-        from anamnesis.utils.toon_encoder import ToonEncoder
-
-        _toon = ToonEncoder()
-
         def as_dict(result):
-            if isinstance(result, str):
-                return _toon.decode(result)
             return result
 
         # Step 1: Learn from the sample project
@@ -596,49 +590,37 @@ class TestMemoryCrudLifecycleE2E:
 
     def test_memory_crud_lifecycle(self):
         """Full pipeline: write -> read -> list -> search -> delete -> verify gone."""
-        from anamnesis.mcp_server.tools.memory import (
-            _delete_memory_impl,
-            _read_memory_impl,
-            _search_memories_impl,
-            _write_memory_impl,
-        )
-        from anamnesis.utils.toon_encoder import ToonEncoder
-
-        _toon = ToonEncoder()
-
-        def as_dict(result):
-            if isinstance(result, str):
-                return _toon.decode(result)
-            return result
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
         # Step 1: Write a memory
-        write_result = as_dict(
-            _write_memory_impl("test-decisions", "# Architecture Decisions\n\nUse SQLite for storage.")
+        write_result = _manage_memories_impl(
+            action="write", name="test-decisions",
+            content="# Architecture Decisions\n\nUse SQLite for storage.",
         )
         assert write_result["success"] is True
         assert write_result["data"]["name"] == "test-decisions"
 
         # Step 2: Read it back
-        read_result = as_dict(_read_memory_impl("test-decisions"))
+        read_result = _manage_memories_impl(action="read", name="test-decisions")
         assert read_result["success"] is True
         assert "Architecture Decisions" in read_result["data"]["content"]
 
         # Step 3: List all memories — should include the new one
-        list_result = as_dict(_search_memories_impl(query=None))
+        list_result = _manage_memories_impl(action="search")
         assert list_result["success"] is True
         names = [m["name"] for m in list_result["data"]]
         assert "test-decisions" in names
 
         # Step 4: Search for the memory
-        search_result = as_dict(_search_memories_impl("architecture"))
+        search_result = _manage_memories_impl(action="search", query="architecture")
         assert search_result["success"] is True
         assert len(search_result["data"]) > 0
 
         # Step 5: Delete the memory
-        delete_result = as_dict(_delete_memory_impl("test-decisions"))
+        delete_result = _manage_memories_impl(action="delete", name="test-decisions")
         assert delete_result["success"] is True
 
         # Step 6: Verify it's gone
-        list_after = as_dict(_search_memories_impl(query=None))
+        list_after = _manage_memories_impl(action="search")
         names_after = [m["name"] for m in list_after["data"]]
         assert "test-decisions" not in names_after

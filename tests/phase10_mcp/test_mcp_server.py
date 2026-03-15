@@ -5,20 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from anamnesis.utils.toon_encoder import ToonEncoder
-
-_toon = ToonEncoder()
-
-
-def _as_dict(result):
-    """Decode TOON-encoded responses back to dict for assertions.
-
-    _impl functions go through _with_error_handling which may TOON-encode
-    eligible success responses. Tests need dict access for assertions.
-    """
-    if isinstance(result, str):
-        return _toon.decode(result)
-    return result
+from .conftest import _as_dict
 
 
 # Import implementation functions from their canonical tool modules

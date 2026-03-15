@@ -111,7 +111,7 @@ Service Layer (services/ — one instance per project)
 
 - **Project isolation** — each project gets its own service instances via `ProjectContext`, preventing cross-project data contamination
 - **Lazy initialization** — services, LSP servers, and embedding models start on first use, not at server startup
-- **Error handling** — the `_with_error_handling` decorator handles exception classification, path sanitization, and optional TOON (Token-Oriented Object Notation) auto-encoding for token-efficient responses
+- **Error handling** — the `_with_error_handling` decorator handles exception classification, path sanitization, and telemetry logging
 
 ## Supported Languages
 
@@ -188,7 +188,7 @@ Every tool invocation is logged to `.anamnesis/tool_usage.jsonl` (one JSON line 
 | **Vector Search** | qdrant-client, sentence-transformers |
 | **MCP** | mcp, fastmcp |
 | **CLI** | click |
-| **Utils** | loguru, watchdog, toon-format |
+| **Utils** | loguru, watchdog |
 | **LSP** (optional) | overrides, psutil |
 
 See [pyproject.toml](pyproject.toml) for version constraints.

@@ -266,7 +266,7 @@ class TestSanitizeIntegrationWithDecorator:
     def test_sync_decorator_sanitizes_path_in_exception(self):
         """Sync decorated function: path in exception is sanitized."""
 
-        @_with_error_handling("test_op", toon_auto=False)
+        @_with_error_handling("test_op")
         def failing_func():
             raise FileNotFoundError("/home/komi/repos/secret/config.yaml")
 
@@ -279,7 +279,7 @@ class TestSanitizeIntegrationWithDecorator:
         """Async decorated function: path in exception is sanitized."""
         import asyncio
 
-        @_with_error_handling("test_op_async", toon_auto=False)
+        @_with_error_handling("test_op_async")
         async def failing_async():
             raise PermissionError(
                 "Cannot read /etc/anamnesis/secrets.json: permission denied"
@@ -294,7 +294,7 @@ class TestSanitizeIntegrationWithDecorator:
     def test_decorator_sanitizes_file_uri_in_exception(self):
         """file:// URIs in exceptions are sanitized by the decorator."""
 
-        @_with_error_handling("test_uri", toon_auto=False)
+        @_with_error_handling("test_uri")
         def failing_func():
             raise ValueError(
                 "Invalid source: file:///home/user/project/main.py"
@@ -308,7 +308,7 @@ class TestSanitizeIntegrationWithDecorator:
     def test_decorator_sanitizes_traversal_in_exception(self):
         """Traversal sequences in exceptions are sanitized by the decorator."""
 
-        @_with_error_handling("test_traversal", toon_auto=False)
+        @_with_error_handling("test_traversal")
         def failing_func():
             raise OSError("Blocked access to ../../secret/keys.pem")
 
@@ -320,7 +320,7 @@ class TestSanitizeIntegrationWithDecorator:
     def test_decorator_preserves_non_path_error_message(self):
         """Errors without paths pass through the decorator unchanged."""
 
-        @_with_error_handling("test_clean", toon_auto=False)
+        @_with_error_handling("test_clean")
         def failing_func():
             raise RuntimeError("Connection timeout after 30s")
 
@@ -331,7 +331,7 @@ class TestSanitizeIntegrationWithDecorator:
     def test_decorator_returns_standard_failure_shape(self):
         """Decorated error responses include success, error, and error_code."""
 
-        @_with_error_handling("test_shape", toon_auto=False)
+        @_with_error_handling("test_shape")
         def failing_func():
             raise ValueError("/var/log/anamnesis/debug.log not writable")
 

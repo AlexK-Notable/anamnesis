@@ -6,7 +6,6 @@ This package provides shared utilities used across the Anamnesis codebase:
 - Security (path validation, sensitive file detection)
 - Language detection and registry
 - Resilience (error classification)
-- TOON encoding and response formatting
 """
 
 # Logger
@@ -76,22 +75,6 @@ from .error_classifier import (
     is_retryable as is_error_retryable,
 )
 
-# TOON Encoder (Phase 13)
-from .toon_encoder import (
-    ResponseFormat,
-    ToonEncoder,
-    ToonEncodingError,
-    estimate_token_savings,
-    has_nested_arrays,
-    is_structurally_toon_eligible,
-)
-
-# Serialization (Phase 13)
-from .serialization import (
-    is_serialized,
-    serialize_to_primitives,
-)
-
 # Model Registry
 from .model_registry import (
     get_model_cache_stats,
@@ -156,16 +139,6 @@ __all__ = [
     "ErrorClassification",
     "classify_error",
     "is_error_retryable",
-    # TOON Encoder (Phase 13)
-    "ResponseFormat",
-    "ToonEncoder",
-    "ToonEncodingError",
-    "estimate_token_savings",
-    "has_nested_arrays",
-    "is_structurally_toon_eligible",
-    # Serialization (Phase 13)
-    "is_serialized",
-    "serialize_to_primitives",
     # Model Registry
     "get_model_cache_stats",
     "get_shared_sentence_transformer",

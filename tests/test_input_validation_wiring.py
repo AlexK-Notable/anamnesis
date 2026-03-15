@@ -106,29 +106,27 @@ class TestSearchQueryTooLongRejected:
 
 
 class TestMemoryWriteEmptyNameRejected:
-    """Verify that _write_memory_impl rejects empty names."""
+    """Verify that manage_memories rejects empty names."""
 
     def test_empty_name_returns_failure(self):
-        from anamnesis.mcp_server.tools.memory import _write_memory_impl
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
         # No need to mock services — validation fires before service access
-        result = _write_memory_impl("", "some content")
+        result = _manage_memories_impl(action="write", name="", content="some content")
 
         assert result["success"] is False
         assert "name" in result["error"].lower()
-        assert "at least" in result["error"].lower()
-
 
 class TestMemoryWriteOversizedContentRejected:
-    """Verify that _write_memory_impl rejects oversized content."""
+    """Verify that manage_memories rejects oversized content."""
 
     def test_content_over_500k_returns_failure(self):
-        from anamnesis.mcp_server.tools.memory import _write_memory_impl
+        from anamnesis.mcp_server.tools.memory import _manage_memories_impl
 
         huge_content = "x" * 600_000
 
         # No need to mock services — validation fires before service access
-        result = _write_memory_impl("valid-name", huge_content)
+        result = _manage_memories_impl(action="write", name="valid-name", content=huge_content)
 
         assert result["success"] is False
         assert "content" in result["error"].lower()

@@ -1,24 +1,14 @@
 """Shared test infrastructure for phase10_mcp tests.
 
-Provides unified fixtures for resetting server state, decoding TOON
-responses, and creating sample Python projects for _impl testing.
+Provides unified fixtures for resetting server state and creating
+sample Python projects for _impl testing.
 """
 
 import pytest
 
-from anamnesis.utils.toon_encoder import ToonEncoder
-
-_toon = ToonEncoder()
-
 
 def _as_dict(result):
-    """Decode TOON-encoded responses back to dict for assertions.
-
-    _impl functions go through _with_error_handling which may TOON-encode
-    eligible success responses. Tests need dict access for assertions.
-    """
-    if isinstance(result, str):
-        return _toon.decode(result)
+    """Identity helper — results are always dicts now (TOON removed)."""
     return result
 
 

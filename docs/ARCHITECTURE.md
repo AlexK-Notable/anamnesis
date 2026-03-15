@@ -7,7 +7,7 @@
 ## System Overview
 
 Anamnesis is a **Model Context Protocol (MCP) server** that provides codebase
-intelligence through 29 tools. It learns from codebases by extracting semantic
+intelligence through 23 tools. It learns from codebases by extracting semantic
 concepts (classes, functions, patterns, frameworks), stores them in SQLite and
 Qdrant, and serves them to LLM-based agents via the MCP protocol.
 
@@ -40,7 +40,7 @@ cross-project data contamination. The primary entry point is either the CLI
         v
 +---------------------------------------------------------------------+
 | Layer 1: MCP Tool Layer           anamnesis/mcp_server/             |
-|   _shared.py (FastMCP instance, error handling, TOON encoding)      |
+|   _shared.py (FastMCP instance, error handling, telemetry)          |
 |   server.py  (coordinator, tool import trigger)                     |
 |   tools/     (8 modules: lsp, intelligence, memory, session,        |
 |               project, search, learning, monitoring)                |
@@ -115,12 +115,12 @@ cross-project data contamination. The primary entry point is either the CLI
 
 | File | Responsibility | Key Exports |
 |------|---------------|-------------|
-| `_shared.py` | FastMCP instance, service accessors, `_with_error_handling` decorator, TOON encoding, metacognition prompts | `mcp`, `_registry`, `_with_error_handling` |
+| `_shared.py` | FastMCP instance, service accessors, `_with_error_handling` decorator, metacognition prompts | `mcp`, `_registry`, `_with_error_handling` |
 | `server.py` | Coordinator -- imports all tool modules (triggering `@mcp.tool` registration), re-exports `_impl` names for tests | `create_server()` |
 | `tools/lsp.py` | 11 tools: find_symbol, get_symbols_overview, find_referencing_symbols, go_to_definition, replace_symbol_body, insert_near_symbol, rename_symbol, manage_lsp, match_sibling_style, analyze_code_quality, investigate_symbol | LSP + synergy _impl functions |
 | `tools/intelligence.py` | 4 tools: manage_concepts, get_coding_guidance, get_developer_profile, analyze_project | Intelligence _impl functions |
-| `tools/memory.py` | 6 tools: write/read/delete/edit memory, search_memories, reflect | Memory _impl functions |
-| `tools/session.py` | 4 tools: start_session, end_session, get_sessions, manage_decisions | Session _impl functions |
+| `tools/memory.py` | 2 tools: manage_memories (write/read/edit/delete/search), reflect | Memory _impl functions |
+| `tools/session.py` | 2 tools: manage_sessions (start/end/list), manage_decisions (record/list) | Session _impl functions |
 | `tools/project.py` | 1 tool: manage_project (status + activate) | Project _impl functions |
 | `tools/search.py` | 1 tool: search_codebase (text, pattern, semantic) | Search _impl functions |
 | `tools/learning.py` | 1 tool: auto_learn_if_needed | `_auto_learn_if_needed_impl` |
@@ -133,7 +133,7 @@ cross-project data contamination. The primary entry point is either the CLI
 def tool_name(args) -> dict:       <-- delegates to _impl
     return _tool_name_impl(args)
 
-@_with_error_handling("tool_name") <-- error classification + TOON encoding
+@_with_error_handling("tool_name") <-- error classification + telemetry
 def _tool_name_impl(args) -> dict: <-- business logic
     service = _get_some_service()
     result = service.do_something()
@@ -227,7 +227,7 @@ extraction API in `anamnesis.extraction` should be preferred for new code.
 
 | Package | Key Files | Responsibility |
 |---------|----------|---------------|
-| `utils/` | `toon_encoder.py`, `error_classifier.py`, `security.py`, `logger.py`, `serialization.py`, `language_registry.py`, `helpers.py`, `model_registry.py` | TOON encoding, error classification (lookup table), path sanitization, language detection, `enum_value()` helper, SentenceTransformer model caching |
+| `utils/` | `error_classifier.py`, `security.py`, `logger.py`, `language_registry.py`, `helpers.py`, `model_registry.py` | Error classification (lookup table), path sanitization, language detection, `enum_value()` helper, SentenceTransformer model caching |
 | `patterns/` | `matcher.py`, `ast_matcher.py`, `regex_matcher.py` | Pattern matching for search (AST + regex) |
 | `interfaces/` | `search.py`, `engines.py` | ABCs and Protocols (`SearchBackend`, `ISearchService`, `SemanticSearchResult`) |
 | `parsing/` | `tree_sitter_wrapper.py`, `language_parsers.py`, `ast_types.py` | Tree-sitter wrapper layer for parser management |
@@ -328,7 +328,7 @@ Auto-onboarding (S5):
   |-- MemoryService.write_memory("project-overview", ...)
   |
   v
-Response dict -> _with_error_handling -> TOON encoding check -> MCP Client
+Response dict -> _with_error_handling -> MCP Client
 ```
 
 ### Search Flow (search_codebase)
@@ -359,7 +359,7 @@ SearchService.search(SearchQuery)      [search/service.py]
   +-- Backend unavailable?    -> Fallback to TextSearchBackend
   |
   v
-SearchResult[] -> Response dict -> TOON encoding -> MCP Client
+SearchResult[] -> Response dict -> MCP Client
 ```
 
 ### Symbol Investigation Flow (S4 Synergy)
@@ -390,7 +390,7 @@ SymbolService.investigate_symbol()     [services/symbol_service.py]
   |     (cyclomatic > 20, cognitive > 25, params > 5, etc.)
   |
   v
-Investigation dict -> Response -> TOON encoding -> MCP Client
+Investigation dict -> Response -> MCP Client
 ```
 
 ### Error Handling Flow
@@ -402,10 +402,7 @@ Tool _impl function
   |     |
   |     v
   |   _with_error_handling decorator
-  |     |-- Is result TOON-eligible?
-  |     |     (flat uniform arrays, >= 5 elements, no nested arrays)
-  |     +-- Yes -> ToonEncoder.encode(result) -> return TOON string
-  |     +-- No  -> return dict as-is (JSON via FastMCP)
+  |     +-- return dict as-is (JSON via FastMCP)
   |
   +-- Exception:
         -> classify_error(e) -> ErrorClassification
@@ -445,22 +442,7 @@ loop. The dedicated thread with `run_coroutine_threadsafe()` avoids this.
 (making the entire service layer async) would require pervasive changes and
 async function coloring throughout the codebase.
 
-### 3. TOON Auto-Encoding
-
-**Decision**: Automatically TOON-encode eligible success responses for token
-savings. Error responses are never TOON-encoded.
-
-**Rationale**: TOON achieves approximately 25-40% token savings for responses
-with flat uniform arrays (e.g., search results, symbol lists). Auto-encoding
-via the `_with_error_handling` decorator means tool authors do not need to
-think about encoding. `is_structurally_toon_eligible()` checks for flat
-uniform arrays with 5 or more elements and no nested arrays.
-
-**Trade-off**: Silent encoding means tool consumers receive either a TOON
-string or a JSON dict depending on response shape. FastMCP handles both.
-If TOON encoding fails for any reason, the original dict is returned silently.
-
-### 4. `_impl` + `@mcp.tool` Separation
+### 3. `_impl` + `@mcp.tool` Separation
 
 **Decision**: Every tool has a thin `@mcp.tool` wrapper that delegates to a
 `_impl` function decorated with `@_with_error_handling`.
@@ -471,7 +453,7 @@ If TOON encoding fails for any reason, the original dict is returned silently.
 - Clean docstrings on the `@mcp.tool` function (LLM-facing)
 - Re-export of `_impl` names for backward test compatibility
 
-**Trade-off**: Two functions per tool (58 functions for 29 tools) adds
+**Trade-off**: Two functions per tool (58 functions for 23 tools) adds
 boilerplate, but the pattern is highly consistent and tool authors follow it
 by convention.
 
@@ -639,7 +621,6 @@ Key concurrency points:
 | `click>=8.0.0` | CLI framework |
 | `loguru>=0.7.0` | Structured logging |
 | `watchdog>=3.0.0` | File system watching |
-| `toon-format` | Token-efficient response encoding |
 
 ### Optional (LSP)
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Anamnesis consolidated its MCP tools from 41 down to 29 across three rounds. The goals were:
+Anamnesis consolidated its MCP tools from 41 down to 23 across four rounds. The goals were:
 
 1. **Reduce tool count** so LLM clients spend fewer tokens on tool discovery.
 2. **Unify dispatch** via `action` or `detail_level` parameters instead of separate tools for each operation.
@@ -10,7 +10,7 @@ Anamnesis consolidated its MCP tools from 41 down to 29 across three rounds. The
 
 If you previously integrated with Anamnesis tools, this document maps every old tool name to its current equivalent with exact parameter signatures.
 
-**Tool count history:** 41 (initial) --> 37 (Round 1) --> 28 (Round 2) --> 29 (Round 3, `go_to_definition` added).
+**Tool count history:** 41 (initial) --> 37 (Round 1) --> 28 (Round 2) --> 29 (Round 3, `go_to_definition` added) --> 23 (Round 4, memory + session consolidation).
 
 ---
 
@@ -31,9 +31,17 @@ Every old tool name and its current replacement. Tools that were unchanged acros
 | `get_learned_concepts` | `manage_concepts` | `action="query"` |
 | `contribute_insights` | `manage_concepts` | `action="contribute"` |
 | `suggest_code_pattern` | `match_sibling_style` | (renamed, same semantics) |
-| `list_memories` | `search_memories` | `query=None` (omit query to list all) |
-| `get_session` | `get_sessions` | `session_id="..."` |
-| `list_sessions` | `get_sessions` | (no arguments, or `active_only=True`) |
+| `list_memories` | `manage_memories` | `action="search"` (omit query to list all) |
+| `write_memory` | `manage_memories` | `action="write", name="...", content="..."` |
+| `read_memory` | `manage_memories` | `action="read", name="..."` |
+| `edit_memory` | `manage_memories` | `action="edit", name="...", old_text="...", new_text="..."` |
+| `delete_memory` | `manage_memories` | `action="delete", name="..."` |
+| `search_memories` | `manage_memories` | `action="search", query="..."` |
+| `start_session` | `manage_sessions` | `action="start", name="...", feature="..."` |
+| `end_session` | `manage_sessions` | `action="end"` (or `session_id="..."`) |
+| `get_session` | `manage_sessions` | `action="list", session_id="..."` |
+| `list_sessions` | `manage_sessions` | `action="list"` (or `active_only=True`) |
+| `get_sessions` | `manage_sessions` | `action="list"` |
 | `record_decision` | `manage_decisions` | `action="record"` |
 | `get_decisions` | `manage_decisions` | `action="list"` |
 | `get_pattern_recommendations` | `get_coding_guidance` | `include_patterns=True` |
@@ -373,7 +381,7 @@ go_to_definition(relative_path="src/api.py", line=42, column=8)
 
 ## Complete Tool Reference
 
-All 29 current tools with full parameter signatures, organized by module.
+All 23 current tools with full parameter signatures, organized by module.
 
 ### tools/lsp.py (11 tools)
 

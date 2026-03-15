@@ -26,7 +26,6 @@ from anamnesis.services.project_registry import ProjectContext, ProjectRegistry
 from anamnesis.telemetry import log_tool_call
 from anamnesis.utils.error_classifier import classify_error
 from anamnesis.utils.logger import generate_request_id, logger, with_correlation_id
-from anamnesis.utils.toon_encoder import ToonEncoder, is_structurally_toon_eligible
 
 # =============================================================================
 # Server Lifecycle
@@ -128,7 +127,6 @@ def _parse_allowed_roots() -> list[str] | None:
 
 _registry = ProjectRegistry(allowed_roots=_parse_allowed_roots())
 _server_start_time: float = time.time()
-_toon_encoder = ToonEncoder()
 
 # =============================================================================
 # Registry-based Service Access
@@ -497,38 +495,16 @@ def _failure_response(
     }
 
 
-def _with_error_handling(operation_name: str, toon_auto: bool = True):
-    """Decorator for MCP tool implementations with error handling and TOON auto-encoding.
+def _with_error_handling(operation_name: str):
+    """Decorator for MCP tool implementations with error handling.
 
     Catches exceptions and returns standardized
     ``{"success": False, "error": "..."}`` error responses.
     Supports both sync and async tool implementations.
 
-    When toon_auto is True (default), successful dict responses are checked
-    for structural TOON eligibility. Eligible responses (flat uniform arrays
-    with ≥5 elements, no nested arrays) are encoded to TOON format for
-    ~25-40% token savings. The encoded string is returned directly — FastMCP
-    wraps it as TextContent. Error responses always stay as JSON dicts for
-    maximum debuggability.
-
-    If TOON encoding fails for any reason, the original dict is returned
-    silently (no error propagated).
-
     Args:
         operation_name: Name of the operation for logging and error context.
-        toon_auto: Enable automatic TOON encoding for eligible responses.
-            Set to False for tools where JSON output is required.
     """
-
-    def _apply_toon(result):
-        """Apply TOON encoding to eligible success dicts."""
-        if toon_auto and isinstance(result, dict) and result.get("success"):
-            try:
-                if is_structurally_toon_eligible(result):
-                    return _toon_encoder.encode(result)
-            except Exception:
-                logger.debug("TOON encoding failed, falling back to JSON", exc_info=True)
-        return result
 
     def _handle_exception(e: Exception):
         classification = classify_error(e, {"operation": operation_name})
@@ -569,7 +545,7 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                             success=True, project_path=_project_path(),
                             result=result,
                         )
-                        return _apply_toon(result)
+                        return result
                     except Exception as e:
                         duration_ms = (time.monotonic() - start) * 1000
                         log_tool_call(
@@ -595,7 +571,7 @@ def _with_error_handling(operation_name: str, toon_auto: bool = True):
                             success=True, project_path=_project_path(),
                             result=result,
                         )
-                        return _apply_toon(result)
+                        return result
                     except Exception as e:
                         duration_ms = (time.monotonic() - start) * 1000
                         log_tool_call(

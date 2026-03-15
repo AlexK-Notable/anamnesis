@@ -1,10 +1,10 @@
 # Anamnesis Tool Guide
 
-End-user reference for the Anamnesis MCP server. Covers all 29 tools, organized by what you want to accomplish.
+End-user reference for the Anamnesis MCP server. Covers all 23 tools, organized by what you want to accomplish.
 
 ## Introduction
 
-Anamnesis is a codebase intelligence MCP server. It learns the structure, patterns, and conventions of your codebase, then exposes that knowledge through 29 tools that AI agents (and humans) can call from Claude Desktop or Claude Code.
+Anamnesis is a codebase intelligence MCP server. It learns the structure, patterns, and conventions of your codebase, then exposes that knowledge through 23 tools that AI agents (and humans) can call from Claude Desktop or Claude Code.
 
 The server uses tree-sitter for structural parsing across 10 languages, optional LSP integration for compiler-grade symbol navigation and editing, SQLite for persistent storage, Qdrant for vector similarity search, and sentence-transformers for semantic embeddings.
 
@@ -615,190 +615,78 @@ Persistent project knowledge that survives across conversations and sessions.
 
 ---
 
-#### `write_memory`
+#### `manage_memories`
 
-Write information about the project that will be useful for future tasks. Stores a markdown file in `.anamnesis/memories/` within the project root.
+Unified memory management — write, read, edit, delete, or search project memories. Stores markdown files in `.anamnesis/memories/` within the project root.
 
 **Parameters:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `name` | `str` | *(required)* | Name for the memory (letters, numbers, hyphens, underscores, dots) |
-| `content` | `str` | *(required)* | The content to write (markdown recommended) |
+| `action` | `"write"` / `"read"` / `"edit"` / `"delete"` / `"search"` | `"search"` | Operation to perform |
+| `name` | `str` | `""` | Memory name (required for write/read/edit/delete) |
+| `content` | `str` | `""` | Content to write (required for action="write") |
+| `old_text` | `str` | `""` | Text to find (required for action="edit") |
+| `new_text` | `str` | `""` | Replacement text (for action="edit") |
+| `query` | `str` or `None` | `None` | Search query. Omit to list all (for action="search") |
+| `limit` | `int` | `5` | Maximum search results |
 
-**Example:**
+**Examples:**
 
 ```python
-write_memory(
-    name="authentication-flow",
-    content="# Authentication Flow\n\nThe app uses JWT tokens with refresh rotation..."
-)
-```
+# Write
+manage_memories(action="write", name="auth-flow", content="# Auth Flow\n\nUses JWT...")
 
-**Returns:** Written memory details.
+# Read
+manage_memories(action="read", name="auth-flow")
+
+# Edit
+manage_memories(action="edit", name="auth-flow", old_text="JWT", new_text="OAuth2")
+
+# Delete
+manage_memories(action="delete", name="deprecated-notes")
+
+# Search
+manage_memories(action="search", query="authentication decisions", limit=3)
+
+# List all
+manage_memories(action="search")
+```
 
 ---
 
-#### `read_memory`
+#### `manage_sessions`
 
-Read the content of a previously stored memory. Only read memories relevant to the current task.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `name` | `str` | *(required)* | Name of the memory to read |
-
-**Example:**
-
-```python
-read_memory(name="architecture-decisions")
-```
-
-**Returns:** Memory content and metadata, or error if not found.
-
----
-
-#### `edit_memory`
-
-Edit an existing memory by replacing specific text, without rewriting the entire content.
+Unified session management — start, end, or list work sessions. Sessions track development context including files, tasks, and decisions.
 
 **Parameters:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `name` | `str` | *(required)* | Name of the memory to edit |
-| `old_text` | `str` | *(required)* | The exact text to find and replace |
-| `new_text` | `str` | *(required)* | The replacement text |
+| `action` | `"start"` / `"end"` / `"list"` | `"list"` | Operation to perform |
+| `name` | `str` | `""` | Session name (for action="start") |
+| `feature` | `str` | `""` | Feature being worked on (for action="start") |
+| `files` | `list[str]` or `None` | `None` | Initial files (for action="start") |
+| `tasks` | `list[str]` or `None` | `None` | Initial tasks (for action="start") |
+| `session_id` | `str` or `None` | `None` | Session ID (for action="end" or "list") |
+| `active_only` | `bool` | `False` | Only active sessions (for action="list") |
+| `limit` | `int` | `10` | Max sessions to return (for action="list") |
 
-**Example:**
-
-```python
-edit_memory(
-    name="authentication-flow",
-    old_text="JWT tokens with refresh rotation",
-    new_text="OAuth2 with PKCE flow"
-)
-```
-
-**Returns:** Updated memory content and metadata.
-
----
-
-#### `delete_memory`
-
-Delete a memory that is no longer relevant or correct.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `name` | `str` | *(required)* | Name of the memory to delete |
-
-**Example:**
+**Examples:**
 
 ```python
-delete_memory(name="deprecated-api-notes")
+# Start
+manage_sessions(action="start", name="Add rate limiting", feature="api-rate-limiting")
+
+# End (active session)
+manage_sessions(action="end")
+
+# End (specific session)
+manage_sessions(action="end", session_id="session_abc123")
+
+# List active
+manage_sessions(action="list", active_only=True)
 ```
-
-**Returns:** Success status.
-
----
-
-#### `search_memories`
-
-Search project memories or list all memories. When a query is provided, finds memories relevant to the natural language query using embedding-based search (falls back to substring matching). When query is omitted, lists all available memories with metadata.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `query` | `str` or `None` | `None` | What you are looking for. Omit to list all memories. |
-| `limit` | `int` | `5` | Maximum results (applies to search only) |
-
-**Example (search):**
-
-```python
-search_memories(query="authentication decisions", limit=3)
-```
-
-**Example (list all):**
-
-```python
-search_memories()
-```
-
-**Returns:** Matching memories ranked by relevance, or all memories if no query.
-
----
-
-#### `start_session`
-
-Start a new work session to track development context. Sessions help organize decisions, files, and tasks related to a specific feature or bug fix.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `name` | `str` | `""` | Name or description of the session |
-| `feature` | `str` | `""` | Feature being worked on (e.g., `"authentication"`, `"search"`) |
-| `files` | `list[str]` or `None` | `None` | Initial list of files being worked on |
-| `tasks` | `list[str]` or `None` | `None` | Initial list of tasks to complete |
-
-**Example:**
-
-```python
-start_session(
-    name="Add rate limiting",
-    feature="api-rate-limiting",
-    files=["src/middleware/rate_limit.py", "src/config.py"],
-    tasks=["Implement token bucket", "Add configuration", "Write tests"]
-)
-```
-
-**Returns:** Session info with `session_id` and status.
-
----
-
-#### `end_session`
-
-End a work session. Marks the session as completed and records the end time.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `session_id` | `str` or `None` | `None` | Session ID to end. Defaults to the currently active session. |
-
-**Example:**
-
-```python
-end_session()
-```
-
-**Returns:** Ended session info.
-
----
-
-#### `get_sessions`
-
-Retrieve work sessions by ID, active status, or recent history.
-
-**Parameters:**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `session_id` | `str` or `None` | `None` | Get a specific session by ID |
-| `active_only` | `bool` | `False` | Only return active sessions |
-| `limit` | `int` | `10` | Maximum number of sessions to return |
-
-**Example:**
-
-```python
-get_sessions(active_only=True)
-```
-
-**Returns:** List of sessions with count and active session ID.
 
 ---
 
@@ -964,7 +852,7 @@ get_system_status(sections="all", run_benchmark=True)
 1. auto_learn_if_needed(path="/path/to/project")
    -> Builds intelligence database, creates project-overview memory
 
-2. read_memory(name="project-overview")
+2. manage_memories(action="read", name="project-overview")
    -> Read the auto-generated overview
 
 3. analyze_project(scope="project", include_feature_map=True)
@@ -997,7 +885,7 @@ get_system_status(sections="all", run_benchmark=True)
 3. search_codebase(query="class.*Service", search_type="pattern")
    -> Find existing services to use as templates
 
-4. start_session(name="Add email notifications", feature="notifications")
+4. manage_sessions(action="start", name="Add email notifications", feature="notifications")
    -> Track your work context
 
 5. manage_decisions(
@@ -1009,7 +897,7 @@ get_system_status(sections="all", run_benchmark=True)
 
 6. [Write code using insert_near_symbol, replace_symbol_body, etc.]
 
-7. end_session()
+7. manage_sessions(action="end")
 ```
 
 ### "I need to understand this code"
@@ -1120,11 +1008,11 @@ The language server binary must be installed on the system (see [LSP Prerequisit
 
 ### Memory naming conventions
 
-Use descriptive, kebab-case names for memories: `architecture-decisions`, `api-patterns`, `testing-strategy`. This makes them easy to find with `search_memories`.
+Use descriptive, kebab-case names for memories: `architecture-decisions`, `api-patterns`, `testing-strategy`. This makes them easy to find with `manage_memories(action="search")`.
 
 ### Sessions help with context continuity
 
-If you are working on a multi-step task, use `start_session` at the beginning. This creates a container for decisions, files, and tasks. When you return to the task later, call `get_sessions(active_only=True)` to restore context.
+If you are working on a multi-step task, use `manage_sessions(action="start")` at the beginning. This creates a container for decisions, files, and tasks. When you return to the task later, call `manage_sessions(action="list", active_only=True)` to restore context.
 
 ### Reflect at checkpoints
 
@@ -1163,15 +1051,9 @@ Use `"quick"` for initial triage (which functions are complex?), then `"standard
 | `analyze_project` | intelligence | No | Project blueprint or file analysis |
 | `search_codebase` | search | No | Text, pattern, semantic search |
 | `auto_learn_if_needed` | learning | No | Bootstrap intelligence |
-| `write_memory` | memory | No | Store project knowledge |
-| `read_memory` | memory | No | Retrieve stored knowledge |
-| `edit_memory` | memory | No | Update stored knowledge |
-| `delete_memory` | memory | No | Remove stored knowledge |
-| `search_memories` | memory | No | Search or list memories |
+| `manage_memories` | memory | No | Write/read/edit/delete/search memories |
 | `reflect` | memory | No | Metacognitive prompts |
-| `start_session` | session | No | Begin work session |
-| `end_session` | session | No | End work session |
-| `get_sessions` | session | No | Retrieve sessions |
+| `manage_sessions` | session | No | Start/end/list work sessions |
 | `manage_decisions` | session | No | Record/list decisions |
 | `manage_project` | project | No | Switch projects, view status |
 | `get_system_status` | monitoring | No | Server health dashboard |

@@ -149,17 +149,7 @@ class SessionManager:
             backend: Storage backend for persistence
         """
         self._backend = backend
-        self._active_session_id: str | None = None
-
-        # Recover active session from persistent backend (post-restart)
-        try:
-            active = self._backend.get_active_sessions()
-            if active:
-                # Pick most recently started session
-                active.sort(key=lambda s: s.started_at, reverse=True)
-                self._active_session_id = active[0].id
-        except Exception:
-            pass  # Non-critical; worst case end_session() needs explicit ID
+        self._local_session_id: str | None = None
 
     @property
     def backend(self) -> "SyncSQLiteBackend":
@@ -168,8 +158,20 @@ class SessionManager:
 
     @property
     def active_session_id(self) -> str | None:
-        """Get the currently active session ID (most recently started)."""
-        return self._active_session_id
+        """Get the currently active session ID (most recently started).
+
+        Queries the database each time to reflect sessions created by
+        external processes (e.g. other MCP server instances). Falls back
+        to the locally-started session if the DB query fails.
+        """
+        try:
+            active = self._backend.get_active_sessions()
+            if active:
+                active.sort(key=lambda s: s.started_at, reverse=True)
+                return active[0].id
+        except Exception:
+            pass
+        return self._local_session_id
 
     def start_session(
         self,
@@ -210,7 +212,7 @@ class SessionManager:
         )
 
         self._backend.save_work_session(session)
-        self._active_session_id = session_id
+        self._local_session_id = session_id
 
         return SessionInfo(
             session_id=session_id,
@@ -234,13 +236,13 @@ class SessionManager:
         Returns:
             True if session was ended, False if not found
         """
-        target_id = session_id or self._active_session_id
+        target_id = session_id or self._local_session_id
         if not target_id:
             return False
 
         success = self._backend.end_work_session(target_id)
-        if success and target_id == self._active_session_id:
-            self._active_session_id = None
+        if success and target_id == self._local_session_id:
+            self._local_session_id = None
 
         return success
 
@@ -317,7 +319,7 @@ class SessionManager:
         Returns:
             Updated SessionInfo or None if not found
         """
-        target_id = session_id or self._active_session_id
+        target_id = session_id or self._local_session_id
         if not target_id:
             return None
 
@@ -354,7 +356,7 @@ class SessionManager:
         Returns:
             True if added, False if session not found
         """
-        target_id = session_id or self._active_session_id
+        target_id = session_id or self._local_session_id
         if not target_id:
             return False
 
@@ -383,7 +385,7 @@ class SessionManager:
         Returns:
             True if added, False if session not found
         """
-        target_id = session_id or self._active_session_id
+        target_id = session_id or self._local_session_id
         if not target_id:
             return False
 
@@ -423,7 +425,7 @@ class SessionManager:
             DecisionInfo with the recorded decision
         """
         decision_id = generate_id("decision")
-        target_session = session_id or self._active_session_id or ""
+        target_session = session_id or self._local_session_id or ""
         now = utcnow()
 
         project_decision = ProjectDecision(

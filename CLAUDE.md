@@ -1,6 +1,6 @@
 # CLAUDE.md -- Anamnesis
 
-Codebase intelligence MCP server. 29 tools across 8 modules. Python 3.11+, FastMCP transport, tree-sitter parsing, SQLite + Qdrant storage.
+Codebase intelligence MCP server. 23 tools across 8 modules. Python 3.11+, FastMCP transport, tree-sitter parsing, SQLite + Qdrant storage.
 
 ## Quick Start
 
@@ -30,7 +30,7 @@ pyright anamnesis
 Three-sentence summary:
 
 1. `ProjectRegistry` manages multiple projects; each gets an isolated `ProjectContext` with lazily-initialized service instances (double-checked locking via `RLock`).
-2. MCP tools (`@mcp.tool` thin wrappers) call `_impl()` functions, which call services, which call engines/storage. The `_with_error_handling` decorator handles error classification, path sanitization, optional TOON auto-encoding, and telemetry logging.
+2. MCP tools (`@mcp.tool` thin wrappers) call `_impl()` functions, which call services, which call engines/storage. The `_with_error_handling` decorator handles error classification, path sanitization, and telemetry logging.
 3. Code extraction flows through `ExtractionOrchestrator` which routes to backends by priority: `TreeSitterBackend` (50) for structural symbols, `RegexBackend` (10) for constants/framework detection.
 
 ### Call Chain
@@ -57,18 +57,18 @@ MCP Client -> FastMCP (mcp_server/_shared.py)
 | `lsp/` | Language Server Protocol integration | `manager.py`, `symbols.py` (nav), `editor.py` (mutations) |
 | `extractors/` | Low-level tree-sitter extractors (internal to TreeSitterBackend) | `symbol_extractor.py`, `pattern_extractor.py`, `import_extractor.py` |
 | `patterns/` | Pattern matching (AST + regex) | `matcher.py`, `ast_matcher.py`, `regex_matcher.py` |
-| `utils/` | Cross-cutting concerns | `toon_encoder.py`, `error_classifier.py`, `security.py`, `language_registry.py` |
+| `utils/` | Cross-cutting concerns | `error_classifier.py`, `security.py`, `language_registry.py` |
 | `cli/` | Click-based CLI | `main.py` (entry point: `anamnesis.cli.main:cli`) |
 | `telemetry.py` | Tool usage JSONL logging (top-level module) | `ToolUsageLogger`, `log_tool_call()` |
 
-### Tool Modules (29 tools)
+### Tool Modules (23 tools)
 
 | Module | Count | Domain |
 |--------|-------|--------|
 | `tools/lsp.py` | 11 | `find_symbol`, `get_symbols_overview`, `find_referencing_symbols`, `go_to_definition`, `replace_symbol_body`, `insert_near_symbol`, `rename_symbol`, `manage_lsp`, `match_sibling_style`, `analyze_code_quality`, `investigate_symbol` |
 | `tools/intelligence.py` | 4 | `manage_concepts`, `get_coding_guidance`, `get_developer_profile`, `analyze_project` |
-| `tools/memory.py` | 6 | `write_memory`, `read_memory`, `delete_memory`, `edit_memory`, `search_memories`, `reflect` |
-| `tools/session.py` | 4 | `start_session`, `end_session`, `get_sessions`, `manage_decisions` |
+| `tools/memory.py` | 2 | `manage_memories` (write/read/edit/delete/search), `reflect` |
+| `tools/session.py` | 2 | `manage_sessions` (start/end/list), `manage_decisions` (record/list) |
 | `tools/project.py` | 1 | `manage_project` (status + activate) |
 | `tools/search.py` | 1 | `search_codebase` (text, pattern, semantic) |
 | `tools/learning.py` | 1 | `auto_learn_if_needed` |
@@ -116,7 +116,7 @@ def operation_name(arg1: str, arg2: Literal["a", "b"] = "a") -> dict:
 
 Key points:
 - `@mcp.tool` on a thin wrapper that just delegates to `_impl`
-- `@_with_error_handling` on the `_impl` function (handles exceptions, sanitizes paths, applies TOON encoding)
+- `@_with_error_handling` on the `_impl` function (handles exceptions, sanitizes paths)
 - All success returns use `_success_response(data, **metadata)` — never manual dict construction
 - `Literal[...]` on `@mcp.tool` wrappers for JSON schema enum generation; `str` on `_impl` (runtime validation)
 - Error responses: `_failure_response("message")` → `{"success": False, "error": "...", "error_code": "...", "is_retryable": bool}`
@@ -163,7 +163,7 @@ Use `detect_language_from_extension()` from `anamnesis.utils.language_registry` 
 When adding or removing MCP tools, update the expected count in:
 `tests/test_memory_and_metacognition.py::TestToolRegistration::test_total_tool_count`
 
-Currently asserts `tool_count == 29`.
+Currently asserts `tool_count == 23`.
 
 ### Adopted LSP Code
 
@@ -221,7 +221,7 @@ asyncio mode is `auto` (set in `pyproject.toml`), so async test functions do not
 
 ## Telemetry
 
-Every MCP tool invocation is logged to `.anamnesis/tool_usage.jsonl` as a JSON line containing: timestamp, correlation ID, tool name, truncated args, duration (ms), success/failure, full result dict, and project path. Wired into `_with_error_handling` so all 29 tools get telemetry automatically.
+Every MCP tool invocation is logged to `.anamnesis/tool_usage.jsonl` as a JSON line containing: timestamp, correlation ID, tool name, truncated args, duration (ms), success/failure, full result dict, and project path. Wired into `_with_error_handling` so all 23 tools get telemetry automatically.
 
 - **Disable**: set `ANAMNESIS_TELEMETRY=false` (or `0` or `no`)
 - **Arg truncation**: string values clipped to 200 chars; sensitive args (`content`, `old_text`, `new_text`, `source`, `body`) annotated with `[truncated]`
@@ -239,7 +239,7 @@ Every MCP tool invocation is logged to `.anamnesis/tool_usage.jsonl` as a JSON l
 
 ## Dependencies
 
-Core: `tree-sitter`, `tree-sitter-language-pack`, `aiosqlite`, `numpy`, `qdrant-client`, `sentence-transformers`, `mcp`, `fastmcp`, `click`, `loguru`, `pathspec`, `watchdog`, `toon-format` (git dep), `overrides`, `psutil`
+Core: `tree-sitter`, `tree-sitter-language-pack`, `aiosqlite`, `numpy`, `qdrant-client`, `sentence-transformers`, `mcp`, `fastmcp`, `click`, `loguru`, `pathspec`, `watchdog`, `overrides`, `psutil`
 
 Optional groups:
 - `dev`: `pytest`, `pytest-asyncio`, `pytest-benchmark`, `pytest-cov`, `pytest-mock`, `freezegun`, `deepdiff`, `hypothesis`, `tiktoken`, `ruff`, `mypy`, `pyright`
@@ -259,17 +259,19 @@ All tools return a standardized envelope:
 
 Build responses with `_success_response(data, **metadata)` and `_failure_response(message)`.
 
-## Current State (2026-02-22)
+## Current State (2026-03-14)
 
-- Version: 0.2.0
-- 29 MCP tools registered (consolidated from 41 → 37 → 28, +1 go_to_definition)
-- 2145 tests passing (+ 2 xpassed MCP protocol tests)
+- Version: 0.3.0
+- 23 MCP tools registered (consolidated from 41 → 37 → 29 → 23)
+- 2096 tests passing (+ 2 xpassed MCP protocol tests)
 - All synergy features (S1-S5) complete
+- TOON encoding removed (incompatible with FastMCP 3.1.0 structured_content)
 - Persistent backends wired -- sessions, decisions, insights survive restarts
+- SessionManager.active_session_id queries DB (cross-process session visibility)
 - Standardized response envelope across all tools
 - Service layer raises exceptions (not hand-crafted dicts); `_with_error_handling` catches at tool layer
 - Literal type constraints on all dispatch parameters (FastMCP generates JSON schema enums)
 - Parameter naming normalized (name_path, relative_path, name)
-- No mock theatre or dead code modules (ChangeAnalyzer, LineRange/types/ deleted)
+- No mock theatre or dead code modules
 - Optional[X] normalized to X | None; f-string logging converted to lazy-%
 - enum_value() adopted; enum imports use canonical extraction/types.py

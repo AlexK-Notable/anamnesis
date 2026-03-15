@@ -353,3 +353,66 @@ class TestSessionManagerPersistence:
         assert retrieved is not None
         assert retrieved.decision == "Persistent Decision"
         assert retrieved.rationale == "Test persistence"
+
+
+class TestCrossInstanceSessionVisibility:
+    """Tests for session visibility across separate SessionManager instances.
+
+    Simulates the scenario where multiple MCP server processes share the
+    same SQLite database (e.g. phase_0a.py and Claude Code).
+    """
+
+    def test_active_session_id_sees_sessions_from_other_instance(self, backend):
+        """active_session_id reflects sessions started by a different manager."""
+        manager1 = SessionManager(backend)
+        manager2 = SessionManager(backend)
+
+        session = manager1.start_session(name="From instance 1")
+
+        # manager2 should see manager1's session as active
+        assert manager2.active_session_id == session.session_id
+
+    def test_end_session_works_for_session_from_other_instance(self, backend):
+        """A session started by one manager can be ended by another."""
+        manager1 = SessionManager(backend)
+        manager2 = SessionManager(backend)
+
+        session = manager1.start_session(name="Cross-instance end")
+
+        # End from manager2 using explicit ID
+        success = manager2.end_session(session.session_id)
+        assert success is True
+
+        # Verify it's actually ended
+        ended = manager2.get_session(session.session_id)
+        assert ended is not None
+        assert ended.is_active is False
+        assert ended.ended_at is not None
+
+    def test_end_session_without_id_ends_latest_active(self, backend):
+        """end_session(None) via tool layer falls back to active_session_id."""
+        manager1 = SessionManager(backend)
+        manager2 = SessionManager(backend)
+
+        session = manager1.start_session(name="Implicit end target")
+
+        # Simulate what the MCP tool does: get active, then end it
+        target_id = manager2.active_session_id
+        assert target_id == session.session_id
+
+        success = manager2.end_session(target_id)
+        assert success is True
+
+    def test_active_session_id_updates_after_external_end(self, backend):
+        """active_session_id reflects DB state after another instance ends a session."""
+        manager1 = SessionManager(backend)
+        manager2 = SessionManager(backend)
+
+        session = manager1.start_session(name="Will be ended externally")
+        assert manager2.active_session_id == session.session_id
+
+        # End from manager1
+        manager1.end_session(session.session_id)
+
+        # manager2 should now see no active session
+        assert manager2.active_session_id is None
